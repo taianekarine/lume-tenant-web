@@ -1,0 +1,13 @@
+.git
+.github
+.husky
+.next
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+!.env.production.example
+coverage
+docs
+*.tsbuildinfo

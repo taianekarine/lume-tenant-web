@@ -1,0 +1,11 @@
+.next
+node_modules
+coverage
+dist
+build
+
+package-lock.json
+
+*.log
+
+public
