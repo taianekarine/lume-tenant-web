@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Department, Role } from '../domain';
+import type { Department } from '../domain';
 import { normalizeLoginIdentifier } from '../lib/login-identifier';
 
 export const SIMULATED_USER_PASSWORD = 'Milenium@2026';
@@ -16,7 +16,6 @@ interface SimulatedUserBase {
 export interface SimulatedEmployeeUser extends SimulatedUserBase {
   readonly type: 'employee';
   readonly departments: readonly Department[];
-  readonly roles: readonly Role[];
 }
 
 export type SimulatedUser = SimulatedEmployeeUser;
@@ -29,7 +28,6 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['human-resources'],
-    roles: [],
     isActive: true,
   },
   {
@@ -39,7 +37,6 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['personnel-department'],
-    roles: [],
     isActive: true,
   },
   {
@@ -49,7 +46,6 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['commercial'],
-    roles: [],
     isActive: true,
   },
   {
@@ -59,7 +55,15 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['purchasing'],
-    roles: [],
+    isActive: true,
+  },
+  {
+    id: 'simulated-controlling',
+    name: 'Usuário de Controladoria',
+    identifier: 'controladoria.teste',
+    password: SIMULATED_USER_PASSWORD,
+    type: 'employee',
+    departments: ['controllership'],
     isActive: true,
   },
   {
@@ -69,7 +73,6 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['maintenance'],
-    roles: [],
     isActive: true,
   },
   {
@@ -79,7 +82,15 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['monitoring'],
-    roles: [],
+    isActive: true,
+  },
+  {
+    id: 'simulated-management',
+    name: 'Usuário de Gerência',
+    identifier: 'gerencia.departamento.teste',
+    password: SIMULATED_USER_PASSWORD,
+    type: 'employee',
+    departments: ['management'],
     isActive: true,
   },
   {
@@ -89,7 +100,6 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['operations'],
-    roles: [],
     isActive: true,
   },
   {
@@ -99,7 +109,6 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['cleaning'],
-    roles: [],
     isActive: true,
   },
   {
@@ -109,7 +118,6 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['financial'],
-    roles: [],
     isActive: true,
   },
   {
@@ -119,27 +127,6 @@ export const SIMULATED_EMPLOYEE_USERS: readonly SimulatedEmployeeUser[] = [
     password: SIMULATED_USER_PASSWORD,
     type: 'employee',
     departments: ['information-technology'],
-    roles: [],
-    isActive: true,
-  },
-  {
-    id: 'simulated-manager',
-    name: 'Usuário de Gerência',
-    identifier: 'gerencia.teste',
-    password: SIMULATED_USER_PASSWORD,
-    type: 'employee',
-    departments: [],
-    roles: ['manager'],
-    isActive: true,
-  },
-  {
-    id: 'simulated-director',
-    name: 'Usuário de Diretoria',
-    identifier: 'diretoria.teste',
-    password: SIMULATED_USER_PASSWORD,
-    type: 'employee',
-    departments: [],
-    roles: ['director'],
     isActive: true,
   },
 ];

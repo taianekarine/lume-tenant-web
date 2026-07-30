@@ -9,7 +9,6 @@ const authenticatedSession: AuthenticatedSession = {
     name: 'Maria',
     type: 'employee',
     departments: ['commercial'],
-    roles: ['manager'],
     permissions: ['dashboard:view', 'commercial:view'],
     clientCategory: null,
     isActive: true,

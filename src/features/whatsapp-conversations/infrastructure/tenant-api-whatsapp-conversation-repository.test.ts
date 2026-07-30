@@ -24,7 +24,9 @@ function apiQuote() {
     serviceType: 'Evento',
     origin: 'Belo Horizonte',
     destination: 'Contagem',
+    departureDate: '2026-08-01',
     departureAt: '2026-08-01T10:00:00.000Z',
+    returnDate: null,
     returnAt: null,
     passengerCount: 20,
     vehicleType: 'Ônibus',
@@ -81,6 +83,10 @@ function apiMessage(overrides: Record<string, unknown> = {}) {
     deliveryStatus: 'failed',
     kind: 'document',
     text: 'Segue a proposta.',
+    sentBy: {
+      id: '00000000-0000-4000-8000-000000000801',
+      name: 'Usuário Comercial',
+    },
     media: {
       mimeType: 'application/pdf',
       size: 2048,
@@ -150,7 +156,9 @@ describe('LumeApiWhatsAppConversationRepository', () => {
 
     const [conversation] = await repository.getConversations({
       search: 'Ana',
+      department: 'commercial',
       state: 'sent-to-human',
+      requestStatus: 'under-review',
     });
 
     expect(conversation).toMatchObject({
@@ -162,12 +170,71 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       messages: [],
     });
     expect(fetcher).toHaveBeenCalledWith(
-      'http://localhost:3333/api/v1/whatsapp/conversations?page=1&pageSize=100&search=Ana&state=sent-to-human',
+      'http://localhost:3333/api/v1/whatsapp/conversations?page=1&pageSize=100&search=Ana&department=commercial&state=sent-to-human&requestStatus=under-review',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token',
         }),
         signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it('loads every page so department queues are not limited to the first 100 conversations', async () => {
+    const secondConversationId = '00000000-0000-4000-8000-000000000102';
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [apiConversation()],
+          meta: { page: 1, pageSize: 100, total: 2, totalPages: 2 },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [apiConversation({ id: secondConversationId })],
+          meta: { page: 2, pageSize: 100, total: 2, totalPages: 2 },
+        }),
+      );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'http://localhost:3333/api/v1/',
+      'access-token',
+      fetcher,
+      1_500,
+    );
+
+    await expect(repository.getConversations({ department: 'controlling' })).resolves.toMatchObject(
+      [{ id: conversationId }, { id: secondConversationId }],
+    );
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:3333/api/v1/whatsapp/conversations?page=2&pageSize=100&department=controlling',
+      expect.any(Object),
+    );
+  });
+
+  it('uses the dedicated server-scoped endpoint for dashboard indicators', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse({
+        data: [apiConversation({ department: 'operations' })],
+        meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+      }),
+    );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'http://localhost:3333/api/v1/',
+      'access-token',
+      fetcher,
+      1_500,
+    );
+
+    await repository.getDashboardConversations({ department: 'operations' });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://localhost:3333/api/v1/whatsapp/conversations/dashboard?page=1&pageSize=100&department=operations',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer access-token',
+        }),
       }),
     );
   });
@@ -196,7 +263,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
         }),
       )
       .mockResolvedValueOnce(
-         jsonResponse({
+        jsonResponse({
           data: [historicalRecoveryTransition, automaticInboundTransition],
           meta: { page: 1, pageSize: 100, total: 2, totalPages: 1 },
         }),
@@ -212,6 +279,10 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     expect(conversation?.messages).toEqual([
       expect.objectContaining({
         deliveryStatus: 'failed',
+        sentBy: {
+          id: '00000000-0000-4000-8000-000000000801',
+          name: 'Usuário Comercial',
+        },
         attachment: expect.objectContaining({
           fileName: 'proposta.pdf',
           url: 'https://files.example.test/proposta.pdf',
@@ -328,6 +399,8 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     await repository.returnConversationToBot(conversationId, 8);
     await repository.forwardConversation(conversationId, 'operations', 9);
     await repository.markConversationAsRead(conversationId, 10);
+    await repository.closeConversationAfterRejection(conversationId, 11);
+    await repository.closeConversation(conversationId, 12, 'Solicitação concluída.');
 
     const requests = fetcher.mock.calls.map(
       ([url, init]) => [url, JSON.parse((init as RequestInit).body as string)] as const,
@@ -337,9 +410,12 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       expect.stringContaining('/actions/return-to-bot'),
       expect.stringContaining('/actions/forward'),
       expect.stringContaining('/actions/mark-read'),
+      expect.stringContaining('/actions/close-after-rejection'),
+      expect.stringContaining('/actions/close'),
     ]);
-    expect(requests.map(([, body]) => body.expectedVersion)).toEqual([7, 8, 9, 10]);
+    expect(requests.map(([, body]) => body.expectedVersion)).toEqual([7, 8, 9, 10, 11, 12]);
     expect(requests[2][1]).toMatchObject({ targetDepartment: 'operations' });
+    expect(requests[5][1]).toMatchObject({ reason: 'Solicitação concluída.' });
     expect(requests.every(([, body]) => /^[0-9a-f-]{36}$/.test(body.commandId))).toBe(true);
   });
 

@@ -32,7 +32,6 @@ function createSession(permissions: readonly Permission[]): AuthenticatedSession
       name: 'Maria Silva',
       type: 'employee',
       departments: [],
-      roles: ['manager'],
       permissions,
       clientCategory: null,
       isActive: true,

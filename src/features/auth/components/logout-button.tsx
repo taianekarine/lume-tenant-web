@@ -19,7 +19,7 @@ export function LogoutButton() {
     <form action={formAction} className={styles.form()}>
       <Button type="submit" variant="outline" className={styles.button()} disabled={isPending}>
         <LogOut aria-hidden="true" />
-        {isPending ? 'Saindo...' : 'Sair'}
+        <span>{isPending ? 'Saindo...' : 'Sair'}</span>
       </Button>
 
       {state.message !== null ? (

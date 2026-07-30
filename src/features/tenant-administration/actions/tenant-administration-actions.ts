@@ -7,34 +7,75 @@ import { z } from 'zod';
 import { TenantAdministrationError } from '../application';
 import { executeAuthenticatedTenantMutation } from '../server';
 
-const userBaseSchema = z.object({
+const userAssignmentFields = {
   name: z.string().trim().min(3).max(120),
   email: z.string().trim().email().max(254),
-  cpf: z.string().trim().optional(),
+  isAdministrator: z.boolean(),
   departments: z.array(z.string().min(1)),
-  roleIds: z.array(z.string().uuid()),
-});
-const createUserSchema = userBaseSchema.extend({
-  username: z
-    .string()
-    .trim()
-    .regex(/^[a-zA-Z0-9._-]{3,40}$/),
-  password: z
-    .string()
-    .min(12)
-    .max(72)
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/),
-});
-const roleSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9-]{2,59}$/),
-  name: z.string().trim().min(3).max(80),
-  description: z.string().trim().max(240).optional(),
-  permissions: z.array(z.string().regex(/^[a-z0-9-]+:[a-z0-9-]+$/)),
-});
+  permissionCodes: z.array(z.string().min(1)),
+} as const;
 
+function requireDepartmentForStandardUser(
+  input: { readonly isAdministrator: boolean; readonly departments: readonly string[] },
+  context: z.RefinementCtx,
+) {
+  if (!input.isAdministrator && input.departments.length === 0) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Selecione ao menos um departamento.',
+      path: ['departments'],
+    });
+  }
+}
+
+const userBaseSchema = z.object(userAssignmentFields).superRefine(requireDepartmentForStandardUser);
+const createUserSchema = z
+  .object({
+    ...userAssignmentFields,
+    isAdministrator: z.literal(false, {
+      error: 'Contas administradoras não podem ser criadas pelo Tenant Web.',
+    }),
+    username: z
+      .string()
+      .trim()
+      .regex(/^[a-zA-Z0-9._-]{3,40}$/)
+      .refine(
+        (username) => /[a-zA-Z]/.test(username),
+        'O nome de usuário deve conter ao menos uma letra.',
+      ),
+    password: z
+      .string()
+      .min(12)
+      .max(72)
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/),
+  })
+  .superRefine(requireDepartmentForStandardUser);
+
+function normalizeAdministratorAssignments<
+  T extends {
+    readonly isAdministrator: boolean;
+    readonly departments: readonly string[];
+    readonly permissionCodes: readonly string[];
+  },
+>(input: T): T {
+  return input.isAdministrator ? { ...input, departments: [], permissionCodes: [] } : input;
+}
+
+function withoutAdministratorMutation(input: z.infer<typeof userBaseSchema>) {
+  if (input.isAdministrator) {
+    return {
+      name: input.name,
+      email: input.email,
+    };
+  }
+
+  return {
+    name: input.name,
+    email: input.email,
+    departments: input.departments,
+    permissionCodes: input.permissionCodes,
+  };
+}
 function formString(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === 'string' ? value : '';
@@ -44,6 +85,11 @@ function formStrings(formData: FormData, name: string): string[] {
   return formData
     .getAll(name)
     .filter((value): value is string => typeof value === 'string' && value.length > 0);
+}
+
+function formBoolean(formData: FormData, name: string): boolean {
+  const value = formData.get(name);
+  return value === 'true' || value === 'on';
 }
 
 function actionFailureDestination(path: string, error: unknown): never {
@@ -63,10 +109,10 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
     name: formString(formData, 'name'),
     username: formString(formData, 'username'),
     email: formString(formData, 'email'),
-    cpf: formString(formData, 'cpf') || undefined,
     password: formString(formData, 'password'),
+    isAdministrator: formBoolean(formData, 'isAdministrator'),
     departments: formStrings(formData, 'departments'),
-    roleIds: formStrings(formData, 'roleIds'),
+    permissionCodes: formStrings(formData, 'permissionCodes'),
   });
 
   if (!parsed.success) {
@@ -74,7 +120,9 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
   }
 
   try {
-    await executeAuthenticatedTenantMutation((gateway) => gateway.createUser(parsed.data));
+    await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.createUser(normalizeAdministratorAssignments(parsed.data)),
+    );
   } catch (error) {
     actionFailureDestination('/users', error);
   }
@@ -87,9 +135,9 @@ export async function updateTenantUserAction(userId: string, formData: FormData)
   const parsed = userBaseSchema.safeParse({
     name: formString(formData, 'name'),
     email: formString(formData, 'email'),
-    cpf: formString(formData, 'cpf') || null,
+    isAdministrator: formBoolean(formData, 'isAdministrator'),
     departments: formStrings(formData, 'departments'),
-    roleIds: formStrings(formData, 'roleIds'),
+    permissionCodes: formStrings(formData, 'permissionCodes'),
   });
 
   if (!parsed.success) {
@@ -97,7 +145,9 @@ export async function updateTenantUserAction(userId: string, formData: FormData)
   }
 
   try {
-    await executeAuthenticatedTenantMutation((gateway) => gateway.updateUser(userId, parsed.data));
+    await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.updateUser(userId, withoutAdministratorMutation(parsed.data)),
+    );
   } catch (error) {
     actionFailureDestination(`/users/${userId}`, error);
   }
@@ -109,7 +159,9 @@ export async function updateTenantUserAction(userId: string, formData: FormData)
 
 export async function setTenantUserActiveAction(userId: string, isActive: boolean): Promise<void> {
   try {
-    await executeAuthenticatedTenantMutation((gateway) => gateway.updateUser(userId, { isActive }));
+    await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.updateUserStatus(userId, { status: isActive ? 'active' : 'inactive' }),
+    );
   } catch (error) {
     actionFailureDestination('/users', error);
   }
@@ -118,58 +170,149 @@ export async function setTenantUserActiveAction(userId: string, isActive: boolea
   redirect(`/users?success=Usuário ${isActive ? 'ativado' : 'desativado'} com sucesso.`);
 }
 
-export async function createTenantRoleAction(formData: FormData): Promise<void> {
-  const parsed = roleSchema.safeParse({
-    code: formString(formData, 'code'),
-    name: formString(formData, 'name'),
-    description: formString(formData, 'description') || undefined,
-    permissions: formStrings(formData, 'permissions'),
-  });
+export type TenantUserFormResult =
+  | {
+      readonly success: true;
+      readonly message: string;
+    }
+  | {
+      readonly success: false;
+      readonly message: string;
+      readonly errorCode: string;
+    };
 
-  if (!parsed.success) {
-    redirect('/roles?error=Revise os dados do papel.');
+function tenantUserActionResult(error: unknown, fallback: string): TenantUserFormResult {
+  if (error instanceof TenantAdministrationError) {
+    return { success: false, message: error.message, errorCode: error.publicCode };
   }
 
-  try {
-    await executeAuthenticatedTenantMutation((gateway) => gateway.createRole(parsed.data));
-  } catch (error) {
-    actionFailureDestination('/roles', error);
-  }
-
-  revalidatePath('/roles');
-  redirect('/roles?success=Papel criado com sucesso.');
+  return { success: false, message: fallback, errorCode: 'UNEXPECTED_ERROR' };
 }
 
-export async function updateTenantRoleAction(roleId: string, formData: FormData): Promise<void> {
-  const parsed = roleSchema.safeParse({
-    code: formString(formData, 'code'),
-    name: formString(formData, 'name'),
-    description: formString(formData, 'description') || undefined,
-    permissions: formStrings(formData, 'permissions'),
-  });
-
+export async function createTenantUserFormAction(input: unknown): Promise<TenantUserFormResult> {
+  const parsed = createUserSchema.safeParse(input);
   if (!parsed.success) {
-    redirect(`/roles/${roleId}?error=Revise os dados do papel.`);
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? 'Revise os dados do novo usuário.',
+      errorCode: 'VALIDATION_ERROR',
+    };
   }
 
   try {
-    await executeAuthenticatedTenantMutation((gateway) => gateway.updateRole(roleId, parsed.data));
+    await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.createUser(normalizeAdministratorAssignments(parsed.data)),
+    );
   } catch (error) {
-    actionFailureDestination(`/roles/${roleId}`, error);
+    return tenantUserActionResult(error, 'Não foi possível criar o usuário.');
   }
 
-  revalidatePath('/roles');
-  revalidatePath(`/roles/${roleId}`);
-  redirect(`/roles/${roleId}?success=Papel atualizado com sucesso.`);
+  revalidatePath('/users');
+  return {
+    success: true,
+    message: 'Usuário criado. No primeiro acesso, ele deverá substituir a senha inicial.',
+  };
 }
 
-export async function deleteTenantRoleAction(roleId: string): Promise<void> {
-  try {
-    await executeAuthenticatedTenantMutation((gateway) => gateway.deleteRole(roleId));
-  } catch (error) {
-    actionFailureDestination('/roles', error);
+export async function updateTenantUserFormAction(
+  userId: string,
+  input: unknown,
+): Promise<TenantUserFormResult> {
+  const parsed = userBaseSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? 'Revise os dados do usuário.',
+      errorCode: 'VALIDATION_ERROR',
+    };
   }
 
-  revalidatePath('/roles');
-  redirect('/roles?success=Papel excluído com sucesso.');
+  try {
+    await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.updateUser(userId, withoutAdministratorMutation(parsed.data)),
+    );
+  } catch (error) {
+    return tenantUserActionResult(error, 'Não foi possível atualizar o usuário.');
+  }
+
+  revalidatePath('/users');
+  revalidatePath(`/users/${userId}`);
+  return { success: true, message: 'Dados e permissões atualizados com sucesso.' };
+}
+
+const updateUserStatusSchema = z
+  .object({
+    status: z.enum(['active', 'inactive', 'suspended']),
+    suspendedUntil: z.string().datetime().optional(),
+    suspensionReason: z.string().trim().max(500).optional(),
+  })
+  .superRefine((input, context) => {
+    if (input.status !== 'suspended') return;
+
+    if (!input.suspendedUntil || Date.parse(input.suspendedUntil) <= Date.now()) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Informe uma data futura para a suspensão.',
+        path: ['suspendedUntil'],
+      });
+    }
+
+    if (!input.suspensionReason || input.suspensionReason.length < 3) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Informe o motivo da suspensão.',
+        path: ['suspensionReason'],
+      });
+    }
+  });
+
+export async function updateTenantUserStatusAction(
+  userId: string,
+  input: unknown,
+): Promise<TenantUserFormResult> {
+  const parsed = updateUserStatusSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: parsed.error.issues[0]?.message ?? 'Revise o estado do usuário.',
+      errorCode: 'VALIDATION_ERROR',
+    };
+  }
+
+  try {
+    await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.updateUserStatus(userId, parsed.data),
+    );
+  } catch (error) {
+    return tenantUserActionResult(error, 'Não foi possível alterar o estado do usuário.');
+  }
+
+  revalidatePath('/users');
+  revalidatePath(`/users/${userId}`);
+  const labels = {
+    active: 'ativado',
+    inactive: 'desativado',
+    suspended: 'suspenso',
+  } as const;
+  return {
+    success: true,
+    message: `Usuário ${labels[parsed.data.status]} com sucesso.`,
+  };
+}
+
+export async function requestTenantUserPasswordResetAction(
+  userId: string,
+): Promise<TenantUserFormResult> {
+  try {
+    const result = await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.requestPasswordReset(userId),
+    );
+    revalidatePath('/users');
+    return {
+      success: true,
+      message: `Enviamos as instruções para ${result.recipient}.`,
+    };
+  } catch (error) {
+    return tenantUserActionResult(error, 'Não foi possível solicitar a criação de uma nova senha.');
+  }
 }

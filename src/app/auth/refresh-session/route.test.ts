@@ -34,7 +34,6 @@ function authentication(): ApiAuthentication {
         name: 'Ana Souza',
         type: 'employee',
         departments: ['commercial'],
-        roles: ['manager'],
         permissions: ['dashboard:view'],
         clientCategory: null,
         isActive: true,
@@ -78,8 +77,11 @@ describe('GET /auth/refresh-session', () => {
     process.env.SESSION_SECRET = SESSION_SECRET;
     gateway = {
       authenticate: jest.fn(),
+      getCurrentIdentity: jest.fn(),
+      requestPasswordReset: jest.fn(),
       refresh: jest.fn().mockResolvedValue(authentication()),
       logout: jest.fn(),
+      completePasswordChange: jest.fn(),
     };
     mockedCreateAuthenticationGateway.mockReturnValue(gateway);
   });

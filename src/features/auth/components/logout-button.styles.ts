@@ -1,9 +1,9 @@
 import { cva } from 'class-variance-authority';
 
 export const logoutButtonStyles = {
-  form: cva('flex flex-col items-stretch gap-2 sm:items-end'),
+  form: cva('flex items-center gap-2'),
 
-  button: cva('w-full sm:w-auto'),
+  button: cva('max-sm:[&_span]:sr-only'),
 
-  feedback: cva('max-w-xs text-right text-xs font-medium text-red-600'),
+  feedback: cva('max-w-xs text-right text-xs font-medium text-destructive'),
 };

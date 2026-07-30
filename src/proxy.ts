@@ -51,9 +51,11 @@ export const config = {
   matcher: [
     '/dashboard/:path*',
     '/users/:path*',
-    '/roles/:path*',
     '/license/:path*',
     '/ai-agents/:path*',
     '/whatsapp-conversations/:path*',
+    '/quote-proposals/:path*',
+    '/profile/:path*',
+    '/support/:path*',
   ],
 };

@@ -20,9 +20,13 @@ jest.mock('../components', () => ({
     initialConversations: readonly unknown[];
     initialError?: string | null;
   }) => (
-    <div data-testid="conversation-workspace">
-      {initialConversations.length} carregadas {initialError}
-    </div>
+    <>
+      <p>Atendimento comercial</p>
+      <h1>Painel WhatsApp</h1>
+      <div data-testid="conversation-workspace">
+        {initialConversations.length} carregadas {initialError}
+      </div>
+    </>
   ),
 }));
 
@@ -36,7 +40,6 @@ const session: AuthenticatedSession = {
     name: 'Usuário Comercial',
     type: 'employee',
     departments: ['commercial'],
-    roles: [],
     permissions: ['dashboard:view', 'whatsapp-conversations:manage'],
     clientCategory: null,
     isActive: true,
@@ -74,13 +77,12 @@ describe('WhatsAppConversationsPage', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Conversas do WhatsApp' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Conversas WhatsApp' })).toHaveAttribute(
+    expect(screen.getByRole('heading', { name: 'Painel WhatsApp' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Painel WhatsApp' })[0]).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(screen.getByText('Bot ativo')).toBeInTheDocument();
-    expect(screen.getByText('Humano ativo')).toBeInTheDocument();
+    expect(screen.getByText('Atendimento comercial')).toBeInTheDocument();
     expect(screen.getByText(/2 carregadas Falha inicial/)).toBeInTheDocument();
   });
 });

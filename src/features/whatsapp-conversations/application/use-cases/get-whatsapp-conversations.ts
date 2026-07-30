@@ -6,3 +6,10 @@ export function getWhatsAppConversations(
 ) {
   return repository.getConversations(filters);
 }
+
+export function getWhatsAppDashboardConversations(
+  repository: WhatsAppConversationRepository,
+  filters?: GetWhatsAppConversationsFilters,
+) {
+  return repository.getDashboardConversations(filters);
+}

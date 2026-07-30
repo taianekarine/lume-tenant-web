@@ -1,0 +1,373 @@
+'use client';
+
+import {
+  AlertCircle,
+  FileText,
+  LoaderCircle,
+  MessageCircleMore,
+  Paperclip,
+  RefreshCw,
+  Send,
+} from 'lucide-react';
+
+import { CurrentUserAvatar } from '@/shared/current-user-avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
+import { Bubble, BubbleContent } from '@/shared/ui/bubble';
+import { Button } from '@/shared/ui/button';
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+  MessageFooter,
+  MessageHeader,
+} from '@/shared/ui/message';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/shared/ui/sheet';
+import { Skeleton } from '@/shared/ui/skeleton';
+import { Textarea } from '@/shared/ui/textarea';
+
+import { HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH } from '../application';
+import type { WhatsAppConversation } from '../domain';
+import { DELIVERY_STATUS_LABELS, MESSAGE_KIND_LABELS } from './conversation-labels';
+
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'America/Sao_Paulo',
+});
+
+function formatDateTime(value: string): string {
+  return DATE_TIME_FORMATTER.format(new Date(value));
+}
+
+function formatFileSize(size: number | null): string {
+  if (size === null) return 'Tamanho não informado';
+  if (size < 1_024) return `${size} bytes`;
+  if (size < 1_048_576) return `${(size / 1_024).toFixed(1)} KB`;
+  return `${(size / 1_048_576).toFixed(1)} MB`;
+}
+
+function getInitial(name: string): string {
+  return name.trim().charAt(0).toLocaleUpperCase('pt-BR') || '?';
+}
+
+export interface ConversationMessageSheetProps {
+  readonly conversation: WhatsAppConversation;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly isLoading: boolean;
+  readonly isLoaded: boolean;
+  readonly detailError: string;
+  readonly onRetry: () => void;
+  readonly onRefresh: () => void;
+  readonly messageDraft: string;
+  readonly onMessageDraftChange: (value: string) => void;
+  readonly canSendMessage: boolean;
+  readonly canTakeOver: boolean;
+  readonly isTakingOver: boolean;
+  readonly onTakeOver: () => void;
+  readonly isSendingMessage: boolean;
+  readonly onSendMessage: () => void;
+  readonly feedbackMessage: string;
+  readonly feedbackTone: 'neutral' | 'success' | 'error';
+}
+
+export function ConversationMessageSheet({
+  conversation,
+  open,
+  onOpenChange,
+  isLoading,
+  isLoaded,
+  detailError,
+  onRetry,
+  onRefresh,
+  messageDraft,
+  onMessageDraftChange,
+  canSendMessage,
+  canTakeOver,
+  isTakingOver,
+  onTakeOver,
+  isSendingMessage,
+  onSendMessage,
+  feedbackMessage,
+  feedbackTone,
+}: ConversationMessageSheetProps) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetTrigger
+        render={
+          <Button type="button" variant="outline" size="sm" className="h-9 whitespace-nowrap" />
+        }
+      >
+        <MessageCircleMore aria-hidden="true" />
+        <span className="sr-only">Mensagens e anexos — </span>
+        Histórico completo
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {conversation.messages.length}
+        </span>
+      </SheetTrigger>
+
+      <SheetContent className="w-full gap-0 overflow-x-hidden data-[side=right]:w-full sm:max-w-none sm:data-[side=right]:w-[min(84rem,calc(100vw-2rem))]">
+        <SheetHeader className="border-b pr-12">
+          <SheetTitle>Conversa com {conversation.contact.name}</SheetTitle>
+          <SheetDescription>
+            {conversation.contact.phone} · mensagens e anexos persistidos pela Tenant API
+          </SheetDescription>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2 w-fit"
+            onClick={onRefresh}
+          >
+            <RefreshCw aria-hidden="true" />
+            Atualizar
+          </Button>
+        </SheetHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-4 sm:p-6">
+          {isLoading && !isLoaded ? (
+            <div className="space-y-4" role="status">
+              <span className="sr-only">Carregando histórico completo...</span>
+              <Skeleton className="h-20 w-3/4 rounded-2xl" />
+              <Skeleton className="ml-auto h-24 w-2/3 rounded-2xl" />
+              <Skeleton className="h-16 w-1/2 rounded-2xl" />
+            </div>
+          ) : detailError ? (
+            <div
+              className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+              role="alert"
+            >
+              <span className="flex items-center gap-2">
+                <AlertCircle aria-hidden="true" />
+                {detailError}
+              </span>
+              <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                Tentar novamente
+              </Button>
+            </div>
+          ) : conversation.messages.length > 0 ? (
+            <div className="space-y-5">
+              {conversation.messages.map((message) => {
+                const isOutbound = message.direction === 'outbound';
+                const failedAttempt = [...message.attempts]
+                  .reverse()
+                  .find((attempt) => attempt.status === 'failed');
+                const messageMetadata = [
+                  formatDateTime(message.occurredAt),
+                  ...(isOutbound
+                    ? [message.sentBy?.name ?? conversation.assignedTo?.name ?? 'Atendente']
+                    : []),
+                  DELIVERY_STATUS_LABELS[message.deliveryStatus],
+                ].join(' · ');
+
+                return (
+                  <Message key={message.id} align={isOutbound ? 'end' : 'start'}>
+                    <MessageAvatar>
+                      {isOutbound ? (
+                        <CurrentUserAvatar
+                          name={
+                            message.sentBy?.name ?? conversation.assignedTo?.name ?? 'Atendimento'
+                          }
+                          imageAlt="Foto do atendente"
+                        />
+                      ) : (
+                        <Avatar>
+                          {conversation.contact.profilePictureUrl ? (
+                            <AvatarImage
+                              src={conversation.contact.profilePictureUrl}
+                              alt={conversation.contact.name}
+                            />
+                          ) : null}
+                          <AvatarFallback>{getInitial(conversation.contact.name)}</AvatarFallback>
+                        </Avatar>
+                      )}
+                    </MessageAvatar>
+                    <MessageContent>
+                      <MessageHeader>
+                        {isOutbound ? 'Atendimento' : conversation.contact.name}
+                      </MessageHeader>
+                      <Bubble variant={isOutbound ? 'tinted' : 'secondary'}>
+                        <BubbleContent>
+                          <div className="space-y-2">
+                            {message.text ? (
+                              <p className="whitespace-pre-wrap">{message.text}</p>
+                            ) : null}
+                            {message.attachment ? (
+                              <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
+                                <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+                                <span className="min-w-0 flex-1">
+                                  <strong className="block truncate text-xs">
+                                    {message.attachment.fileName ??
+                                      MESSAGE_KIND_LABELS[message.kind]}
+                                  </strong>
+                                  <small className="block truncate text-muted-foreground">
+                                    {message.attachment.mimeType ??
+                                      MESSAGE_KIND_LABELS[message.kind]}{' '}
+                                    · {formatFileSize(message.attachment.size)}
+                                  </small>
+                                </span>
+                                {message.attachment.url ? (
+                                  <a
+                                    href={message.attachment.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  >
+                                    <FileText aria-hidden="true" />
+                                    Abrir
+                                  </a>
+                                ) : null}
+                              </div>
+                            ) : null}
+                            {failedAttempt ? (
+                              <p className="flex items-start gap-1 text-xs text-destructive">
+                                <AlertCircle aria-hidden="true" className="mt-0.5 size-3.5" />
+                                <span>
+                                  {failedAttempt.errorMessage ??
+                                    'Não foi possível enviar esta mensagem. Tente novamente.'}
+                                </span>
+                              </p>
+                            ) : null}
+                          </div>
+                        </BubbleContent>
+                      </Bubble>
+                      <MessageFooter className="w-full max-w-full min-w-0 justify-center text-center text-[11px] sm:text-xs">
+                        <span
+                          className="block w-full min-w-0 max-w-full whitespace-normal break-words text-center [overflow-wrap:anywhere]"
+                          data-occurred-at={message.occurredAt}
+                        >
+                          {messageMetadata}
+                        </span>
+                      </MessageFooter>
+                    </MessageContent>
+                  </Message>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2 text-center">
+              <MessageCircleMore aria-hidden="true" className="size-9 text-muted-foreground" />
+              <strong>Nenhuma mensagem registrada</strong>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                As próximas mensagens e anexos desta conversa aparecerão aqui.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3 border-t bg-background p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold">Responder pelo painel</p>
+              <p className="text-xs text-muted-foreground">
+                {canSendMessage
+                  ? 'Envio autorizado para o atendente responsável.'
+                  : 'Assuma esta conversa para responder ao cliente.'}
+              </p>
+            </div>
+            <span
+              className={
+                canSendMessage
+                  ? 'shrink-0 whitespace-nowrap rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300'
+                  : 'shrink-0 whitespace-nowrap rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground'
+              }
+            >
+              {canSendMessage ? 'Atendente ativo' : 'Envio bloqueado'}
+            </span>
+          </div>
+          <Textarea
+            id="human-message"
+            value={messageDraft}
+            onChange={(event) => onMessageDraftChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing &&
+                canSendMessage &&
+                messageDraft.trim().length > 0
+              ) {
+                event.preventDefault();
+                onSendMessage();
+              }
+            }}
+            maxLength={HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH}
+            rows={4}
+            disabled={!canSendMessage || isSendingMessage}
+            placeholder={
+              canSendMessage
+                ? `Responder para ${conversation.contact.name}`
+                : 'Assuma esta conversa para responder ao cliente.'
+            }
+            aria-label={`Mensagem para ${conversation.contact.name}`}
+          />
+          <div className="space-y-2">
+            <p className="whitespace-nowrap text-xs text-muted-foreground">
+              {messageDraft.length.toLocaleString('pt-BR')} /{' '}
+              {HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH.toLocaleString('pt-BR')} caracteres
+            </p>
+            <div
+              className={
+                !canSendMessage && canTakeOver
+                  ? 'grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 overflow-x-hidden'
+                  : 'grid w-full min-w-0 max-w-full grid-cols-1 overflow-x-hidden'
+              }
+            >
+              {!canSendMessage && canTakeOver ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full min-w-0 max-w-full gap-1 overflow-hidden px-1 text-xs sm:px-2.5 sm:text-sm"
+                  onClick={onTakeOver}
+                  disabled={isTakingOver}
+                >
+                  {isTakingOver ? (
+                    <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+                  ) : null}
+                  {isTakingOver ? 'Assumindo...' : 'Assumir atendimento'}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                className="w-full min-w-0 max-w-full gap-1 overflow-hidden px-1 text-xs sm:px-2.5 sm:text-sm"
+                onClick={onSendMessage}
+                disabled={!canSendMessage || isSendingMessage || messageDraft.trim().length === 0}
+              >
+                {isSendingMessage ? (
+                  <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+                ) : (
+                  <Send aria-hidden="true" className="size-3.5" />
+                )}
+                {isSendingMessage ? 'Enviando...' : 'Enviar mensagem'}
+              </Button>
+            </div>
+          </div>
+          {feedbackMessage ? (
+            <p
+              aria-live="polite"
+              className={
+                feedbackTone === 'error'
+                  ? 'text-sm text-destructive'
+                  : feedbackTone === 'success'
+                    ? 'text-sm text-emerald-700 dark:text-emerald-300'
+                    : 'text-sm text-muted-foreground'
+              }
+            >
+              {feedbackMessage}
+            </p>
+          ) : null}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}

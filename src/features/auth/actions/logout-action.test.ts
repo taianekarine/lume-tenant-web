@@ -58,8 +58,11 @@ function createApiTokenStorageMock(): ApiTokenStorage {
 function createAuthenticationGatewayMock(): AuthenticationGateway {
   return {
     authenticate: jest.fn(),
+    getCurrentIdentity: jest.fn(),
+    requestPasswordReset: jest.fn().mockResolvedValue(undefined),
     refresh: jest.fn(),
     logout: jest.fn().mockResolvedValue(undefined),
+    completePasswordChange: jest.fn().mockResolvedValue(undefined),
   };
 }
 

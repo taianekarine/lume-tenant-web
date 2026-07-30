@@ -5,8 +5,7 @@ function optionalPublicValue(value: string | undefined): string | null {
 }
 
 const tenantName = optionalPublicValue(process.env.NEXT_PUBLIC_TENANT_NAME) ?? 'Empresa';
-const productName =
-  optionalPublicValue(process.env.NEXT_PUBLIC_TENANT_PRODUCT_NAME) ?? `${tenantName} Lume`;
+const productName = optionalPublicValue(process.env.NEXT_PUBLIC_TENANT_PRODUCT_NAME) ?? 'Lume';
 
 export const tenantBranding = {
   tenantName,

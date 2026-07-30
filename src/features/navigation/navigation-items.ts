@@ -1,20 +1,32 @@
 import {
   BadgeCheck,
   Bot,
+  FileClock,
   LayoutDashboard,
+  LifeBuoy,
   MessageCircle,
-  ShieldCheck,
   Users,
   type LucideIcon,
 } from 'lucide-react';
 
-import { hasPermission, type Permission, type User } from '@/features/auth/domain';
+import {
+  canAccessLicense,
+  hasCommercialScope,
+  hasManagementLeadershipScope,
+  hasPermission,
+  type Permission,
+  type User,
+} from '@/features/auth/domain';
+
+export type NavigationGroup = 'general' | 'commercial' | 'administration';
 
 export interface InternalNavigationItem {
   readonly label: string;
   readonly href: string;
   readonly permission: Permission;
+  readonly alternativePermissions?: readonly Permission[];
   readonly icon: LucideIcon;
+  readonly group?: NavigationGroup;
 }
 
 export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
@@ -23,42 +35,75 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
     href: '/dashboard',
     permission: 'dashboard:view',
     icon: LayoutDashboard,
+    group: 'general',
   },
   {
     label: 'Agentes de IA',
     href: '/ai-agents',
     permission: 'ai-agents:use',
     icon: Bot,
+    group: 'general',
   },
   {
-    label: 'Conversas WhatsApp',
+    label: 'Painel WhatsApp',
     href: '/whatsapp-conversations',
     permission: 'whatsapp-conversations:manage',
     icon: MessageCircle,
+    group: 'commercial',
+  },
+  {
+    label: 'Orçamentos',
+    href: '/quote-proposals/pending',
+    permission: 'whatsapp-conversations:manage',
+    alternativePermissions: ['whatsapp-conversations:view', 'commercial:view', 'commercial:manage'],
+    icon: FileClock,
+    group: 'commercial',
   },
   {
     label: 'Usuários',
     href: '/users',
     permission: 'users:view',
+    alternativePermissions: ['users:manage'],
     icon: Users,
-  },
-  {
-    label: 'Papéis',
-    href: '/roles',
-    permission: 'settings:view',
-    icon: ShieldCheck,
+    group: 'administration',
   },
   {
     label: 'Licença',
     href: '/license',
-    permission: 'dashboard:view',
+    permission: 'license:view',
     icon: BadgeCheck,
+    group: 'administration',
+  },
+  {
+    label: 'Suporte',
+    href: '/support',
+    permission: 'support:view',
+    icon: LifeBuoy,
+    group: 'general',
   },
 ];
+
+function hasOrganizationalScope(user: User, item: InternalNavigationItem): boolean {
+  if (item.group === 'commercial') return hasCommercialScope(user);
+  if (item.group === 'administration') return hasManagementLeadershipScope(user);
+  return true;
+}
+
+function hasNavigationPermission(user: User, item: InternalNavigationItem): boolean {
+  return (
+    hasPermission(user, item.permission) ||
+    item.alternativePermissions?.some((permission) => hasPermission(user, permission)) === true
+  );
+}
 
 export function getAuthorizedNavigationItems(
   user: User,
   items: readonly InternalNavigationItem[] = INTERNAL_NAVIGATION_ITEMS,
 ): InternalNavigationItem[] {
-  return items.filter((item) => hasPermission(user, item.permission));
+  return items.filter(
+    (item) =>
+      hasNavigationPermission(user, item) &&
+      hasOrganizationalScope(user, item) &&
+      (item.href !== '/license' || canAccessLicense(user)),
+  );
 }

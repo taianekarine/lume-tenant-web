@@ -5,6 +5,11 @@ const nextConfig: NextConfig = {
   logging: {
     serverFunctions: false,
   },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '51mb',
+    },
+  },
   transpilePackages: ['jose'],
 };
 

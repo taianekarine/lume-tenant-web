@@ -5,31 +5,40 @@ import {
   type TenantAdministrationErrorCode,
   type TenantAdministrationGateway,
 } from '../application';
-import type {
-  CreateTenantRoleInput,
-  CreateTenantUserInput,
-  UpdateTenantRoleInput,
-  UpdateTenantUserInput,
-} from '../domain';
+import type { CreateTenantUserInput, UpdateTenantUserInput } from '../domain';
 
 type Fetcher = typeof fetch;
 
 const isoDate = z.string().refine((value) => Number.isFinite(Date.parse(value)));
-const userSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1),
-  username: z.string().min(1),
-  email: z.string().email(),
-  cpf: z.string().nullable(),
-  type: z.literal('employee'),
-  departments: z.array(z.string()),
-  roles: z.array(z.string()),
-  permissions: z.array(z.string()),
-  clientCategory: z.null(),
-  isActive: z.boolean(),
-  createdAt: isoDate,
-  updatedAt: isoDate,
-});
+const userSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().min(1),
+    username: z.string().min(1),
+    email: z.string().email(),
+    cpf: z.string().nullable(),
+    type: z.literal('employee'),
+    departments: z.array(z.string()),
+    isAdministrator: z.boolean(),
+    permissionCodes: z.array(z.string()).optional(),
+    permissions: z.array(z.string()),
+    clientCategory: z.null(),
+    isActive: z.boolean(),
+    status: z.enum(['active', 'inactive', 'suspended']).optional(),
+    suspendedUntil: isoDate.nullable().optional(),
+    suspensionReason: z.string().nullable().optional(),
+    mustChangePassword: z.boolean().default(false),
+    hasProfilePicture: z.boolean().default(false),
+    createdAt: isoDate,
+    updatedAt: isoDate,
+  })
+  .transform((user) => ({
+    ...user,
+    permissionCodes: user.permissionCodes ?? [],
+    status: user.status ?? (user.isActive ? ('active' as const) : ('inactive' as const)),
+    suspendedUntil: user.suspendedUntil ?? null,
+    suspensionReason: user.suspensionReason ?? null,
+  }));
 const userListSchema = z.object({
   data: z.array(userSchema),
   meta: z.object({
@@ -39,22 +48,37 @@ const userListSchema = z.object({
     totalPages: z.number().int().nonnegative(),
   }),
 });
-const roleSchema = z.object({
-  id: z.string().uuid(),
-  code: z.string().min(1),
-  name: z.string().min(1),
-  description: z.string().nullable(),
-  permissions: z.array(z.string()),
-  isSystem: z.boolean(),
-  createdAt: isoDate,
-  updatedAt: isoDate,
-});
-const roleListSchema = z.array(roleSchema);
 const permissionCatalogSchema = z.object({
   resources: z.array(z.string()),
   actions: z.array(z.string()),
   actionsByResource: z.record(z.string(), z.array(z.string())),
   permissions: z.array(z.string()),
+  permissionsByDepartment: z.record(z.string(), z.array(z.string())).default({}),
+  implicitPermissions: z.array(z.string()).default([]),
+});
+const notificationSummarySchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.string().min(1),
+      type: z.string().min(1),
+      department: z.string().min(1),
+      title: z.string().min(1),
+      description: z.string(),
+      href: z.string().startsWith('/'),
+      count: z.number().int().positive(),
+      unreadCount: z.number().int().nonnegative(),
+      read: z.boolean(),
+    }),
+  ),
+  total: z.number().int().nonnegative(),
+  unreadTotal: z.number().int().nonnegative(),
+});
+const notificationReadReceiptSchema = z.object({
+  notificationId: z.string().min(1),
+  pendingTotal: z.number().int().nonnegative(),
+  unreadTotal: z.number().int().nonnegative(),
+  markedRead: z.number().int().nonnegative(),
+  readAt: isoDate,
 });
 const licenseStatusSchema = z.object({
   state: z.enum(['active', 'grace']),
@@ -65,13 +89,25 @@ const licenseStatusSchema = z.object({
   expiresAt: isoDate,
   graceUntil: isoDate,
 });
+const profileSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  username: z.string().min(1),
+  email: z.string().email(),
+  profilePictureDataUrl: z.string().startsWith('data:image/').nullable(),
+});
+const apiErrorSchema = z.object({
+  code: z.unknown().optional(),
+  message: z.union([z.string(), z.array(z.string())]).optional(),
+});
+const publicErrorCodePattern = /^[A-Z][A-Z0-9_]{1,79}$/;
 
 function statusCodeToError(status: number): TenantAdministrationErrorCode {
   if (status === 401) return 'unauthorized';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not-found';
   if (status === 409) return 'conflict';
-  if (status === 400 || status === 422) return 'validation';
+  if (status === 400 || status === 413 || status === 422) return 'validation';
   return 'service-unavailable';
 }
 
@@ -92,20 +128,41 @@ function parseApiResponse<T>(schema: z.ZodType<T>, value: unknown): T {
   return parsed.data;
 }
 
-function apiErrorMessage(value: unknown): string | null {
-  const parsed = z
-    .object({
-      message: z.union([z.string(), z.array(z.string())]),
-    })
-    .safeParse(value);
+function fallbackPublicCodeForStatus(status: number): string {
+  return `HTTP_${status}`;
+}
 
-  if (!parsed.success) return null;
+function normalizePublicErrorCode(value: unknown, fallback: string): string {
+  return typeof value === 'string' && publicErrorCodePattern.test(value) ? value : fallback;
+}
 
-  const message = Array.isArray(parsed.data.message)
-    ? parsed.data.message.join(' ')
-    : parsed.data.message;
+function canExposeApiErrorMessage(status: number): boolean {
+  return [400, 401, 403, 404, 409, 422, 423, 429].includes(status);
+}
 
-  return message.trim() || null;
+async function readApiError(response: Response): Promise<{
+  readonly message: string | null;
+  readonly publicCode: string;
+}> {
+  const fallback = fallbackPublicCodeForStatus(response.status);
+
+  try {
+    const parsed = apiErrorSchema.safeParse(await response.json());
+    if (!parsed.success) return { message: null, publicCode: fallback };
+
+    const rawMessage = parsed.data.message;
+    const message =
+      rawMessage === undefined
+        ? null
+        : (Array.isArray(rawMessage) ? rawMessage.join(' ') : rawMessage).trim() || null;
+
+    return {
+      message,
+      publicCode: normalizePublicErrorCode(parsed.data.code, fallback),
+    };
+  } catch {
+    return { message: null, publicCode: fallback };
+  }
 }
 
 function searchParams(values: Record<string, string | number | boolean | undefined>): string {
@@ -132,7 +189,9 @@ export class TenantApiAdministrationGateway implements TenantAdministrationGatew
       page?: number;
       pageSize?: number;
       search?: string;
-      isActive?: boolean;
+      department?: string;
+      permission?: string;
+      status?: 'active' | 'inactive' | 'suspended';
     } = {},
   ) {
     return parseApiResponse(
@@ -142,7 +201,9 @@ export class TenantApiAdministrationGateway implements TenantAdministrationGatew
           page: query.page ?? 1,
           pageSize: query.pageSize ?? 20,
           search: query.search,
-          isActive: query.isActive,
+          department: query.department,
+          permission: query.permission,
+          status: query.status,
         })}`,
       ),
     );
@@ -169,37 +230,85 @@ export class TenantApiAdministrationGateway implements TenantAdministrationGatew
     );
   }
 
-  async listRoles() {
-    return parseApiResponse(roleListSchema, await this.request('/roles'));
-  }
-
-  async createRole(input: CreateTenantRoleInput) {
+  async updateUserStatus(
+    userId: string,
+    input: {
+      status: 'active' | 'inactive' | 'suspended';
+      suspendedUntil?: string;
+      suspensionReason?: string;
+    },
+  ) {
     return parseApiResponse(
-      roleSchema,
-      await this.request('/roles', { method: 'POST', body: input }),
-    );
-  }
-
-  async updateRole(roleId: string, input: UpdateTenantRoleInput) {
-    return parseApiResponse(
-      roleSchema,
-      await this.request(`/roles/${encodeURIComponent(roleId)}`, {
+      userSchema,
+      await this.request(`/users/${encodeURIComponent(userId)}/status`, {
         method: 'PATCH',
         body: input,
       }),
     );
   }
 
-  async deleteRole(roleId: string): Promise<void> {
-    await this.request(`/roles/${encodeURIComponent(roleId)}`, { method: 'DELETE' }, true);
+  async requestPasswordReset(userId: string) {
+    return parseApiResponse(
+      z.object({
+        requested: z.literal(true),
+        recipient: z.string().email(),
+        expiresAt: isoDate,
+      }),
+      await this.request(`/users/${encodeURIComponent(userId)}/password-reset`, {
+        method: 'POST',
+      }),
+    );
   }
 
   async listPermissions() {
     return parseApiResponse(permissionCatalogSchema, await this.request('/permissions'));
   }
 
+  async getNotifications() {
+    return parseApiResponse(notificationSummarySchema, await this.request('/notifications'));
+  }
+
+  async markNotificationRead(notificationId: string) {
+    return parseApiResponse(
+      notificationReadReceiptSchema,
+      await this.request(`/notifications/${encodeURIComponent(notificationId)}/read`, {
+        method: 'POST',
+      }),
+    );
+  }
+
   async getLicenseStatus() {
     return parseApiResponse(licenseStatusSchema, await this.request('/license/status'));
+  }
+
+  async getProfile() {
+    return parseApiResponse(profileSchema, await this.request('/users/me/profile'));
+  }
+
+  async updateProfilePicture(dataUrl: string | null) {
+    return parseApiResponse(
+      profileSchema,
+      await this.request('/users/me/profile-picture', {
+        method: 'PUT',
+        body: { dataUrl },
+      }),
+    );
+  }
+
+  async changeOwnPassword(input: {
+    readonly currentPassword: string;
+    readonly newPassword: string;
+  }) {
+    return parseApiResponse(
+      z.object({
+        changed: z.literal(true),
+        sessionRevoked: z.literal(true),
+      }),
+      await this.request('/users/me/password', {
+        method: 'PATCH',
+        body: input,
+      }),
+    );
   }
 
   private async request(
@@ -229,15 +338,22 @@ export class TenantApiAdministrationGateway implements TenantAdministrationGatew
     }
 
     if (!response.ok) {
-      let message = `A API respondeu com o status ${response.status}.`;
+      const apiError = await readApiError(response);
 
-      try {
-        message = apiErrorMessage(await response.json()) ?? message;
-      } catch {
-        // Mantém a mensagem baseada no status.
+      if (response.status === 413) {
+        throw new TenantAdministrationError(
+          'validation',
+          'A imagem excedeu o limite aceito pelo servidor. Selecione um arquivo de até 512 KB.',
+          apiError.publicCode,
+        );
       }
 
-      throw new TenantAdministrationError(statusCodeToError(response.status), message);
+      throw new TenantAdministrationError(
+        statusCodeToError(response.status),
+        (canExposeApiErrorMessage(response.status) ? apiError.message : null) ??
+          `A API respondeu com o status ${response.status}.`,
+        apiError.publicCode,
+      );
     }
 
     if (emptyResponse || response.status === 204) return null;

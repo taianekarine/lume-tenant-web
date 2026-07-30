@@ -32,6 +32,10 @@ type Fetcher = typeof fetch;
 
 const isoDateSchema = z.string().refine((value) => Number.isFinite(Date.parse(value)));
 const nullableIsoDateSchema = isoDateSchema.nullable();
+const nullableCivilDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .nullable();
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 const quoteRequestSchema = z.object({
@@ -44,7 +48,9 @@ const quoteRequestSchema = z.object({
   serviceType: z.string().nullable(),
   origin: z.string().nullable(),
   destination: z.string().nullable(),
+  departureDate: nullableCivilDateSchema,
   departureAt: nullableIsoDateSchema,
+  returnDate: nullableCivilDateSchema,
   returnAt: nullableIsoDateSchema,
   passengerCount: z.number().int().positive().nullable(),
   vehicleType: z.string().nullable(),
@@ -91,6 +97,7 @@ const conversationSchema = z.object({
   createdAt: isoDateSchema,
   updatedAt: isoDateSchema,
   currentQuoteRequest: quoteRequestSchema.nullable(),
+  hasApprovedQuoteRequest: z.boolean().default(false),
 });
 
 const paginationSchema = z.object({
@@ -139,6 +146,13 @@ const messageSchema = z.object({
   kind: z.enum(WHATSAPP_MESSAGE_KINDS),
   text: z.string().nullable(),
   media: mediaSchema,
+  sentBy: z
+    .object({
+      id: z.string().uuid(),
+      name: z.string().min(1),
+    })
+    .nullable()
+    .optional(),
   correlationId: z.string().min(1),
   occurredAt: isoDateSchema,
   attempts: z.array(messageAttemptSchema),
@@ -171,6 +185,17 @@ const transitionSchema = z.object({
   resultingVersion: z.number().int().positive(),
   actorType: z.string().min(1),
   actorUserId: z.string().uuid().nullable(),
+  actor: z
+    .object({
+      type: z.string().min(1),
+      user: z
+        .object({
+          id: z.string().uuid(),
+          name: z.string().min(1),
+        })
+        .nullable(),
+    })
+    .optional(),
   from: conversationSnapshotSchema,
   to: conversationSnapshotSchema,
   metadata: jsonObjectSchema,
@@ -206,7 +231,9 @@ function filtersToQuery(filters?: GetWhatsAppConversationsFilters): string {
   });
 
   if (filters?.search?.trim()) params.set('search', filters.search.trim());
+  if (filters?.department) params.set('department', filters.department);
   if (filters?.state) params.set('state', filters.state);
+  if (filters?.requestStatus) params.set('requestStatus', filters.requestStatus);
 
   return `?${params.toString()}`;
 }
@@ -254,6 +281,7 @@ function mapMessage(message: ApiMessage): WhatsAppMessage {
     kind: message.kind,
     text: message.text,
     attachment: mapAttachment(message.media),
+    sentBy: message.sentBy ?? null,
     occurredAt: message.occurredAt,
     attempts: message.attempts,
   };
@@ -290,6 +318,7 @@ function mapConversation(
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     currentQuoteRequest: mapQuoteRequest(conversation.currentQuoteRequest),
+    hasApprovedQuoteRequest: conversation.hasApprovedQuoteRequest,
     messages,
     transitions,
   };
@@ -348,12 +377,57 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
   async getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]> {
+    return this.getConversationCollection('/whatsapp/conversations', filters);
+  }
+
+  async getDashboardConversations(
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<readonly WhatsAppConversation[]> {
+    return this.getConversationCollection('/whatsapp/conversations/dashboard', filters);
+  }
+
+  private async getConversationCollection(
+    path: string,
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<readonly WhatsAppConversation[]> {
+    const firstPage = filters?.page ?? 1;
+    const pageSize = filters?.pageSize ?? 100;
     const response = parseResponse(
       conversationListSchema,
-      await this.request(`/whatsapp/conversations${filtersToQuery(filters)}`),
+      await this.request(
+        `${path}${filtersToQuery({
+          ...filters,
+          page: firstPage,
+          pageSize,
+        })}`,
+      ),
     );
 
-    return response.data.map((conversation) => mapConversation(conversation));
+    if (filters?.page || response.meta.totalPages <= firstPage) {
+      return response.data.map((conversation) => mapConversation(conversation));
+    }
+
+    const remainingPages = await Promise.all(
+      Array.from(
+        { length: response.meta.totalPages - firstPage },
+        (_unused, index) => firstPage + index + 1,
+      ).map(async (page) =>
+        parseResponse(
+          conversationListSchema,
+          await this.request(
+            `${path}${filtersToQuery({
+              ...filters,
+              page,
+              pageSize,
+            })}`,
+          ),
+        ),
+      ),
+    );
+
+    return [response, ...remainingPages].flatMap((page) =>
+      page.data.map((conversation) => mapConversation(conversation)),
+    );
   }
 
   async getConversationById(conversationId: string): Promise<WhatsAppConversation | null> {
@@ -408,6 +482,23 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
     expectedVersion: number,
   ): Promise<WhatsAppConversation> {
     return this.executeVersionedAction(conversationId, 'mark-read', expectedVersion);
+  }
+
+  async closeConversationAfterRejection(
+    conversationId: string,
+    expectedVersion: number,
+  ): Promise<WhatsAppConversation> {
+    return this.executeVersionedAction(conversationId, 'close-after-rejection', expectedVersion);
+  }
+
+  async closeConversation(
+    conversationId: string,
+    expectedVersion: number,
+    reason?: string | null,
+  ): Promise<WhatsAppConversation> {
+    return this.executeVersionedAction(conversationId, 'close', expectedVersion, {
+      reason: reason?.trim() || null,
+    });
   }
 
   async sendHumanMessage(
@@ -478,7 +569,8 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
 
   private async executeVersionedAction(
     conversationId: string,
-    action: 'take-over' | 'return-to-bot' | 'forward' | 'mark-read',
+    action:
+      'take-over' | 'return-to-bot' | 'forward' | 'mark-read' | 'close' | 'close-after-rejection',
     expectedVersion: number,
     extra: Readonly<Record<string, unknown>> = {},
   ): Promise<WhatsAppConversation> {

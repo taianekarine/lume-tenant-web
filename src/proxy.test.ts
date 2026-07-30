@@ -8,7 +8,7 @@ import {
   encryptApiAuthenticationTokens,
 } from '@/features/auth/infrastructure/api-token-storage';
 
-import { proxy } from './proxy';
+import { config, proxy } from './proxy';
 
 const SESSION_SECRET = 'test-session-secret-with-at-least-32-bytes';
 
@@ -60,6 +60,10 @@ describe('tenant session proxy', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('x-middleware-next')).toBe('1');
+  });
+
+  it('protects the quote proposal queue with the session proxy', () => {
+    expect(config.matcher).toContain('/quote-proposals/:path*');
   });
 
   it('redirects an expiring access token to the refresh Route Handler', async () => {

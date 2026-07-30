@@ -1,21 +1,28 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import Link from 'next/link';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { tenantBranding } from '@/config/tenant-branding';
+import { ThemeToggle } from '@/features/navigation/theme-toggle';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 
-import { loginAction } from '../actions/login-action';
+import { loginAction, type LoginActionFailure } from '../actions/login-action';
+import type { PasswordSetupChallenge } from '../application';
+import { InitialPasswordSetupDialog } from '../components/initial-password-setup-dialog';
+import { AUTH_FALLBACK_ERROR_CODES } from '../lib/auth-error-feedback';
 import { normalizeLoginIdentifier } from '../lib/login-identifier';
 import { loginSchema, type LoginFormData } from '../lib/login-schema';
 import { loginPageStyles } from './login-page.styles';
 
-export function LoginPage() {
+export function LoginPage({ passwordChanged = false }: { readonly passwordChanged?: boolean }) {
   const [showPassword, setShowPassword] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<LoginActionFailure | null>(null);
+  const [passwordSetupChallenge, setPasswordSetupChallenge] =
+    useState<PasswordSetupChallenge | null>(null);
 
   const {
     register,
@@ -42,14 +49,31 @@ export function LoginPage() {
         remember: values.remember,
       });
 
-      setLoginError(result.message);
+      const setupChallenge = result.passwordSetupChallenge ?? null;
+      setPasswordSetupChallenge(setupChallenge);
+      setLoginError(setupChallenge ? null : result);
     } catch {
-      setLoginError('Não foi possível acessar sua conta. Tente novamente.');
+      setLoginError({
+        success: false,
+        message: 'Não foi possível acessar sua conta. Tente novamente.',
+        errorCode: AUTH_FALLBACK_ERROR_CODES.unexpected,
+      });
     }
+  }
+
+  function handleInvalidLogin() {
+    setLoginError({
+      success: false,
+      message: 'Revise os campos destacados e tente novamente.',
+      errorCode: AUTH_FALLBACK_ERROR_CODES.validation,
+    });
   }
 
   return (
     <main className={loginPageStyles.page()}>
+      <div className={loginPageStyles.themeToggle()}>
+        <ThemeToggle />
+      </div>
       <Card className={loginPageStyles.card()}>
         <CardHeader className={loginPageStyles.cardHeader()}>
           <p className={loginPageStyles.platformName()}>{tenantBranding.productName}</p>
@@ -59,27 +83,35 @@ export function LoginPage() {
           </CardTitle>
 
           <CardDescription className={loginPageStyles.description()}>
-            Informe seu usuário, e-mail ou CPF para continuar.
+            Informe seu usuário ou e-mail para continuar.
           </CardDescription>
         </CardHeader>
 
         <CardContent className={loginPageStyles.cardContent()}>
+          {passwordChanged ? (
+            <p
+              role="status"
+              className="mb-5 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700"
+            >
+              Senha definida com sucesso. Entre com sua nova senha.
+            </p>
+          ) : null}
           <form
             className={loginPageStyles.form()}
-            onSubmit={handleSubmit(handleLogin)}
+            onSubmit={handleSubmit(handleLogin, handleInvalidLogin)}
             aria-describedby={loginError ? 'login-error' : undefined}
             noValidate
           >
             <div className={loginPageStyles.fieldGroup()}>
               <label htmlFor="identifier" className={loginPageStyles.label()}>
-                Usuário, e-mail ou CPF
+                Usuário ou e-mail
               </label>
 
               <input
                 id="identifier"
                 type="text"
                 autoComplete="username"
-                placeholder="Digite seu usuário, e-mail ou CPF"
+                placeholder="Digite seu usuário ou e-mail"
                 aria-invalid={Boolean(errors.identifier)}
                 aria-describedby={errors.identifier ? 'identifier-error' : undefined}
                 className={loginPageStyles.input({
@@ -101,7 +133,12 @@ export function LoginPage() {
                   Senha
                 </label>
 
-                <Button type="button" variant="link" className={loginPageStyles.forgotPassword()}>
+                <Button
+                  render={<Link href="/forgot-password" />}
+                  nativeButton={false}
+                  variant="link"
+                  className={loginPageStyles.forgotPassword()}
+                >
                   Esqueci minha senha
                 </Button>
               </div>
@@ -150,7 +187,10 @@ export function LoginPage() {
 
             {loginError && (
               <p id="login-error" role="alert" className={loginPageStyles.fieldError()}>
-                {loginError}
+                <span className="block">{loginError.message}</span>
+                <span className="mt-1 block font-mono text-xs">
+                  Código do erro: {loginError.errorCode}
+                </span>
               </p>
             )}
 
@@ -165,6 +205,10 @@ export function LoginPage() {
           </form>
         </CardContent>
       </Card>
+      <InitialPasswordSetupDialog
+        challenge={passwordSetupChallenge}
+        onClear={() => setPasswordSetupChallenge(null)}
+      />
     </main>
   );
 }

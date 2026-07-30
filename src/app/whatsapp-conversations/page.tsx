@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
-import { hasPermission } from '@/features/auth/domain';
+import { hasCommercialScope, hasPermission } from '@/features/auth/domain';
 import { getCurrentAuthenticatedSession } from '@/features/auth/server';
 import { WhatsAppConversationRepositoryError } from '@/features/whatsapp-conversations/application';
 import type { WhatsAppConversation } from '@/features/whatsapp-conversations/domain';
@@ -9,7 +9,7 @@ import { WhatsAppConversationsPage } from '@/features/whatsapp-conversations/pag
 import { getWhatsAppConversationsForDashboard } from '@/features/whatsapp-conversations/server';
 
 export const metadata: Metadata = {
-  title: 'Conversas WhatsApp | Milenium Platform',
+  title: 'Painel WhatsApp | Lume',
   description: 'Gestão protegida das conversas comerciais recebidas pelo WhatsApp.',
 };
 
@@ -20,7 +20,10 @@ export default async function Page() {
     redirect('/login');
   }
 
-  if (!hasPermission(session.user, 'whatsapp-conversations:manage')) {
+  if (
+    !hasCommercialScope(session.user) ||
+    !hasPermission(session.user, 'whatsapp-conversations:manage')
+  ) {
     redirect('/dashboard');
   }
 

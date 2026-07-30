@@ -35,7 +35,6 @@ function session(permissions: readonly Permission[]): AuthenticatedSession {
       name: 'Usuário',
       type: 'employee',
       departments: ['commercial'],
-      roles: [],
       permissions,
       clientCategory: null,
       isActive: true,

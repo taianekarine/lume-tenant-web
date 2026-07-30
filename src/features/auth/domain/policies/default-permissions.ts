@@ -1,4 +1,11 @@
-import type { Department, Permission, Role } from '../entities';
+import type { Department, Permission } from '../entities';
+
+export const EMPLOYEE_SELF_SERVICE_PERMISSIONS = [
+  'profile:view',
+  'profile:update',
+  'support:view',
+  'support:create',
+] as const satisfies readonly Permission[];
 
 export const DEFAULT_DEPARTMENT_PERMISSIONS = {
   'human-resources': [
@@ -52,6 +59,36 @@ export const DEFAULT_DEPARTMENT_PERMISSIONS = {
     'reports:export',
   ],
 
+  controlling: [
+    'dashboard:view',
+    'financial:view',
+    'financial:create',
+    'financial:update',
+    'financial:manage',
+    'financial:approve',
+    'financial:export',
+    'commercial:view',
+    'clients:view',
+    'manuals:view',
+    'reports:view',
+    'reports:export',
+  ],
+
+  controllership: [
+    'dashboard:view',
+    'financial:view',
+    'financial:create',
+    'financial:update',
+    'financial:manage',
+    'financial:approve',
+    'financial:export',
+    'commercial:view',
+    'clients:view',
+    'manuals:view',
+    'reports:view',
+    'reports:export',
+  ],
+
   maintenance: [
     'dashboard:view',
     'maintenance:view',
@@ -72,6 +109,24 @@ export const DEFAULT_DEPARTMENT_PERMISSIONS = {
     'monitoring:manage',
     'operations:view',
     'drivers:view',
+    'manuals:view',
+    'reports:view',
+    'reports:export',
+  ],
+
+  management: [
+    'dashboard:view',
+    'operations:view',
+    'operations:create',
+    'operations:update',
+    'operations:manage',
+    'monitoring:view',
+    'maintenance:view',
+    'commercial:view',
+    'financial:view',
+    'clients:view',
+    'drivers:view',
+    'drivers:manage',
     'manuals:view',
     'reports:view',
     'reports:export',
@@ -142,52 +197,3 @@ export const DEFAULT_DEPARTMENT_PERMISSIONS = {
     'settings:manage',
   ],
 } as const satisfies Record<Department, readonly Permission[]>;
-
-export const DEFAULT_ROLE_PERMISSIONS = {
-  director: [
-    'dashboard:view',
-    'users:view',
-    'users:manage',
-    'human-resources:view',
-    'human-resources:manage',
-    'personnel-department:view',
-    'personnel-department:manage',
-    'commercial:view',
-    'commercial:manage',
-    'purchasing:view',
-    'purchasing:manage',
-    'maintenance:view',
-    'maintenance:manage',
-    'monitoring:view',
-    'monitoring:manage',
-    'operations:view',
-    'operations:manage',
-    'cleaning:view',
-    'cleaning:manage',
-    'drivers:view',
-    'drivers:manage',
-    'financial:view',
-    'financial:manage',
-    'financial:approve',
-    'clients:view',
-    'clients:manage',
-    'whatsapp-conversations:manage',
-    'ai-agents:view',
-    'ai-agents:use',
-    'manuals:view',
-    'reports:view',
-    'reports:export',
-    'settings:view',
-  ],
-
-  manager: [
-    'dashboard:view',
-    'whatsapp-conversations:manage',
-    'ai-agents:use',
-    'manuals:view',
-    'reports:view',
-    'reports:export',
-  ],
-
-  driver: ['dashboard:view', 'drivers:view', 'operations:view', 'manuals:view'],
-} as const satisfies Record<Role, readonly Permission[]>;

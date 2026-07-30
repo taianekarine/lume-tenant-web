@@ -47,6 +47,16 @@ Publique a porta 3000 somente na rede interna do proxy reverso. O proxy deve:
 - limitar o tamanho de corpo;
 - aplicar timeout superior ao timeout server-side da Tenant API.
 
+Para propostas, o limite de corpo do proxy deve aceitar multipart de pelo menos
+50 MiB mais os campos do formulário: o lote permite até cinco PDFs e cada um
+mantém o limite individual de 10 MiB. O limite público não deve ser removido: a
+Tenant API continua sendo a autoridade da validação de tamanho, MIME, assinatura
+PDF e hash. O Next.js aceita até 51 MiB na Server Action para comportar o lote e
+o overhead do multipart; o proxy não pode impor um limite inferior. O adapter
+reserva trinta segundos para cada upload multipart. Configure timeouts do proxy
+acima da janela do lote para não transformar um upload persistido em erro
+ambíguo no navegador.
+
 O Tenant Web precisa alcançar apenas a Tenant API e os destinos HTTPS dos anexos
 publicados por ela.
 
@@ -65,10 +75,31 @@ balanceador. Nenhuma sonda expõe segredos ou JWTs.
 2. Gere e identifique a imagem pelo SHA.
 3. Confirme que as migrations e o bootstrap da Tenant API já terminaram.
 4. Suba uma réplica sem tráfego e valide `health` e `readiness`.
-5. Execute login real, abertura de conversa, takeover e envio humano controlado.
-6. Direcione tráfego e acompanhe erros 401, 409, 5xx e falhas de readiness.
+5. Confirme que a senha inicial não cria sessão, solicite recuperação por
+   **Esqueci minha senha**, abra o link de e-mail em `/reset-password` e entre
+   somente com a nova senha. Repita com um identificador inexistente e confirme
+   que a resposta visual é a mesma.
+6. Valide um usuário `active`, outro `inactive` e uma suspensão temporária com
+   motivo; confirme bloqueio de login/sessão e posterior ativação.
+7. Execute abertura de conversa, takeover, envio controlado pelo atendente no
+   painel **Histórico completo / Mensagens e anexos** e um canário de orçamento
+   com PDF não sensível.
+8. Valide o encerramento de uma conversa sem proposta ativa e confirme no
+   histórico data, atendente e motivo. Repita com uma proposta já aprovada e
+   confirme que o MVP permite o comando. Confirme também que uma proposta ainda
+   em andamento bloqueia o encerramento e que qualquer recusa da Tenant API é
+   exibida sem simular sucesso.
+9. Verifique o sino em usuários de departamentos diferentes e confirme que cada
+   um recebe somente notificações do próprio escopo. No Comercial, valide o
+   aviso de novo orçamento pendente.
+10. Confirme os grupos **Geral**, **Comercial** e **Administração** na sidebar,
+    o envio de suporte pelo provedor e, ao simular uma falha autorizada, o
+    `mailto:` com identificação do solicitante; confirme também a negativa de
+    `/users` e `/license` fora de Gerência ou sem suas permissões individuais.
+11. Direcione tráfego e acompanhe erros 401, 403, 409, 423, 5xx e falhas de
+    readiness.
 
-O envio humano registra primeiro uma mensagem `pending` na Tenant API. A
+O envio pelo atendente registra primeiro uma mensagem `pending` na Tenant API. A
 confirmação `sent`, `delivered`, `read` ou `failed` aparece depois pelo polling;
 uma resposta HTTP bem-sucedida do painel não deve ser interpretada como entrega
 ao WhatsApp.

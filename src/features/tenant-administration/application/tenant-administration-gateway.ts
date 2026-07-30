@@ -1,13 +1,15 @@
 import type {
-  CreateTenantRoleInput,
   CreateTenantUserInput,
   LocalLicenseStatus,
   PermissionCatalog,
-  TenantRole,
+  TenantNotificationReadReceipt,
+  TenantNotificationSummary,
+  TenantProfile,
   TenantUser,
   TenantUserList,
-  UpdateTenantRoleInput,
+  TenantUserStatus,
   UpdateTenantUserInput,
+  UpdateTenantUserStatusInput,
 } from '../domain';
 
 export type TenantAdministrationErrorCode =
@@ -19,10 +21,21 @@ export type TenantAdministrationErrorCode =
   | 'invalid-response'
   | 'service-unavailable';
 
+const defaultPublicCodeByErrorCode: Readonly<Record<TenantAdministrationErrorCode, string>> = {
+  unauthorized: 'UNAUTHORIZED',
+  forbidden: 'FORBIDDEN',
+  validation: 'VALIDATION_ERROR',
+  conflict: 'CONFLICT',
+  'not-found': 'NOT_FOUND',
+  'invalid-response': 'INVALID_RESPONSE',
+  'service-unavailable': 'SERVICE_UNAVAILABLE',
+};
+
 export class TenantAdministrationError extends Error {
   constructor(
     readonly code: TenantAdministrationErrorCode,
     message: string,
+    readonly publicCode: string = defaultPublicCodeByErrorCode[code],
   ) {
     super(message);
     this.name = 'TenantAdministrationError';
@@ -34,15 +47,27 @@ export interface TenantAdministrationGateway {
     page?: number;
     pageSize?: number;
     search?: string;
-    isActive?: boolean;
+    department?: string;
+    permission?: string;
+    status?: TenantUserStatus;
   }): Promise<TenantUserList>;
   getUser(userId: string): Promise<TenantUser>;
   createUser(input: CreateTenantUserInput): Promise<TenantUser>;
   updateUser(userId: string, input: UpdateTenantUserInput): Promise<TenantUser>;
-  listRoles(): Promise<readonly TenantRole[]>;
-  createRole(input: CreateTenantRoleInput): Promise<TenantRole>;
-  updateRole(roleId: string, input: UpdateTenantRoleInput): Promise<TenantRole>;
-  deleteRole(roleId: string): Promise<void>;
+  updateUserStatus(userId: string, input: UpdateTenantUserStatusInput): Promise<TenantUser>;
+  requestPasswordReset(userId: string): Promise<{
+    readonly requested: true;
+    readonly recipient: string;
+    readonly expiresAt: string;
+  }>;
   listPermissions(): Promise<PermissionCatalog>;
+  getNotifications(): Promise<TenantNotificationSummary>;
+  markNotificationRead(notificationId: string): Promise<TenantNotificationReadReceipt>;
   getLicenseStatus(): Promise<LocalLicenseStatus>;
+  getProfile(): Promise<TenantProfile>;
+  updateProfilePicture(dataUrl: string | null): Promise<TenantProfile>;
+  changeOwnPassword(input: {
+    readonly currentPassword: string;
+    readonly newPassword: string;
+  }): Promise<{ readonly changed: true; readonly sessionRevoked: true }>;
 }

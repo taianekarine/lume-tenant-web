@@ -6,8 +6,8 @@ import { getCurrentAuthenticatedSession } from '@/features/auth/server';
 import { AiAgentsPage } from '@/features/ai-agents/pages';
 
 export const metadata: Metadata = {
-  title: 'Agentes de IA | Milenium Platform',
-  description: 'Catálogo protegido de agentes de IA da Milenium Platform.',
+  title: 'Agentes de IA | Lume',
+  description: 'Catálogo protegido de agentes de IA do Lume.',
 };
 
 export default async function Page() {

@@ -47,7 +47,6 @@ const apiSession: AuthenticatedSession = {
     name: 'Administrador da API',
     type: 'employee',
     departments: ['commercial'],
-    roles: ['administrator'],
     permissions: ['dashboard:view', 'whatsapp-conversations:manage'],
     clientCategory: null,
     isActive: true,
@@ -98,8 +97,11 @@ function createAuthenticationGatewayMock(): AuthenticationGateway {
       session: apiSession,
       tokens: apiTokens,
     }),
+    getCurrentIdentity: jest.fn(),
+    requestPasswordReset: jest.fn().mockResolvedValue(undefined),
     refresh: jest.fn(),
     logout: jest.fn().mockResolvedValue(undefined),
+    completePasswordChange: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -147,7 +149,8 @@ describe('loginAction', () => {
       }),
     ).resolves.toEqual({
       success: false,
-      message: 'Informe seu usuário, e-mail ou CPF.',
+      message: 'Informe seu usuário ou e-mail.',
+      errorCode: 'VALIDATION_ERROR',
     });
 
     expect(mockedCreateCookieSessionStorage).not.toHaveBeenCalled();
@@ -175,7 +178,6 @@ describe('loginAction', () => {
           name: user.name,
           type: 'employee',
           departments: user.departments,
-          roles: user.roles,
           isActive: true,
         },
         rememberDevice: false,
@@ -184,7 +186,6 @@ describe('loginAction', () => {
         resolveAccessPermissions({
           type: 'employee',
           departments: user.departments,
-          roles: user.roles,
         }),
       );
       expect(JSON.stringify(savedSession)).not.toContain(user.identifier);
@@ -195,7 +196,7 @@ describe('loginAction', () => {
     },
   );
 
-  it('keeps simulated external-client access disabled', async () => {
+  it('keeps numeric document access disabled', async () => {
     await expect(
       loginAction({
         identifier: '11.222.333/0001-81',
@@ -204,7 +205,8 @@ describe('loginAction', () => {
       }),
     ).resolves.toEqual({
       success: false,
-      message: 'O acesso por CNPJ ainda não está disponível.',
+      message: 'Informe um usuário ou e-mail válido.',
+      errorCode: 'VALIDATION_ERROR',
     });
 
     expect(sessionStorage.save).not.toHaveBeenCalled();
@@ -225,13 +227,51 @@ describe('loginAction', () => {
         }),
       ).resolves.toEqual({
         success: false,
-        message: 'Usuário ou senha inválidos.',
+        message: 'Usuário ou senha inválidos. Se o problema persistir, contate o administrador.',
+        errorCode: 'INVALID_CREDENTIALS',
       });
 
       expect(mockedCreateCookieSessionStorage).not.toHaveBeenCalled();
       expect(mockedRedirect).not.toHaveBeenCalled();
     },
   );
+
+  it('returns the first-access challenge without persisting a session', async () => {
+    process.env.AUTH_SIMULATION_ENABLED = 'false';
+    jest.mocked(authenticationGateway.authenticate).mockRejectedValue(
+      new AuthenticationGatewayError(
+        'account-password-setup-required',
+        'Defina uma nova senha para concluir o primeiro acesso.',
+        'ACCOUNT_PASSWORD_SETUP_REQUIRED',
+        {
+          token: 'opaque-first-access-challenge',
+          expiresAt: '2026-07-29T12:00:00.000Z',
+          reason: 'first-access',
+        },
+      ),
+    );
+
+    await expect(
+      loginAction({
+        identifier: 'administrador.api',
+        password: 'SenhaInicial@2026',
+        remember: false,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message: 'Defina uma nova senha para concluir o primeiro acesso.',
+      errorCode: 'ACCOUNT_PASSWORD_SETUP_REQUIRED',
+      passwordSetupChallenge: {
+        token: 'opaque-first-access-challenge',
+        expiresAt: '2026-07-29T12:00:00.000Z',
+        reason: 'first-access',
+      },
+    });
+
+    expect(sessionStorage.save).not.toHaveBeenCalled();
+    expect(apiTokenStorage.save).not.toHaveBeenCalled();
+    expect(mockedRedirect).not.toHaveBeenCalled();
+  });
 
   it('authenticates against the API when simulation is disabled', async () => {
     process.env.AUTH_SIMULATION_ENABLED = 'false';
@@ -283,7 +323,8 @@ describe('loginAction', () => {
       }),
     ).resolves.toEqual({
       success: false,
-      message: 'Usuário ou senha inválidos.',
+      message: 'Usuário ou senha inválidos. Se o problema persistir, contate o administrador.',
+      errorCode: 'INVALID_CREDENTIALS',
     });
 
     expect(mockedCreateCookieSessionStorage).not.toHaveBeenCalled();
@@ -304,12 +345,72 @@ describe('loginAction', () => {
       }),
     ).resolves.toEqual({
       success: false,
-      message: 'Não foi possível conectar ao serviço de autenticação. Tente novamente.',
+      message:
+        'Não foi possível conectar ao serviço de autenticação. Tente novamente ou contate o administrador.',
+      errorCode: 'SERVICE_UNAVAILABLE',
     });
 
     expect(mockedCreateCookieSessionStorage).not.toHaveBeenCalled();
     expect(mockedRedirect).not.toHaveBeenCalled();
   });
+
+  it('does not accept a legacy inline password challenge as a successful login', async () => {
+    process.env.AUTH_SIMULATION_ENABLED = 'false';
+    jest
+      .mocked(authenticationGateway.authenticate)
+      .mockRejectedValue(
+        new AuthenticationGatewayError('invalid-response', 'Legacy password challenge'),
+      );
+
+    await expect(
+      loginAction({
+        identifier: 'administrador.api',
+        password: 'SenhaInicial@2026',
+        remember: false,
+      }),
+    ).resolves.toEqual({
+      success: false,
+      message:
+        'Não foi possível conectar ao serviço de autenticação. Tente novamente ou contate o administrador.',
+      errorCode: 'INVALID_RESPONSE',
+    });
+
+    expect(sessionStorage.save).not.toHaveBeenCalled();
+    expect(apiTokenStorage.save).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      'account-password-setup-required',
+      'senha inicial não pode ser usada',
+      'ACCOUNT_PASSWORD_SETUP_REQUIRED',
+    ],
+    ['account-inactive', 'desativado', 'ACCOUNT_INACTIVE'],
+    ['account-suspended', 'suspenso', 'ACCOUNT_SUSPENDED'],
+  ] as const)(
+    'shows the safe %s account state on the login screen',
+    async (code, text, publicCode) => {
+      process.env.AUTH_SIMULATION_ENABLED = 'false';
+      jest
+        .mocked(authenticationGateway.authenticate)
+        .mockRejectedValue(
+          new AuthenticationGatewayError(code, `Acesso ${text}. Contate o administrador.`),
+        );
+
+      const result = await loginAction({
+        identifier: 'administrador.api',
+        password: 'SenhaCorreta@2026',
+        remember: false,
+      });
+
+      expect(result).toEqual({
+        success: false,
+        message: `Acesso ${text}. Contate o administrador.`,
+        errorCode: publicCode,
+      });
+      expect(sessionStorage.save).not.toHaveBeenCalled();
+    },
+  );
 
   it('returns a safe error when simulated session persistence fails', async () => {
     mockedCreateCookieSessionStorage.mockRejectedValue(new Error('Missing secret'));
@@ -323,6 +424,7 @@ describe('loginAction', () => {
     ).resolves.toEqual({
       success: false,
       message: 'Não foi possível iniciar sua sessão. Tente novamente.',
+      errorCode: 'SESSION_INITIALIZATION_FAILED',
     });
 
     expect(mockedRedirect).not.toHaveBeenCalled();
@@ -341,6 +443,7 @@ describe('loginAction', () => {
     ).resolves.toEqual({
       success: false,
       message: 'Não foi possível iniciar sua sessão. Tente novamente.',
+      errorCode: 'SESSION_INITIALIZATION_FAILED',
     });
 
     expect(authenticationGateway.logout).toHaveBeenCalledWith(apiTokens.refreshToken);

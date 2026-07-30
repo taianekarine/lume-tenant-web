@@ -1,15 +1,29 @@
 /** @jest-environment node */
 
-import type { SessionStorage } from '../application';
-import { AUTHENTICATED_SESSION_VERSION, type AuthenticatedSession } from '../domain';
-import { createCookieSessionStorage } from '../infrastructure';
+import type {
+  ApiAuthenticationTokens,
+  ApiTokenStorage,
+  AuthenticationGateway,
+  SessionStorage,
+} from '../application';
+import { AUTHENTICATED_SESSION_VERSION, type AuthenticatedSession, type User } from '../domain';
+import {
+  createCookieApiTokenStorage,
+  createCookieSessionStorage,
+  createTenantApiAuthenticationGateway,
+} from '../infrastructure';
 import { getCurrentAuthenticatedSession } from './get-current-authenticated-session';
 
 jest.mock('../infrastructure', () => ({
+  createCookieApiTokenStorage: jest.fn(),
   createCookieSessionStorage: jest.fn(),
+  createTenantApiAuthenticationGateway: jest.fn(),
 }));
 
+const mockedCreateCookieApiTokenStorage = jest.mocked(createCookieApiTokenStorage);
 const mockedCreateCookieSessionStorage = jest.mocked(createCookieSessionStorage);
+const mockedCreateAuthenticationGateway = jest.mocked(createTenantApiAuthenticationGateway);
+const originalSimulationFlag = process.env.AUTH_SIMULATION_ENABLED;
 
 function createValidSession(): AuthenticatedSession {
   return {
@@ -17,10 +31,9 @@ function createValidSession(): AuthenticatedSession {
     id: 'session-employee-001',
     user: {
       id: 'employee-001',
-      name: 'Usuário de demonstração',
+      name: 'Usuário armazenado',
       type: 'employee',
-      departments: [],
-      roles: [],
+      departments: ['commercial'],
       permissions: ['dashboard:view'],
       clientCategory: null,
       isActive: true,
@@ -31,47 +44,152 @@ function createValidSession(): AuthenticatedSession {
   };
 }
 
+function createCurrentUser(overrides: Partial<User> = {}): User {
+  return {
+    id: 'employee-001',
+    name: 'Usuário atualizado',
+    type: 'employee',
+    departments: ['financial'],
+    permissions: ['dashboard:view', 'financial:view'],
+    clientCategory: null,
+    isActive: true,
+    ...overrides,
+  } as User;
+}
+
 function createSessionStorageMock(session: AuthenticatedSession | null): SessionStorage {
   return {
-    save: jest
-      .fn<ReturnType<SessionStorage['save']>, Parameters<SessionStorage['save']>>()
-      .mockResolvedValue(undefined),
-    get: jest
-      .fn<ReturnType<SessionStorage['get']>, Parameters<SessionStorage['get']>>()
-      .mockResolvedValue(session),
-    remove: jest
-      .fn<ReturnType<SessionStorage['remove']>, Parameters<SessionStorage['remove']>>()
-      .mockResolvedValue(undefined),
+    save: jest.fn().mockResolvedValue(undefined),
+    get: jest.fn().mockResolvedValue(session),
+    remove: jest.fn().mockResolvedValue(undefined),
   };
 }
 
+const tokens: ApiAuthenticationTokens = {
+  accessToken: 'current-access-token',
+  refreshToken: 'refresh-token-with-at-least-forty-characters-123456',
+  accessTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+  refreshTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+};
+
+function createTokenStorageMock(value: ApiAuthenticationTokens | null = tokens): ApiTokenStorage {
+  return {
+    save: jest.fn().mockResolvedValue(undefined),
+    get: jest.fn().mockResolvedValue(value),
+    remove: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function createAuthenticationGatewayMock(user: User = createCurrentUser()): AuthenticationGateway {
+  return {
+    authenticate: jest.fn(),
+    getCurrentIdentity: jest.fn().mockResolvedValue(user),
+    requestPasswordReset: jest.fn(),
+    refresh: jest.fn(),
+    logout: jest.fn(),
+    completePasswordChange: jest.fn(),
+  };
+}
+
+function restoreSimulationFlag() {
+  if (originalSimulationFlag === undefined) {
+    delete process.env.AUTH_SIMULATION_ENABLED;
+  } else {
+    process.env.AUTH_SIMULATION_ENABLED = originalSimulationFlag;
+  }
+}
+
 describe('getCurrentAuthenticatedSession', () => {
+  beforeEach(() => {
+    process.env.AUTH_SIMULATION_ENABLED = 'false';
+  });
+
   afterEach(() => {
-    mockedCreateCookieSessionStorage.mockReset();
+    jest.clearAllMocks();
+    restoreSimulationFlag();
   });
 
-  it('returns the current valid session', async () => {
+  it('revalidates the identity and returns current departments and permissions', async () => {
     const session = createValidSession();
-
+    const currentUser = createCurrentUser();
+    const authenticationGateway = createAuthenticationGatewayMock(currentUser);
     mockedCreateCookieSessionStorage.mockResolvedValue(createSessionStorageMock(session));
+    mockedCreateCookieApiTokenStorage.mockResolvedValue(createTokenStorageMock());
+    mockedCreateAuthenticationGateway.mockReturnValue(authenticationGateway);
 
-    await expect(getCurrentAuthenticatedSession()).resolves.toEqual(session);
+    await expect(getCurrentAuthenticatedSession()).resolves.toEqual({
+      ...session,
+      user: currentUser,
+    });
+    expect(authenticationGateway.getCurrentIdentity).toHaveBeenCalledWith(tokens.accessToken);
   });
 
-  it('returns null for an expired session', async () => {
+  it('returns null for an expired local session without calling the API', async () => {
     const expiredSession: AuthenticatedSession = {
       ...createValidSession(),
       expiresAt: new Date(Date.now() - 1_000).toISOString(),
     };
-
     mockedCreateCookieSessionStorage.mockResolvedValue(createSessionStorageMock(expiredSession));
+
+    await expect(getCurrentAuthenticatedSession()).resolves.toBeNull();
+    expect(mockedCreateCookieApiTokenStorage).not.toHaveBeenCalled();
+    expect(mockedCreateAuthenticationGateway).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the encrypted API token is absent', async () => {
+    mockedCreateCookieSessionStorage.mockResolvedValue(
+      createSessionStorageMock(createValidSession()),
+    );
+    mockedCreateCookieApiTokenStorage.mockResolvedValue(createTokenStorageMock(null));
+    mockedCreateAuthenticationGateway.mockReturnValue(createAuthenticationGatewayMock());
 
     await expect(getCurrentAuthenticatedSession()).resolves.toBeNull();
   });
 
-  it('returns null when the storage adapter is unavailable', async () => {
-    mockedCreateCookieSessionStorage.mockRejectedValue(new Error('Missing session configuration'));
+  it('fails closed when auth/me rejects a deactivated, suspended or stale token', async () => {
+    const authenticationGateway = createAuthenticationGatewayMock();
+    jest
+      .mocked(authenticationGateway.getCurrentIdentity)
+      .mockRejectedValue(new Error('Unauthorized'));
+    mockedCreateCookieSessionStorage.mockResolvedValue(
+      createSessionStorageMock(createValidSession()),
+    );
+    mockedCreateCookieApiTokenStorage.mockResolvedValue(createTokenStorageMock());
+    mockedCreateAuthenticationGateway.mockReturnValue(authenticationGateway);
 
+    await expect(getCurrentAuthenticatedSession()).resolves.toBeNull();
+  });
+
+  it('rejects a valid token whose current user differs from the local session', async () => {
+    mockedCreateCookieSessionStorage.mockResolvedValue(
+      createSessionStorageMock(createValidSession()),
+    );
+    mockedCreateCookieApiTokenStorage.mockResolvedValue(createTokenStorageMock());
+    mockedCreateAuthenticationGateway.mockReturnValue(
+      createAuthenticationGatewayMock(createCurrentUser({ id: 'employee-002' })),
+    );
+
+    await expect(getCurrentAuthenticatedSession()).resolves.toBeNull();
+  });
+
+  it('keeps explicit non-production simulation independent from API tokens', async () => {
+    process.env.AUTH_SIMULATION_ENABLED = 'true';
+    const session = createValidSession();
+    mockedCreateCookieSessionStorage.mockResolvedValue(createSessionStorageMock(session));
+
+    await expect(getCurrentAuthenticatedSession()).resolves.toEqual(session);
+    expect(mockedCreateCookieApiTokenStorage).not.toHaveBeenCalled();
+    expect(mockedCreateAuthenticationGateway).not.toHaveBeenCalled();
+  });
+
+  it('returns null when session or token infrastructure is unavailable', async () => {
+    mockedCreateCookieSessionStorage.mockRejectedValue(new Error('Missing session configuration'));
+    await expect(getCurrentAuthenticatedSession()).resolves.toBeNull();
+
+    mockedCreateCookieSessionStorage.mockResolvedValue(
+      createSessionStorageMock(createValidSession()),
+    );
+    mockedCreateCookieApiTokenStorage.mockRejectedValue(new Error('Missing token configuration'));
     await expect(getCurrentAuthenticatedSession()).resolves.toBeNull();
   });
 });

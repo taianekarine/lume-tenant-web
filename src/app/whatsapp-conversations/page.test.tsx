@@ -30,7 +30,10 @@ const mockedGetCurrentAuthenticatedSession = jest.mocked(getCurrentAuthenticated
 const mockedGetConversations = jest.mocked(getWhatsAppConversationsForDashboard);
 const mockedRedirect = jest.mocked(redirect);
 
-function createSession(permissions: readonly Permission[]): AuthenticatedSession {
+function createSession(
+  permissions: readonly Permission[],
+  departments: readonly string[] = ['commercial'],
+): AuthenticatedSession {
   return {
     version: AUTHENTICATED_SESSION_VERSION,
     id: 'session-commercial-001',
@@ -38,8 +41,7 @@ function createSession(permissions: readonly Permission[]): AuthenticatedSession
       id: 'commercial-001',
       name: 'Usuário Comercial',
       type: 'employee',
-      departments: ['commercial'],
-      roles: [],
+      departments,
       permissions,
       clientCategory: null,
       isActive: true,
@@ -72,6 +74,17 @@ describe('WhatsApp conversations page route', () => {
 
   it('redirects a user without conversation management permission', async () => {
     mockedGetCurrentAuthenticatedSession.mockResolvedValue(createSession(['dashboard:view']));
+
+    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+
+    expect(mockedRedirect).toHaveBeenCalledWith('/dashboard');
+    expect(mockedGetConversations).not.toHaveBeenCalled();
+  });
+
+  it('redirects a non-commercial user even if a legacy permission is present', async () => {
+    mockedGetCurrentAuthenticatedSession.mockResolvedValue(
+      createSession(['whatsapp-conversations:manage'], ['operations']),
+    );
 
     await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
 

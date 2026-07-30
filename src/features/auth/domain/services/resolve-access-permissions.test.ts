@@ -5,7 +5,6 @@ describe('resolveAccessPermissions', () => {
     const permissions = resolveAccessPermissions({
       type: 'employee',
       departments: ['commercial'],
-      roles: ['manager'],
     });
 
     expect(permissions).toContain('dashboard:view');
@@ -14,11 +13,10 @@ describe('resolveAccessPermissions', () => {
     expect(permissions).toContain('reports:export');
   });
 
-  it('combines multiple departments and roles for an employee', () => {
+  it('combines multiple departments for an employee', () => {
     const permissions = resolveAccessPermissions({
       type: 'employee',
       departments: ['commercial', 'financial'],
-      roles: ['manager'],
     });
 
     expect(permissions).toContain('commercial:view');
@@ -51,21 +49,24 @@ describe('resolveAccessPermissions', () => {
     expect(permissions).toContain('support:create');
   });
 
-  it('returns no permissions for an employee without departments or roles', () => {
+  it('returns only self-service permissions for an employee without departments', () => {
     const permissions = resolveAccessPermissions({
       type: 'employee',
       departments: [],
-      roles: [],
     });
 
-    expect(permissions).toEqual([]);
+    expect(permissions).toEqual([
+      'profile:view',
+      'profile:update',
+      'support:view',
+      'support:create',
+    ]);
   });
 
   it('does not return duplicate permissions for employees', () => {
     const permissions = resolveAccessPermissions({
       type: 'employee',
       departments: ['operations'],
-      roles: ['driver'],
     });
 
     expect(new Set(permissions).size).toBe(permissions.length);

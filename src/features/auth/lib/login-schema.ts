@@ -4,7 +4,7 @@ import { normalizeLoginIdentifier, validateLoginIdentifier } from './login-ident
 
 export const loginSchema = z
   .object({
-    identifier: z.string().trim().min(1, 'Informe seu usuário, e-mail ou CPF.'),
+    identifier: z.string().trim().min(1, 'Informe seu usuário ou e-mail.'),
 
     password: z.string().min(1, 'Informe sua senha.'),
 
@@ -23,7 +23,7 @@ export const loginSchema = z
       context.addIssue({
         code: 'custom',
         path: ['identifier'],
-        message: identifierValidation.message ?? 'Informe um usuário, e-mail ou CPF válido.',
+        message: identifierValidation.message ?? 'Informe um usuário ou e-mail válido.',
       });
     }
   });

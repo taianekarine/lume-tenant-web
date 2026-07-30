@@ -33,6 +33,16 @@ describe('login page route', () => {
     expect(mockedRedirect).not.toHaveBeenCalled();
   });
 
+  it('forwards the password change confirmation from the URL', async () => {
+    mockedGetCurrentAuthenticatedSession.mockResolvedValue(null);
+
+    const page = await Page({
+      searchParams: Promise.resolve({ passwordChanged: '1' }),
+    });
+
+    expect(page.props.passwordChanged).toBe(true);
+  });
+
   it('redirects an authenticated user away from login', async () => {
     const session: AuthenticatedSession = {
       version: AUTHENTICATED_SESSION_VERSION,
@@ -42,7 +52,6 @@ describe('login page route', () => {
         name: 'Usuário de demonstração',
         type: 'employee',
         departments: [],
-        roles: [],
         permissions: ['dashboard:view'],
         clientCategory: null,
         isActive: true,

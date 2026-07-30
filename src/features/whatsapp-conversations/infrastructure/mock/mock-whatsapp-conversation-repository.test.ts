@@ -15,6 +15,12 @@ describe('MockWhatsAppConversationRepository', () => {
 
   it('filters using the same list parameters exposed by the API', async () => {
     await expect(repository.getConversations({ search: 'contato' })).resolves.toHaveLength(1);
+    await expect(repository.getConversations({ department: 'commercial' })).resolves.toHaveLength(
+      1,
+    );
+    await expect(
+      repository.getConversations({ requestStatus: 'collecting-information' }),
+    ).resolves.toHaveLength(1);
     await expect(repository.getConversations({ state: 'human-active' })).resolves.toEqual([]);
   });
 

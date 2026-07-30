@@ -3,8 +3,10 @@ export const WHATSAPP_CONVERSATION_DEPARTMENTS = [
   'personnel-department',
   'commercial',
   'purchasing',
+  'controlling',
   'maintenance',
   'monitoring',
+  'management',
   'operations',
   'cleaning',
   'financial',
@@ -12,6 +14,18 @@ export const WHATSAPP_CONVERSATION_DEPARTMENTS = [
 ] as const;
 
 export type WhatsAppConversationDepartment = (typeof WHATSAPP_CONVERSATION_DEPARTMENTS)[number];
+
+export const WHATSAPP_ROUTABLE_DEPARTMENTS = [
+  'commercial',
+  'purchasing',
+  'controlling',
+  'personnel-department',
+  'financial',
+  'management',
+  'maintenance',
+  'monitoring',
+  'operations',
+] as const satisfies readonly WhatsAppConversationDepartment[];
 
 export const WHATSAPP_CONVERSATION_STATES = [
   'bot-active',
@@ -118,6 +132,7 @@ export interface WhatsAppMessage {
   readonly kind: WhatsAppMessageKind;
   readonly text: string | null;
   readonly attachment: WhatsAppMessageAttachment | null;
+  readonly sentBy?: WhatsAppConversationAssignee | null;
   readonly occurredAt: string;
   readonly attempts: readonly WhatsAppMessageAttempt[];
 }
@@ -137,6 +152,13 @@ export interface WhatsAppConversationTransition {
   readonly resultingVersion: number;
   readonly actorType: string;
   readonly actorUserId: string | null;
+  readonly actor?: {
+    readonly type: string;
+    readonly user: {
+      readonly id: string;
+      readonly name: string;
+    } | null;
+  };
   readonly from: WhatsAppConversationSnapshot;
   readonly to: WhatsAppConversationSnapshot;
   readonly metadata: Readonly<Record<string, unknown>>;
@@ -153,7 +175,9 @@ export interface WhatsAppQuoteRequest {
   readonly serviceType: string | null;
   readonly origin: string | null;
   readonly destination: string | null;
+  readonly departureDate: string | null;
   readonly departureAt: string | null;
+  readonly returnDate: string | null;
   readonly returnAt: string | null;
   readonly passengerCount: number | null;
   readonly vehicleType: string | null;
@@ -187,6 +211,7 @@ export interface WhatsAppConversation {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly currentQuoteRequest: WhatsAppQuoteRequest | null;
+  readonly hasApprovedQuoteRequest: boolean;
   readonly messages: readonly WhatsAppMessage[];
   readonly transitions: readonly WhatsAppConversationTransition[];
 }
@@ -236,7 +261,9 @@ export function canSendHumanWhatsAppMessage(conversation: WhatsAppConversation):
 
 export function isWhatsAppAwaitingProposal(conversation: WhatsAppConversation): boolean {
   return (
-    conversation.flowStep === 'quote-send-pending' && conversation.requestStatus === 'under-review'
+    conversation.department === 'commercial' &&
+    conversation.conversationState !== 'closed' &&
+    conversation.currentQuoteRequest?.status === 'under-review'
   );
 }
 
@@ -251,7 +278,15 @@ export function canTakeOverWhatsAppConversation(conversation: WhatsAppConversati
 }
 
 export function canReturnWhatsAppConversationToBot(conversation: WhatsAppConversation): boolean {
-  return ['human-active', 'sent-to-human'].includes(conversation.conversationState);
+  if (['human-active', 'sent-to-human'].includes(conversation.conversationState)) {
+    return true;
+  }
+
+  return (
+    conversation.conversationState === 'waiting-for-customer' &&
+    conversation.hasApprovedQuoteRequest === true &&
+    conversation.assignedTo === null
+  );
 }
 
 export function canForwardWhatsAppConversation(conversation: WhatsAppConversation): boolean {
@@ -260,4 +295,38 @@ export function canForwardWhatsAppConversation(conversation: WhatsAppConversatio
 
 export function canMarkWhatsAppConversationAsRead(conversation: WhatsAppConversation): boolean {
   return conversation.conversationState !== 'closed' && conversation.unreadCount > 0;
+}
+
+export function canCloseWhatsAppConversationAfterRejection(
+  conversation: WhatsAppConversation,
+): boolean {
+  return conversation.conversationState !== 'closed' && conversation.requestStatus === 'rejected';
+}
+
+/**
+ * Política reservada para uma etapa posterior do produto.
+ *
+ * No MVP, uma proposta aprovada não impede o encerramento manual. A Tenant API
+ * continua sendo a autoridade final e pode recusar o comando por outra regra
+ * de negócio. Manter a chave explícita evita perder a política já desenhada e
+ * permite reativá-la junto com o contrato autoritativo do backend.
+ */
+export const BLOCK_APPROVED_QUOTE_CONVERSATION_CLOSE = false;
+
+function isBlockedByApprovedQuote(conversation: WhatsAppConversation): boolean {
+  if (!BLOCK_APPROVED_QUOTE_CONVERSATION_CLOSE) {
+    return false;
+  }
+
+  return conversation.hasApprovedQuoteRequest === true;
+}
+
+export function canCloseWhatsAppConversation(conversation: WhatsAppConversation): boolean {
+  return (
+    conversation.conversationState !== 'closed' &&
+    !isBlockedByApprovedQuote(conversation) &&
+    !['collecting-information', 'waiting-for-customer', 'under-review'].includes(
+      conversation.requestStatus,
+    )
+  );
 }

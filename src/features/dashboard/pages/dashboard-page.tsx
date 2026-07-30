@@ -1,98 +1,289 @@
-import { KeyRound, ShieldCheck, UserRound } from 'lucide-react';
+'use client';
 
-import { tenantBranding } from '@/config/tenant-branding';
+import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis } from 'recharts';
+import { BarChart3, Building2, CircleAlert } from 'lucide-react';
+
 import type { AuthenticatedSession } from '@/features/auth/domain';
 import { AuthenticatedShell } from '@/features/navigation';
+import { QuoteProposalDashboard } from '@/features/quote-proposals/components';
+import type { QuoteProposalDashboardMetrics } from '@/features/quote-proposals/domain';
+import { ConversationMetricsCards } from '@/features/whatsapp-conversations/components/conversation-metrics-cards';
+import { DEPARTMENT_LABELS } from '@/features/whatsapp-conversations/components/conversation-labels';
+import {
+  getWhatsAppConversationMetrics,
+  isWhatsAppConversationDepartment,
+  type WhatsAppConversation,
+  type WhatsAppConversationDepartment,
+} from '@/features/whatsapp-conversations/domain';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/shared/ui/chart';
 
 import { dashboardPageStyles as styles } from './dashboard-page.styles';
 
 export interface DashboardPageProps {
   readonly session: AuthenticatedSession;
+  readonly conversations?: readonly WhatsAppConversation[];
+  readonly initialError?: string | null;
+  readonly quoteMetrics?: QuoteProposalDashboardMetrics | null;
+  readonly quoteInitialError?: string | null;
 }
 
-function getProfileLabel(session: AuthenticatedSession): string {
-  if (session.user.type === 'employee') {
-    return 'Colaborador interno';
+const operationalChartConfig = {
+  botActive: { label: 'Bot ativo', color: 'var(--chart-1)' },
+  attendantActive: { label: 'Atendente ativo', color: 'var(--chart-2)' },
+  automationPaused: { label: 'Automação pausada', color: 'var(--chart-3)' },
+  unreadConversations: { label: 'Conversas não lidas', color: 'var(--chart-4)' },
+  closed: { label: 'Encerrada', color: 'var(--chart-5)' },
+} satisfies ChartConfig;
+
+const departmentColors = [
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+  'hsl(var(--primary))',
+] as const;
+
+function getDepartmentVolume(conversations: readonly WhatsAppConversation[]) {
+  const totals = new Map<WhatsAppConversationDepartment, number>();
+
+  for (const conversation of conversations) {
+    totals.set(conversation.department, (totals.get(conversation.department) ?? 0) + 1);
   }
 
-  return session.user.clientCategory === 'continuous-charter'
-    ? 'Cliente de fretamento contínuo'
-    : 'Cliente de fretamento eventual';
+  return [...totals.entries()]
+    .sort((first, second) => second[1] - first[1])
+    .slice(0, 6)
+    .map(([department, value], index) => ({
+      department,
+      label: DEPARTMENT_LABELS[department],
+      value,
+      fill: departmentColors[index] ?? 'var(--chart-1)',
+    }));
 }
 
-export function DashboardPage({ session }: DashboardPageProps) {
-  const profileLabel = getProfileLabel(session);
+export function DashboardPage({
+  session,
+  conversations = [],
+  initialError = null,
+  quoteMetrics = null,
+  quoteInitialError = null,
+}: DashboardPageProps) {
+  const assignedDepartments = session.user.departments.filter(
+    (department): department is WhatsAppConversationDepartment =>
+      isWhatsAppConversationDepartment(department),
+  );
+  const scopedConversations =
+    assignedDepartments.length === 0
+      ? conversations
+      : conversations.filter((conversation) =>
+          assignedDepartments.includes(conversation.department),
+        );
+  const metrics = getWhatsAppConversationMetrics(scopedConversations);
+  const departmentLabels = assignedDepartments.map((department) =>
+    isWhatsAppConversationDepartment(department) ? DEPARTMENT_LABELS[department] : department,
+  );
+  const isCommercialScope = assignedDepartments.includes('commercial');
+  const operationalData = [
+    { key: 'botActive', label: 'Bot ativo', value: metrics.botActive },
+    { key: 'attendantActive', label: 'Atendente ativo', value: metrics.attendantActive },
+    { key: 'automationPaused', label: 'Automação pausada', value: metrics.automationPaused },
+    {
+      key: 'unreadConversations',
+      label: 'Conversas não lidas',
+      value: metrics.unreadConversations,
+    },
+  ].map((item) => ({
+    ...item,
+    fill: `var(--color-${item.key})`,
+  }));
+  const departmentData = getDepartmentVolume(scopedConversations);
+  const departmentChartConfig = Object.fromEntries(
+    departmentData.map((item) => [item.department, { label: item.label, color: item.fill }]),
+  ) satisfies ChartConfig;
+  const controlDistributionData = [
+    {
+      key: 'botActive',
+      label: 'Bot ativo',
+      value: metrics.botActive,
+      fill: 'var(--color-botActive)',
+    },
+    {
+      key: 'attendantActive',
+      label: 'Atendente ativo',
+      value: metrics.attendantActive,
+      fill: 'var(--color-attendantActive)',
+    },
+    {
+      key: 'automationPaused',
+      label: 'Automação pausada',
+      value: metrics.automationPaused,
+      fill: 'var(--color-automationPaused)',
+    },
+    {
+      key: 'closed',
+      label: 'Encerrada',
+      value: scopedConversations.filter(
+        (conversation) => conversation.conversationState === 'closed',
+      ).length,
+      fill: 'var(--color-closed)',
+    },
+  ].filter((item) => item.value > 0);
+  const showDepartmentVolume = assignedDepartments.length !== 1;
+  const unreadConversationSummary = `${metrics.unreadConversations} ${
+    metrics.unreadConversations === 1 ? 'conversa não lida' : 'conversas não lidas'
+  }`;
 
   return (
     <AuthenticatedShell user={session.user}>
       <main className={styles.content()}>
         <p className={styles.eyebrow()}>Olá, {session.user.name}</p>
-        <h1 className={styles.title()}>
-          Sua área na {tenantBranding.tenantName} já está protegida.
-        </h1>
-        <p className={styles.description()}>
-          Este é o primeiro espaço interno da plataforma. Os próximos módulos serão exibidos
-          conforme as permissões de cada perfil.
-        </p>
+        <div className={styles.heading()}>
+          <div>
+            <h1 className={styles.title()}>
+              {assignedDepartments.length === 1
+                ? `Dashboard ${departmentLabels[0]}`
+                : 'Visão geral do atendimento'}
+            </h1>
+            <p className={styles.description()}>
+              Indicadores limitados às filas atribuídas ao seu perfil para destacar onde sua equipe
+              precisa atuar.
+            </p>
+          </div>
+          <span className={styles.liveBadge()}>
+            <BarChart3 aria-hidden="true" />
+            Dados da Tenant API
+          </span>
+        </div>
 
-        <div className={styles.cardGrid()}>
-          <Card className={styles.card()}>
-            <CardHeader className={styles.cardHeader()}>
-              <span className={styles.cardIcon()}>
-                <ShieldCheck aria-hidden="true" />
-              </span>
-              <CardTitle className={styles.cardTitle()}>Sessão protegida</CardTitle>
-              <CardDescription className={styles.cardDescription()}>
-                Seu acesso foi validado no servidor antes desta página ser exibida.
+        {initialError ? (
+          <div role="alert" className={styles.errorBanner()}>
+            <CircleAlert aria-hidden="true" />
+            <span>{initialError}</span>
+          </div>
+        ) : null}
+
+        <ConversationMetricsCards conversations={scopedConversations} className="mt-5" />
+
+        <div className={styles.graphGrid()}>
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Condução das conversas</CardTitle>
+              <CardDescription>
+                Distribuição calculada pelo estado canônico de cada atendimento.
               </CardDescription>
             </CardHeader>
-            <CardContent className={styles.cardContent()}>
-              <p className={styles.cardValue()}>Ativa</p>
-              <p className={styles.cardDetail()}>
-                A sessão pode ser encerrada com segurança pelo menu superior.
-              </p>
+            <CardContent>
+              <ChartContainer
+                config={operationalChartConfig}
+                className="h-[280px] w-full aspect-auto"
+                aria-label="Gráfico de barras da condução das conversas"
+              >
+                <BarChart accessibilityLayer data={operationalData}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={10}
+                    interval={0}
+                  />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent hideLabel nameKey="key" />}
+                  />
+                  <Bar dataKey="value" radius={8} />
+                </BarChart>
+              </ChartContainer>
             </CardContent>
           </Card>
 
-          <Card className={styles.card()}>
-            <CardHeader className={styles.cardHeader()}>
-              <span className={styles.cardIcon()}>
-                <UserRound aria-hidden="true" />
-              </span>
-              <CardTitle className={styles.cardTitle()}>Perfil de acesso</CardTitle>
-              <CardDescription className={styles.cardDescription()}>
-                A experiência é adaptada ao vínculo do usuário com {tenantBranding.tenantName}.
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base">
+                {showDepartmentVolume
+                  ? 'Volume por departamento'
+                  : `Situação da fila ${departmentLabels[0]}`}
+              </CardTitle>
+              <CardDescription>
+                {showDepartmentVolume
+                  ? 'Participação das filas no volume atual de conversas.'
+                  : 'Distribuição dos atendimentos pelo estado canônico atual.'}
               </CardDescription>
             </CardHeader>
-            <CardContent className={styles.cardContent()}>
-              <p className={styles.cardValue()}>{profileLabel}</p>
-              <p className={styles.cardDetail()}>
-                Apenas recursos autorizados serão disponibilizados.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className={styles.card()}>
-            <CardHeader className={styles.cardHeader()}>
-              <span className={styles.cardIcon()}>
-                <KeyRound aria-hidden="true" />
-              </span>
-              <CardTitle className={styles.cardTitle()}>Permissões</CardTitle>
-              <CardDescription className={styles.cardDescription()}>
-                As permissões determinam os módulos e as ações disponíveis.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className={styles.cardContent()}>
-              <p className={styles.cardValue()}>{session.user.permissions.length}</p>
-              <p className={styles.cardDetail()}>
-                {session.user.permissions.length === 1
-                  ? 'permissão ativa neste perfil'
-                  : 'permissões ativas neste perfil'}
-              </p>
+            <CardContent>
+              {(showDepartmentVolume ? departmentData : controlDistributionData).length > 0 ? (
+                <ChartContainer
+                  config={showDepartmentVolume ? departmentChartConfig : operationalChartConfig}
+                  className="mx-auto h-[280px] w-full max-w-xl aspect-auto"
+                  aria-label="Gráfico de setores do volume por departamento"
+                >
+                  <PieChart accessibilityLayer>
+                    <ChartTooltip
+                      content={
+                        <ChartTooltipContent
+                          hideLabel
+                          nameKey={showDepartmentVolume ? 'department' : 'key'}
+                        />
+                      }
+                    />
+                    <Pie
+                      data={showDepartmentVolume ? departmentData : controlDistributionData}
+                      dataKey="value"
+                      nameKey={showDepartmentVolume ? 'department' : 'key'}
+                      innerRadius={58}
+                      outerRadius={92}
+                      paddingAngle={3}
+                    />
+                    <ChartLegend
+                      content={
+                        <ChartLegendContent nameKey={showDepartmentVolume ? 'department' : 'key'} />
+                      }
+                      verticalAlign="bottom"
+                    />
+                  </PieChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-[280px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
+                  Nenhuma conversa encontrada para este período.
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        <Card className={styles.summaryCard()}>
+          <CardContent className={styles.summaryContent()}>
+            <span className={styles.summaryIcon()}>
+              <Building2 aria-hidden="true" />
+            </span>
+            <div>
+              <strong>
+                {metrics.total}{' '}
+                {metrics.total === 1 ? 'conversa monitorada' : 'conversas monitoradas'}
+              </strong>
+              <p>
+                {isCommercialScope
+                  ? `${metrics.awaitingProposal} aguardando proposta e ${unreadConversationSummary}.`
+                  : `${metrics.attendantActive} com atendente, ${metrics.automationPaused} com automação pausada e ${unreadConversationSummary}.`}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {isCommercialScope && quoteMetrics ? (
+          <div className="mt-6 border-t pt-6">
+            <QuoteProposalDashboard metrics={quoteMetrics} initialError={quoteInitialError} />
+          </div>
+        ) : null}
       </main>
     </AuthenticatedShell>
   );

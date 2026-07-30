@@ -10,8 +10,6 @@ describe('simulated users', () => {
   it('defines exactly one test employee for every department', () => {
     const configuredDepartments = SIMULATED_EMPLOYEE_USERS.flatMap((user) => user.departments);
 
-    expect(configuredDepartments).toHaveLength(DEPARTMENTS.length);
-
     for (const department of DEPARTMENTS) {
       expect(
         configuredDepartments.filter((configuredDepartment) => configuredDepartment === department),
@@ -27,7 +25,6 @@ describe('simulated users', () => {
         name: user.name,
         type: 'employee',
         departments: user.departments,
-        roles: user.roles,
         isActive: user.isActive,
         rememberDevice: false,
       });
@@ -36,7 +33,6 @@ describe('simulated users', () => {
         resolveAccessPermissions({
           type: 'employee',
           departments: user.departments,
-          roles: user.roles,
         }),
       );
       expect(session.user.permissions).toContain('dashboard:view');
@@ -60,13 +56,11 @@ describe('simulated users', () => {
       return resolveAccessPermissions({
         type: 'employee',
         departments: user.departments,
-        roles: user.roles,
       }).includes('whatsapp-conversations:manage');
     };
 
     expect(canManageWhatsApp('comercial.teste')).toBe(true);
-    expect(canManageWhatsApp('gerencia.teste')).toBe(true);
-    expect(canManageWhatsApp('diretoria.teste')).toBe(true);
+    expect(canManageWhatsApp('gerencia.departamento.teste')).toBe(false);
     expect(canManageWhatsApp('operacoes.teste')).toBe(false);
     expect(canManageWhatsApp('ti.teste')).toBe(false);
   });

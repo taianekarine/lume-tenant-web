@@ -3,13 +3,16 @@ import type {
   WhatsAppConversationDepartment,
   WhatsAppMessage,
   WhatsAppConversationState,
+  WhatsAppRequestStatus,
 } from '../../domain';
 
 export interface GetWhatsAppConversationsFilters {
   readonly page?: number;
   readonly pageSize?: number;
   readonly search?: string;
+  readonly department?: WhatsAppConversationDepartment;
   readonly state?: WhatsAppConversationState;
+  readonly requestStatus?: WhatsAppRequestStatus;
 }
 
 export type WhatsAppConversationRepositoryErrorCode =
@@ -48,6 +51,9 @@ export interface WhatsAppConversationRepository {
   getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]>;
+  getDashboardConversations(
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<readonly WhatsAppConversation[]>;
   getConversationById(conversationId: string): Promise<WhatsAppConversation | null>;
   takeOverConversation(
     conversationId: string,
@@ -65,6 +71,15 @@ export interface WhatsAppConversationRepository {
   markConversationAsRead(
     conversationId: string,
     expectedVersion: number,
+  ): Promise<WhatsAppConversation>;
+  closeConversationAfterRejection(
+    conversationId: string,
+    expectedVersion: number,
+  ): Promise<WhatsAppConversation>;
+  closeConversation(
+    conversationId: string,
+    expectedVersion: number,
+    reason?: string | null,
   ): Promise<WhatsAppConversation>;
   sendHumanMessage(
     conversationId: string,

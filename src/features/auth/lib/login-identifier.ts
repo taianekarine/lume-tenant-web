@@ -1,6 +1,4 @@
-import { normalizeCpf, onlyDigits, validateCpf } from '@/shared/utils/brazilian-data';
-
-export type LoginIdentifierType = 'username' | 'cpf' | 'unsupported-client-document';
+export type LoginIdentifierType = 'username' | 'email' | 'unsupported-document';
 
 export type NormalizedLoginIdentifier = {
   type: LoginIdentifierType;
@@ -12,7 +10,7 @@ export type LoginIdentifierValidation = {
   message: string | null;
 };
 
-function hasNumericDocumentFormat(value: string): boolean {
+function hasDocumentFormat(value: string): boolean {
   return /^[\d./\-\s]+$/.test(value);
 }
 
@@ -26,22 +24,18 @@ export function normalizeLoginIdentifier(identifier: string): NormalizedLoginIde
     };
   }
 
-  if (hasNumericDocumentFormat(trimmedIdentifier)) {
-    const digits = onlyDigits(trimmedIdentifier);
+  if (hasDocumentFormat(trimmedIdentifier)) {
+    return {
+      type: 'unsupported-document',
+      value: trimmedIdentifier,
+    };
+  }
 
-    if (digits.length === 11) {
-      return {
-        type: 'cpf',
-        value: normalizeCpf(trimmedIdentifier),
-      };
-    }
-
-    if (digits.length === 14) {
-      return {
-        type: 'unsupported-client-document',
-        value: digits,
-      };
-    }
+  if (trimmedIdentifier.includes('@')) {
+    return {
+      type: 'email',
+      value: trimmedIdentifier.toLocaleLowerCase('pt-BR'),
+    };
   }
 
   return {
@@ -56,21 +50,21 @@ export function validateLoginIdentifier(
   if (!identifier.value) {
     return {
       isValid: false,
-      message: 'Informe seu usuário, e-mail ou CPF.',
+      message: 'Informe seu usuário ou e-mail.',
     };
   }
 
-  if (identifier.type === 'cpf' && !validateCpf(identifier.value)) {
+  if (identifier.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.value)) {
     return {
       isValid: false,
-      message: 'Informe um CPF válido.',
+      message: 'Informe um e-mail válido.',
     };
   }
 
-  if (identifier.type === 'unsupported-client-document') {
+  if (identifier.type === 'unsupported-document') {
     return {
       isValid: false,
-      message: 'O acesso por CNPJ ainda não está disponível.',
+      message: 'Informe um usuário ou e-mail válido.',
     };
   }
 

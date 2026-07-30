@@ -11,20 +11,34 @@ import {
   FileText,
   Forward,
   Headset,
+  History,
   Inbox,
-  LoaderCircle,
-  MessageSquareWarning,
-  Paperclip,
   Phone,
   RefreshCw,
   RotateCcw,
   Search,
-  Send,
   ShieldAlert,
   UserRound,
 } from 'lucide-react';
 
+import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
+import { formatCivilDateTime } from '@/shared/lib/civil-date-time';
+import { Button } from '@/shared/ui/button';
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/shared/ui/select';
+import { Textarea } from '@/shared/ui/textarea';
+import { toast } from '@/shared/ui/toast';
+
+import {
+  closeWhatsAppConversationAction,
   forwardWhatsAppConversationAction,
   markWhatsAppConversationAsReadAction,
   returnWhatsAppConversationToBotAction,
@@ -35,6 +49,7 @@ import {
 } from '../actions';
 import { HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH } from '../application';
 import {
+  canCloseWhatsAppConversation,
   canForwardWhatsAppConversation,
   canMarkWhatsAppConversationAsRead,
   canReturnWhatsAppConversationToBot,
@@ -45,7 +60,7 @@ import {
   isWhatsAppConversationDepartment,
   isWhatsAppHumanActive,
   isWhatsAppQuoteSummaryConfirmed,
-  WHATSAPP_CONVERSATION_DEPARTMENTS,
+  WHATSAPP_ROUTABLE_DEPARTMENTS,
   WHATSAPP_REQUEST_STATUSES,
   type WhatsAppConversation,
   type WhatsAppConversationDepartment,
@@ -53,16 +68,16 @@ import {
 } from '../domain';
 import {
   CONVERSATION_STATE_LABELS,
-  DELIVERY_STATUS_LABELS,
   DEPARTMENT_LABELS,
   FLOW_STEP_LABELS,
   getConversationControl,
   getConversationControlLabel,
   getRequestStatusTone,
-  MESSAGE_KIND_LABELS,
   REQUEST_STATUS_LABELS,
   type ConversationControl,
 } from './conversation-labels';
+import { ConversationMessageSheet } from './conversation-message-sheet';
+import { ConversationMetricsCards } from './conversation-metrics-cards';
 import { conversationWorkspaceStyles as styles } from './conversation-workspace.styles';
 
 export interface ConversationWorkspaceProps {
@@ -89,6 +104,22 @@ interface HumanMessageSubmission {
   readonly idempotencyKey: string;
   readonly expectedVersion: number;
   readonly text: string;
+}
+
+const MANUAL_COMMERCIAL_STATUSES = [
+  'under-review',
+  'waiting-for-customer',
+  'approved',
+  'rejected',
+  'cancelled',
+] as const;
+
+type ManualCommercialStatus = (typeof MANUAL_COMMERCIAL_STATUSES)[number];
+
+function isManualCommercialStatus(value: unknown): value is ManualCommercialStatus {
+  return (
+    typeof value === 'string' && (MANUAL_COMMERCIAL_STATUSES as readonly string[]).includes(value)
+  );
 }
 
 function normalizeSearchValue(value: string): string {
@@ -121,15 +152,28 @@ function formatDateTime(value: string | null): string {
   return value ? DATE_TIME_FORMATTER.format(new Date(value)) : 'Não registrado';
 }
 
-function formatFileSize(size: number | null): string {
-  if (size === null) return 'Tamanho não informado';
-  if (size < 1_024) return `${size} bytes`;
-  if (size < 1_048_576) return `${(size / 1_024).toFixed(1)} KB`;
-  return `${(size / 1_048_576).toFixed(1)} MB`;
-}
-
 function getContactInitial(name: string): string {
   return name.trim().charAt(0).toLocaleUpperCase('pt-BR') || '?';
+}
+
+function getFlowStepLabel(conversation: WhatsAppConversation): string {
+  if (
+    conversation.flowStep === 'quote-send-pending' &&
+    conversation.requestStatus === 'waiting-for-customer'
+  ) {
+    return 'Proposta enviada';
+  }
+
+  return FLOW_STEP_LABELS[conversation.flowStep];
+}
+
+function getDefaultTargetDepartment(
+  currentDepartment: WhatsAppConversationDepartment,
+): WhatsAppConversationDepartment {
+  return (
+    WHATSAPP_ROUTABLE_DEPARTMENTS.find((department) => department !== currentDepartment) ??
+    currentDepartment
+  );
 }
 
 function preserveLoadedMessages(
@@ -157,6 +201,17 @@ function quoteValue(value: unknown): string {
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+function getClosureReason(transition: WhatsAppConversation['transitions'][number]): string | null {
+  const reason = transition.metadata.reason;
+  return typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : null;
+}
+
+function getClosureActor(transition: WhatsAppConversation['transitions'][number]): string {
+  if (transition.actor?.user?.name) return transition.actor.user.name;
+  if (transition.actorType === 'user') return 'Atendente não identificado';
+  return 'Automação';
 }
 
 async function responseMessage(response: Response): Promise<string> {
@@ -188,7 +243,7 @@ export function ConversationWorkspace({
     'all',
   );
   const [targetDepartment, setTargetDepartment] = useState<WhatsAppConversationDepartment>(
-    initialConversations[0]?.department ?? 'commercial',
+    getDefaultTargetDepartment(initialConversations[0]?.department ?? 'commercial'),
   );
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackTone, setFeedbackTone] = useState<'neutral' | 'success' | 'error'>('neutral');
@@ -197,6 +252,12 @@ export function ConversationWorkspace({
   const [detailError, setDetailError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+  const [manualCommercialStatus, setManualCommercialStatus] =
+    useState<ManualCommercialStatus>('under-review');
+  const [manualCommercialStatusReason, setManualCommercialStatusReason] = useState('');
+  const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [loadedConversationIds, setLoadedConversationIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -398,7 +459,9 @@ export function ConversationWorkspace({
         controlFilter === 'all' ||
         getConversationControl(conversation.conversationState) === controlFilter;
       const matchesRequestStatus =
-        requestStatusFilter === 'all' || conversation.requestStatus === requestStatusFilter;
+        requestStatusFilter === 'all' ||
+        (conversation.department === 'commercial' &&
+          conversation.requestStatus === requestStatusFilter);
       const matchesSearch =
         normalizedQuery.length === 0 || conversationMatchesSearch(conversation, normalizedQuery);
 
@@ -408,15 +471,23 @@ export function ConversationWorkspace({
 
   const selectedConversation =
     conversations.find((conversation) => conversation.id === selectedConversationId) ?? null;
+  const effectiveTargetDepartment =
+    selectedConversation !== null && targetDepartment === selectedConversation.department
+      ? getDefaultTargetDepartment(selectedConversation.department)
+      : targetDepartment;
   const canCurrentUserSendMessage =
     selectedConversation !== null &&
     canSendHumanWhatsAppMessage(selectedConversation) &&
     selectedConversation.assignedTo?.id === currentUserId;
+  const closureHistory =
+    selectedConversation?.transitions.filter(
+      (transition) => transition.name === 'close' || transition.name === 'close-after-rejection',
+    ) ?? [];
 
   function applyActionResult(result: WhatsAppConversationActionResult, successMessage: string) {
     if (result.conversation) {
       replaceConversation(result.conversation, result.success);
-      setTargetDepartment(result.conversation.department);
+      setTargetDepartment(getDefaultTargetDepartment(result.conversation.department));
     }
     setFeedbackMessage(result.success ? successMessage : result.message);
     setFeedbackTone(result.success ? 'success' : 'error');
@@ -428,11 +499,20 @@ export function ConversationWorkspace({
 
   function handleConversationSelection(conversation: WhatsAppConversation) {
     setSelectedConversationId(conversation.id);
-    setTargetDepartment(conversation.department);
+    setTargetDepartment(getDefaultTargetDepartment(conversation.department));
     setFeedbackMessage('');
     setFeedbackTone('neutral');
     setDetailError('');
     setMessageDraft('');
+    setIsCloseDialogOpen(false);
+    setCloseReason('');
+    setManualCommercialStatus(
+      isManualCommercialStatus(conversation.requestStatus)
+        ? conversation.requestStatus
+        : 'under-review',
+    );
+    setManualCommercialStatusReason('');
+    setIsMessagesOpen(false);
     humanMessageSubmissionRef.current = null;
 
     if (conversation.unreadCount === 0) return;
@@ -475,9 +555,65 @@ export function ConversationWorkspace({
       const result = await forwardWhatsAppConversationAction({
         conversationId: selectedConversation.id,
         expectedVersion: selectedConversation.version,
-        targetDepartment,
+        targetDepartment: effectiveTargetDepartment,
       });
       applyActionResult(result, 'Atendimento encaminhado com sucesso.');
+    });
+  }
+
+  function handleClose() {
+    if (!selectedConversation) return;
+    setFeedbackMessage('');
+    setFeedbackTone('neutral');
+
+    startConversationTransition(async () => {
+      const result = await closeWhatsAppConversationAction({
+        conversationId: selectedConversation.id,
+        expectedVersion: selectedConversation.version,
+        reason: closeReason.trim() || undefined,
+      });
+      const successMessage =
+        'Atendimento encerrado. O próximo contato será iniciado pelo bot no menu principal.';
+      applyActionResult(result, successMessage);
+
+      toast.add({
+        title: result.success ? 'Atendimento encerrado' : 'Não foi possível encerrar',
+        description: result.success ? successMessage : result.message,
+        type: result.success ? 'success' : 'error',
+      });
+
+      if (result.success) {
+        setIsCloseDialogOpen(false);
+        setCloseReason('');
+      }
+    });
+  }
+
+  function handleManualCommercialStatus() {
+    if (!selectedConversation?.currentQuoteRequest) return;
+    setFeedbackMessage('');
+    setFeedbackTone('neutral');
+
+    startConversationTransition(async () => {
+      const result = await updateQuoteProposalStatusAction({
+        quoteRequestId: selectedConversation.currentQuoteRequest!.id,
+        commandId: crypto.randomUUID(),
+        expectedVersion: selectedConversation.version,
+        status: manualCommercialStatus,
+        reason: manualCommercialStatusReason.trim() || undefined,
+      });
+      if (!result.success) {
+        setFeedbackMessage(result.message);
+        setFeedbackTone('error');
+        if (result.code === 'conflict') await refreshList(true);
+        return;
+      }
+
+      setFeedbackMessage('Status comercial atualizado com sucesso.');
+      setFeedbackTone('success');
+      setManualCommercialStatusReason('');
+      await refreshList(true);
+      await loadConversationDetail(selectedConversation.id);
     });
   }
 
@@ -485,7 +621,7 @@ export function ConversationWorkspace({
     if (!result.success) {
       if (result.conversation) {
         replaceConversation(result.conversation, false);
-        setTargetDepartment(result.conversation.department);
+        setTargetDepartment(getDefaultTargetDepartment(result.conversation.department));
 
         if (
           result.code === 'conflict' &&
@@ -535,7 +671,7 @@ export function ConversationWorkspace({
         };
       }),
     );
-    setTargetDepartment(result.conversation.department);
+    setTargetDepartment(getDefaultTargetDepartment(result.conversation.department));
     setMessageDraft('');
     humanMessageSubmissionRef.current = null;
     setFeedbackMessage('Mensagem registrada. Aguardando confirmação de envio pelo provedor.');
@@ -592,744 +728,746 @@ export function ConversationWorkspace({
   }
 
   return (
-    <section aria-labelledby="conversation-workspace-title" className={styles.section()}>
-      <h2 id="conversation-workspace-title" className={styles.visuallyHidden()}>
-        Caixa de entrada de conversas
-      </h2>
+    <>
+      <ConversationMetricsCards conversations={conversations} className="mt-4" />
+      <section aria-labelledby="conversation-workspace-title" className={styles.section()}>
+        <h2 id="conversation-workspace-title" className={styles.visuallyHidden()}>
+          Caixa de entrada de conversas
+        </h2>
 
-      <aside className={styles.sidebar()}>
-        <div className={styles.sidebarHeader()}>
-          <div className={styles.sidebarHeading()}>
-            <div>
-              <p className={styles.sidebarEyebrow()}>Caixa de entrada</p>
-              <p className={styles.sidebarTitle()}>{filteredConversations.length} conversas</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void refreshList(true)}
-              disabled={isRefreshing}
-              className={styles.refreshButton()}
-            >
-              <RefreshCw aria-hidden="true" />
-              {isRefreshing ? 'Atualizando' : 'Atualizar'}
-            </button>
-          </div>
-
-          {listError ? (
-            <div role="alert" className={styles.errorBanner()}>
-              <AlertCircle aria-hidden="true" />
-              <span>{listError}</span>
-              <button type="button" onClick={() => void refreshList(true)}>
-                Tentar novamente
+        <aside className={styles.sidebar()}>
+          <div className={styles.sidebarHeader()}>
+            <div className={styles.sidebarHeading()}>
+              <div>
+                <p className={styles.sidebarEyebrow()}>Caixa de entrada</p>
+                <p className={styles.sidebarTitle()}>{filteredConversations.length} conversas</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void refreshList(true)}
+                disabled={isRefreshing}
+                className={styles.refreshButton()}
+              >
+                <RefreshCw aria-hidden="true" />
+                {isRefreshing ? 'Atualizando' : 'Atualizar'}
               </button>
             </div>
-          ) : null}
 
-          <div className={styles.searchContainer()}>
-            <Search aria-hidden="true" className={styles.searchIcon()} />
-            <label htmlFor="conversation-search" className={styles.visuallyHidden()}>
-              Buscar conversas
-            </label>
-            <input
-              id="conversation-search"
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Nome, telefone, mensagem ou etapa"
-              className={styles.searchInput()}
-            />
-          </div>
-
-          <div className={styles.filters()}>
-            <div>
-              <label htmlFor="department-filter" className={styles.filterLabel()}>
-                Departamento
-              </label>
-              <select
-                id="department-filter"
-                value={departmentFilter}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setDepartmentFilter(isWhatsAppConversationDepartment(value) ? value : 'all');
-                }}
-                className={styles.filterSelect()}
-              >
-                <option value="all">Todos</option>
-                {WHATSAPP_CONVERSATION_DEPARTMENTS.map((department) => (
-                  <option key={department} value={department}>
-                    {DEPARTMENT_LABELS[department]}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="control-filter" className={styles.filterLabel()}>
-                Condução
-              </label>
-              <select
-                id="control-filter"
-                value={controlFilter}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setControlFilter(
-                    value === 'bot' || value === 'human' || value === 'paused' || value === 'closed'
-                      ? value
-                      : 'all',
-                  );
-                }}
-                className={styles.filterSelect()}
-              >
-                <option value="all">Todas</option>
-                <option value="bot">Bot ativo</option>
-                <option value="human">Humano ativo</option>
-                <option value="paused">Bot bloqueado</option>
-                <option value="closed">Encerrada</option>
-              </select>
-            </div>
-
-            <div className={styles.wideFilter()}>
-              <label htmlFor="request-status-filter" className={styles.filterLabel()}>
-                Status da solicitação
-              </label>
-              <select
-                id="request-status-filter"
-                value={requestStatusFilter}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setRequestStatusFilter(
-                    (WHATSAPP_REQUEST_STATUSES as readonly string[]).includes(value)
-                      ? (value as WhatsAppRequestStatus)
-                      : 'all',
-                  );
-                }}
-                className={styles.filterSelect()}
-              >
-                <option value="all">Todos os status</option>
-                {WHATSAPP_REQUEST_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {REQUEST_STATUS_LABELS[status]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.conversationList()}>
-          {filteredConversations.length > 0 ? (
-            filteredConversations.map((conversation) => {
-              const isSelected = conversation.id === selectedConversation?.id;
-              const control = getConversationControl(conversation.conversationState);
-
-              return (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  onClick={() => handleConversationSelection(conversation)}
-                  className={styles.conversationButton({ selected: isSelected })}
-                  aria-pressed={isSelected}
-                >
-                  <span className={styles.avatar()}>
-                    {getContactInitial(conversation.contact.name)}
-                  </span>
-                  <span className={styles.conversationSummary()}>
-                    <span className={styles.conversationHeading()}>
-                      <strong className={styles.contactName()}>{conversation.contact.name}</strong>
-                      <time className={styles.conversationTime()}>
-                        {formatDateTime(conversation.lastMessageAt)}
-                      </time>
-                    </span>
-                    <span className={styles.phonePreview()}>{conversation.contact.phone}</span>
-                    <span className={styles.previewRow()}>
-                      <span className={styles.preview()}>
-                        {conversation.lastMessagePreview || 'Sem prévia de mensagem'}
-                      </span>
-                      {conversation.unreadCount > 0 ? (
-                        <span
-                          className={styles.unreadBadge()}
-                          aria-label={`${conversation.unreadCount} mensagens não lidas`}
-                        >
-                          {conversation.unreadCount}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className={styles.listMetadata()}>
-                      <span className={styles.departmentBadge()}>
-                        {DEPARTMENT_LABELS[conversation.department]}
-                      </span>
-                      <span className={styles.controlBadge({ control })}>
-                        {getConversationControlLabel(conversation.conversationState)}
-                      </span>
-                      <span
-                        className={styles.requestBadge({
-                          tone: getRequestStatusTone(conversation.requestStatus),
-                        })}
-                      >
-                        {REQUEST_STATUS_LABELS[conversation.requestStatus]}
-                      </span>
-                    </span>
-                  </span>
+            {listError ? (
+              <div role="alert" className={styles.errorBanner()}>
+                <AlertCircle aria-hidden="true" />
+                <span>{listError}</span>
+                <button type="button" onClick={() => void refreshList(true)}>
+                  Tentar novamente
                 </button>
-              );
-            })
+              </div>
+            ) : null}
+
+            <div className={styles.searchContainer()}>
+              <Search aria-hidden="true" className={styles.searchIcon()} />
+              <label htmlFor="conversation-search" className={styles.visuallyHidden()}>
+                Buscar conversas
+              </label>
+              <input
+                id="conversation-search"
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Nome, telefone, mensagem ou etapa"
+                className={styles.searchInput()}
+              />
+            </div>
+
+            <div className={styles.filters()}>
+              <div>
+                <label htmlFor="department-filter" className={styles.filterLabel()}>
+                  Departamento
+                </label>
+                <Select
+                  value={departmentFilter}
+                  onValueChange={(value) => {
+                    setDepartmentFilter(isWhatsAppConversationDepartment(value) ? value : 'all');
+                  }}
+                >
+                  <SelectTrigger id="department-filter" className={styles.filterSelect()}>
+                    <span>
+                      {departmentFilter === 'all' ? 'Todos' : DEPARTMENT_LABELS[departmentFilter]}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {WHATSAPP_ROUTABLE_DEPARTMENTS.map((department) => (
+                      <SelectItem key={department} value={department}>
+                        {DEPARTMENT_LABELS[department]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label htmlFor="control-filter" className={styles.filterLabel()}>
+                  Condução
+                </label>
+                <Select
+                  value={controlFilter}
+                  onValueChange={(value) => {
+                    setControlFilter(
+                      value === 'bot' ||
+                        value === 'human' ||
+                        value === 'paused' ||
+                        value === 'closed'
+                        ? value
+                        : 'all',
+                    );
+                  }}
+                >
+                  <SelectTrigger id="control-filter" className={styles.filterSelect()}>
+                    <span>
+                      {controlFilter === 'all'
+                        ? 'Todas'
+                        : controlFilter === 'bot'
+                          ? 'Bot ativo'
+                          : controlFilter === 'human'
+                            ? 'Atendente ativo'
+                            : controlFilter === 'paused'
+                              ? 'Bot bloqueado'
+                              : 'Encerrada'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="bot">Bot ativo</SelectItem>
+                    <SelectItem value="human">Atendente ativo</SelectItem>
+                    <SelectItem value="paused">Bot bloqueado</SelectItem>
+                    <SelectItem value="closed">Encerrada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className={styles.wideFilter()}>
+                <label htmlFor="request-status-filter" className={styles.filterLabel()}>
+                  Status comercial
+                </label>
+                <Select
+                  value={requestStatusFilter}
+                  onValueChange={(value) => {
+                    setRequestStatusFilter(
+                      typeof value === 'string' &&
+                        (WHATSAPP_REQUEST_STATUSES as readonly string[]).includes(value)
+                        ? (value as WhatsAppRequestStatus)
+                        : 'all',
+                    );
+                  }}
+                >
+                  <SelectTrigger id="request-status-filter" className={styles.filterSelect()}>
+                    <span>
+                      {requestStatusFilter === 'all'
+                        ? 'Todos os status'
+                        : REQUEST_STATUS_LABELS[requestStatusFilter]}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    <SelectItem value="all">Todos os status</SelectItem>
+                    {WHATSAPP_REQUEST_STATUSES.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {REQUEST_STATUS_LABELS[status]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.conversationList()}>
+            {filteredConversations.length > 0 ? (
+              filteredConversations.map((conversation) => {
+                const isSelected = conversation.id === selectedConversation?.id;
+                const control = getConversationControl(conversation.conversationState);
+
+                return (
+                  <button
+                    key={conversation.id}
+                    type="button"
+                    onClick={() => handleConversationSelection(conversation)}
+                    className={styles.conversationButton({ selected: isSelected })}
+                    aria-pressed={isSelected}
+                  >
+                    <span className={styles.avatar()}>
+                      {getContactInitial(conversation.contact.name)}
+                    </span>
+                    <span className={styles.conversationSummary()}>
+                      <span className={styles.conversationHeading()}>
+                        <strong className={styles.contactName()}>
+                          {conversation.contact.name}
+                        </strong>
+                        <time className={styles.conversationTime()}>
+                          {formatDateTime(conversation.lastMessageAt)}
+                        </time>
+                      </span>
+                      <span className={styles.phonePreview()}>{conversation.contact.phone}</span>
+                      <span className={styles.previewRow()}>
+                        <span className={styles.preview()}>
+                          {conversation.lastMessagePreview || 'Sem prévia de mensagem'}
+                        </span>
+                        {conversation.unreadCount > 0 ? (
+                          <span
+                            className={styles.unreadBadge()}
+                            aria-label={`${conversation.unreadCount} mensagens não lidas`}
+                          >
+                            {conversation.unreadCount}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className={styles.listMetadata()}>
+                        <span className={styles.departmentBadge()}>
+                          {DEPARTMENT_LABELS[conversation.department]}
+                        </span>
+                        <span className={styles.controlBadge({ control })}>
+                          {getConversationControlLabel(conversation.conversationState)}
+                        </span>
+                        {conversation.department === 'commercial' ? (
+                          <span
+                            className={styles.requestBadge({
+                              tone: getRequestStatusTone(conversation.requestStatus),
+                            })}
+                          >
+                            {REQUEST_STATUS_LABELS[conversation.requestStatus]}
+                          </span>
+                        ) : null}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className={styles.emptyList()}>
+                <Inbox aria-hidden="true" className={styles.emptyIcon()} />
+                <p className={styles.emptyTitle()}>Nenhuma conversa encontrada</p>
+                <p className={styles.emptyDescription()}>
+                  {listError
+                    ? 'A lista será restaurada quando a Tenant API responder.'
+                    : 'Altere a busca ou os filtros selecionados.'}
+                </p>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        <div className={styles.detail()}>
+          {selectedConversation !== null ? (
+            <>
+              <header className={styles.detailHeader()}>
+                <div className={styles.contactBlock()}>
+                  <span className={styles.detailAvatar()}>
+                    {getContactInitial(selectedConversation.contact.name)}
+                  </span>
+                  <div className={styles.contactIdentity()}>
+                    <h3 className={styles.detailTitle()}>{selectedConversation.contact.name}</h3>
+                    <p className={styles.phone()}>
+                      <Phone aria-hidden="true" />
+                      {selectedConversation.contact.phone}
+                    </p>
+                    <p className={styles.lastInteraction()}>
+                      Última interação: {formatDateTime(selectedConversation.lastMessageAt)}
+                    </p>
+                  </div>
+                </div>
+              </header>
+
+              <div className={styles.highlightGrid()}>
+                <div
+                  className={styles.highlight({
+                    tone: isWhatsAppBotBlocked(selectedConversation) ? 'danger' : 'success',
+                  })}
+                >
+                  {isWhatsAppBotBlocked(selectedConversation) ? (
+                    <ShieldAlert aria-hidden="true" />
+                  ) : (
+                    <Bot aria-hidden="true" />
+                  )}
+                  <span>
+                    <strong>
+                      {isWhatsAppBotBlocked(selectedConversation)
+                        ? 'Bot bloqueado'
+                        : 'Bot autorizado'}
+                    </strong>
+                    <small>
+                      {isWhatsAppBotBlocked(selectedConversation)
+                        ? 'A automação não pode responder neste estado.'
+                        : 'A Tenant API permite a automação neste estado.'}
+                    </small>
+                  </span>
+                </div>
+                <div
+                  className={styles.highlight({
+                    tone: isWhatsAppHumanActive(selectedConversation) ? 'info' : 'neutral',
+                  })}
+                >
+                  <Headset aria-hidden="true" />
+                  <span>
+                    <strong>
+                      {isWhatsAppHumanActive(selectedConversation)
+                        ? 'Atendente ativo'
+                        : 'Sem atendente ativo'}
+                    </strong>
+                    <small>
+                      {selectedConversation.assignedTo?.name ??
+                        'Nenhum responsável assumiu o atendimento.'}
+                    </small>
+                  </span>
+                </div>
+                {selectedConversation.department === 'commercial' ? (
+                  <div
+                    className={styles.highlight({
+                      tone: isWhatsAppAwaitingProposal(selectedConversation)
+                        ? 'warning'
+                        : 'neutral',
+                    })}
+                  >
+                    <FileText aria-hidden="true" />
+                    <span>
+                      <strong>
+                        {isWhatsAppAwaitingProposal(selectedConversation)
+                          ? 'Aguardando proposta'
+                          : selectedConversation.requestStatus === 'waiting-for-customer'
+                            ? 'Proposta enviada'
+                            : 'Sem proposta pendente'}
+                      </strong>
+                      <small>
+                        {selectedConversation.requestStatus === 'waiting-for-customer'
+                          ? 'PDF entregue; aguardando retorno do cliente.'
+                          : selectedConversation.flowStep === 'commercial-follow-up-menu'
+                            ? 'Segundo contato retomado no acompanhamento comercial.'
+                            : getFlowStepLabel(selectedConversation)}
+                      </small>
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className={styles.dimensionGrid()}>
+                <div className={styles.dimensionItem()}>
+                  <Building2 aria-hidden="true" />
+                  <span>
+                    <small>Departamento</small>
+                    <strong>{DEPARTMENT_LABELS[selectedConversation.department]}</strong>
+                  </span>
+                </div>
+                <div className={styles.dimensionItem()}>
+                  <Bot aria-hidden="true" />
+                  <span>
+                    <small>Estado da conversa</small>
+                    <strong>
+                      {CONVERSATION_STATE_LABELS[selectedConversation.conversationState]}
+                    </strong>
+                  </span>
+                </div>
+                <div className={styles.dimensionItem()}>
+                  <RotateCcw aria-hidden="true" />
+                  <span>
+                    <small>Etapa do fluxo</small>
+                    <strong>{getFlowStepLabel(selectedConversation)}</strong>
+                  </span>
+                </div>
+                {selectedConversation.department === 'commercial' ? (
+                  <div className={styles.dimensionItem()}>
+                    <Clock3 aria-hidden="true" />
+                    <span>
+                      <small>Status comercial</small>
+                      <strong>{REQUEST_STATUS_LABELS[selectedConversation.requestStatus]}</strong>
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className={styles.assignment()}>
+                <UserRound aria-hidden="true" />
+                <span>
+                  {selectedConversation.assignedTo === null
+                    ? 'Nenhum atendente responsável'
+                    : `Responsável: ${selectedConversation.assignedTo.name}`}
+                </span>
+                <small>Canal: {selectedConversation.channel.name}</small>
+              </div>
+
+              <div className={styles.actionsPanel()}>
+                <p className={styles.actionsTitle()}>Ações do atendimento</p>
+                <div className={styles.actions()}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionedAction(
+                        takeOverWhatsAppConversationAction,
+                        'Atendimento assumido com sucesso.',
+                      )
+                    }
+                    disabled={
+                      isUpdatingConversation ||
+                      !canTakeOverWhatsAppConversation(selectedConversation)
+                    }
+                    className={styles.actionButton({ action: 'human' })}
+                  >
+                    <Headset aria-hidden="true" />
+                    Assumir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleVersionedAction(
+                        returnWhatsAppConversationToBotAction,
+                        'Conversa devolvida ao bot na etapa permitida.',
+                      )
+                    }
+                    disabled={
+                      isUpdatingConversation ||
+                      !canReturnWhatsAppConversationToBot(selectedConversation)
+                    }
+                    className={styles.actionButton({ action: 'bot' })}
+                  >
+                    <Bot aria-hidden="true" />
+                    Devolver ao bot
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleConversationSelection(selectedConversation)}
+                    disabled={
+                      isUpdatingConversation ||
+                      !canMarkWhatsAppConversationAsRead(selectedConversation)
+                    }
+                    className={styles.actionButton({ action: 'read' })}
+                  >
+                    <CheckCheck aria-hidden="true" />
+                    Marcar como lida
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCloseDialogOpen(true)}
+                    disabled={
+                      isUpdatingConversation || !canCloseWhatsAppConversation(selectedConversation)
+                    }
+                    title={
+                      canCloseWhatsAppConversation(selectedConversation)
+                        ? 'Encerrar a conversa atual e permitir um novo atendimento pelo bot.'
+                        : selectedConversation.conversationState === 'closed'
+                          ? 'Este atendimento já está encerrado.'
+                          : 'Disponível quando não houver proposta em andamento.'
+                    }
+                    className={styles.actionButton({ action: 'close' })}
+                  >
+                    <CircleStop aria-hidden="true" />
+                    Encerrar atendimento
+                  </button>
+                  <ConversationMessageSheet
+                    conversation={selectedConversation}
+                    open={isMessagesOpen}
+                    onOpenChange={setIsMessagesOpen}
+                    isLoading={isLoadingDetail}
+                    isLoaded={loadedConversationIds.has(selectedConversation.id)}
+                    detailError={detailError}
+                    onRetry={() => void loadConversationDetail(selectedConversation.id)}
+                    onRefresh={() => void refreshList(true)}
+                    messageDraft={messageDraft}
+                    onMessageDraftChange={setMessageDraft}
+                    canSendMessage={canCurrentUserSendMessage}
+                    canTakeOver={canTakeOverWhatsAppConversation(selectedConversation)}
+                    isTakingOver={isUpdatingConversation}
+                    onTakeOver={() =>
+                      handleVersionedAction(
+                        takeOverWhatsAppConversationAction,
+                        'Atendimento assumido com sucesso.',
+                      )
+                    }
+                    isSendingMessage={isSendingMessage}
+                    onSendMessage={handleSendHumanMessage}
+                    feedbackMessage={feedbackMessage}
+                    feedbackTone={feedbackTone}
+                  />
+                </div>
+
+                <div className={styles.forwardRow()}>
+                  <label htmlFor="forward-department">Encaminhar para</label>
+                  <Select
+                    value={effectiveTargetDepartment}
+                    onValueChange={(value) => {
+                      if (isWhatsAppConversationDepartment(value)) {
+                        setTargetDepartment(value);
+                      }
+                    }}
+                    disabled={
+                      isUpdatingConversation ||
+                      !canForwardWhatsAppConversation(selectedConversation)
+                    }
+                  >
+                    <SelectTrigger id="forward-department" className={styles.compactSelect()}>
+                      <span>{DEPARTMENT_LABELS[effectiveTargetDepartment]}</span>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {WHATSAPP_ROUTABLE_DEPARTMENTS.filter(
+                        (department) => department !== selectedConversation.department,
+                      ).map((department) => (
+                        <SelectItem key={department} value={department}>
+                          {DEPARTMENT_LABELS[department]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={handleForward}
+                    disabled={
+                      isUpdatingConversation ||
+                      !canForwardWhatsAppConversation(selectedConversation)
+                    }
+                    className={styles.actionButton({ action: 'forward' })}
+                  >
+                    <Forward aria-hidden="true" />
+                    Encaminhar
+                  </button>
+                </div>
+
+                {selectedConversation.department === 'commercial' &&
+                selectedConversation.currentQuoteRequest &&
+                selectedConversation.conversationState !== 'closed' &&
+                selectedConversation.assignedTo?.id === currentUserId ? (
+                  <div className="grid gap-2 rounded-xl border bg-muted/30 p-3 lg:grid-cols-[auto_minmax(13rem,1fr)_auto] lg:items-end">
+                    <label htmlFor="commercial-status" className="text-sm font-medium lg:pb-2">
+                      Alterar status comercial
+                    </label>
+                    <div className="grid gap-2">
+                      <Select
+                        value={manualCommercialStatus}
+                        onValueChange={(value) => {
+                          if (isManualCommercialStatus(value)) {
+                            setManualCommercialStatus(value);
+                            if (value !== 'rejected' && value !== 'cancelled') {
+                              setManualCommercialStatusReason('');
+                            }
+                          }
+                        }}
+                        disabled={isUpdatingConversation}
+                      >
+                        <SelectTrigger id="commercial-status" className={styles.compactSelect()}>
+                          <span>{REQUEST_STATUS_LABELS[manualCommercialStatus]}</span>
+                        </SelectTrigger>
+                        <SelectContent alignItemWithTrigger={false}>
+                          {MANUAL_COMMERCIAL_STATUSES.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {REQUEST_STATUS_LABELS[status]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {manualCommercialStatus === 'rejected' ||
+                      manualCommercialStatus === 'cancelled' ? (
+                        <Textarea
+                          aria-label="Motivo da alteração do status comercial"
+                          value={manualCommercialStatusReason}
+                          onChange={(event) => setManualCommercialStatusReason(event.target.value)}
+                          minLength={3}
+                          maxLength={500}
+                          rows={2}
+                          placeholder="Informe o motivo para manter a auditoria completa."
+                        />
+                      ) : null}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleManualCommercialStatus}
+                      disabled={
+                        isUpdatingConversation ||
+                        manualCommercialStatus === selectedConversation.requestStatus ||
+                        ((manualCommercialStatus === 'rejected' ||
+                          manualCommercialStatus === 'cancelled') &&
+                          manualCommercialStatusReason.trim().length < 3)
+                      }
+                    >
+                      Atualizar status
+                    </Button>
+                  </div>
+                ) : null}
+
+                <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Encerrar este atendimento?</DialogTitle>
+                      <DialogDescription>
+                        A conversa atual será encerrada e preservada no histórico. Quando o cliente
+                        enviar uma nova mensagem, o bot iniciará outro atendimento pelo menu
+                        principal. O encerramento não é permitido enquanto houver uma proposta em
+                        andamento.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                      <label htmlFor="close-reason" className="text-sm font-medium">
+                        Motivo do encerramento
+                        {selectedConversation.requestStatus === 'rejected' ? ' (obrigatório)' : ''}
+                      </label>
+                      <Textarea
+                        id="close-reason"
+                        value={closeReason}
+                        onChange={(event) => setCloseReason(event.target.value)}
+                        minLength={3}
+                        maxLength={500}
+                        required={selectedConversation.requestStatus === 'rejected'}
+                        placeholder={
+                          selectedConversation.requestStatus === 'rejected'
+                            ? 'Informe por que a proposta foi recusada.'
+                            : 'Opcional: registre uma observação sobre o encerramento.'
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {closeReason.length}/500 caracteres
+                      </p>
+                    </div>
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>Voltar</DialogClose>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={handleClose}
+                        disabled={
+                          isUpdatingConversation ||
+                          (selectedConversation.requestStatus === 'rejected' &&
+                            closeReason.trim().length < 3)
+                        }
+                      >
+                        {isUpdatingConversation ? 'Encerrando...' : 'Confirmar encerramento'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <section aria-labelledby="quote-request-title" className={styles.quotePanel()}>
+                <div className={styles.panelHeading()}>
+                  <div>
+                    <p className={styles.panelEyebrow()}>Solicitação estruturada</p>
+                    <h4 id="quote-request-title">Orçamento atual</h4>
+                  </div>
+                  {isWhatsAppQuoteSummaryConfirmed(selectedConversation) ? (
+                    <span className={styles.confirmedBadge()}>
+                      <CheckCheck aria-hidden="true" />
+                      Resumo confirmado
+                    </span>
+                  ) : null}
+                </div>
+
+                {selectedConversation.currentQuoteRequest ? (
+                  <>
+                    <dl className={styles.quoteGrid()}>
+                      {[
+                        ['Sequência', selectedConversation.currentQuoteRequest.sequence],
+                        ['Contato', selectedConversation.currentQuoteRequest.contactName],
+                        ['Documento', selectedConversation.currentQuoteRequest.document],
+                        ['E-mail', selectedConversation.currentQuoteRequest.email],
+                        ['Serviço', selectedConversation.currentQuoteRequest.serviceType],
+                        ['Origem', selectedConversation.currentQuoteRequest.origin],
+                        ['Destino', selectedConversation.currentQuoteRequest.destination],
+                        [
+                          'Saída',
+                          formatCivilDateTime(
+                            selectedConversation.currentQuoteRequest.departureDate,
+                            selectedConversation.currentQuoteRequest.departureAt,
+                          ),
+                        ],
+                        [
+                          'Retorno',
+                          selectedConversation.currentQuoteRequest.returnDate ||
+                          selectedConversation.currentQuoteRequest.returnAt
+                            ? formatCivilDateTime(
+                                selectedConversation.currentQuoteRequest.returnDate,
+                                selectedConversation.currentQuoteRequest.returnAt,
+                              )
+                            : null,
+                        ],
+                        ['Passageiros', selectedConversation.currentQuoteRequest.passengerCount],
+                        ['Veículo', selectedConversation.currentQuoteRequest.vehicleType],
+                        [
+                          'À disposição',
+                          selectedConversation.currentQuoteRequest.vehicleAtDisposal,
+                        ],
+                        [
+                          'Traslados locais',
+                          selectedConversation.currentQuoteRequest.localTransfers,
+                        ],
+                        ['Observações', selectedConversation.currentQuoteRequest.notes],
+                      ].map(([label, value]) => (
+                        <div key={String(label)}>
+                          <dt>{label}</dt>
+                          <dd>{quoteValue(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    {/* Os dados estruturados permanecem no contrato para uma futura visão técnica,
+                      mas não são exibidos na operação diária do atendente. */}
+                  </>
+                ) : (
+                  <p className={styles.emptyPanelText()}>
+                    Nenhuma solicitação de orçamento vinculada a esta conversa.
+                  </p>
+                )}
+              </section>
+
+              {closureHistory.length > 0 ? (
+                <section
+                  aria-labelledby="closure-history-title"
+                  className={styles.closureHistory()}
+                >
+                  <div className={styles.closureHistoryHeading()}>
+                    <History aria-hidden="true" />
+                    <div>
+                      <p className={styles.panelEyebrow()}>Registro do atendimento</p>
+                      <h4 id="closure-history-title">Histórico de encerramentos</h4>
+                    </div>
+                  </div>
+                  <div className={styles.closureHistoryList()}>
+                    {closureHistory.map((transition) => (
+                      <article key={transition.id} className={styles.closureHistoryItem()}>
+                        <dl>
+                          <div>
+                            <dt>Data e hora</dt>
+                            <dd>{formatDateTime(transition.createdAt)}</dd>
+                          </div>
+                          <div>
+                            <dt>Encerrado por</dt>
+                            <dd>{getClosureActor(transition)}</dd>
+                          </div>
+                          <div>
+                            <dt>Motivo</dt>
+                            <dd>{getClosureReason(transition) ?? 'Não informado'}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <footer className={styles.detailFooter()}>
+                <p
+                  aria-live="polite"
+                  className={styles.feedback({
+                    tone: feedbackTone,
+                  })}
+                >
+                  {isUpdatingConversation ? 'Atualizando atendimento...' : feedbackMessage}
+                </p>
+              </footer>
+            </>
           ) : (
-            <div className={styles.emptyList()}>
-              <Inbox aria-hidden="true" className={styles.emptyIcon()} />
-              <p className={styles.emptyTitle()}>Nenhuma conversa encontrada</p>
-              <p className={styles.emptyDescription()}>
-                {listError
-                  ? 'A lista será restaurada quando a Tenant API responder.'
-                  : 'Altere a busca ou os filtros selecionados.'}
+            <div className={styles.emptyDetail()}>
+              <Inbox aria-hidden="true" className={styles.emptyDetailIcon()} />
+              <p className={styles.emptyDetailTitle()}>Selecione uma conversa</p>
+              <p className={styles.emptyDetailDescription()}>
+                Os detalhes, o histórico e as ações do atendimento aparecerão aqui.
               </p>
             </div>
           )}
         </div>
-      </aside>
-
-      <div className={styles.detail()}>
-        {selectedConversation !== null ? (
-          <>
-            <header className={styles.detailHeader()}>
-              <div className={styles.contactBlock()}>
-                <span className={styles.detailAvatar()}>
-                  {getContactInitial(selectedConversation.contact.name)}
-                </span>
-                <div>
-                  <h3 className={styles.detailTitle()}>{selectedConversation.contact.name}</h3>
-                  <p className={styles.phone()}>
-                    <Phone aria-hidden="true" />
-                    {selectedConversation.contact.phone}
-                  </p>
-                  <p className={styles.lastInteraction()}>
-                    Última interação: {formatDateTime(selectedConversation.lastMessageAt)}
-                  </p>
-                </div>
-              </div>
-              <div className={styles.versionBadge()}>versão {selectedConversation.version}</div>
-            </header>
-
-            <div className={styles.highlightGrid()}>
-              <div
-                className={styles.highlight({
-                  tone: isWhatsAppBotBlocked(selectedConversation) ? 'danger' : 'success',
-                })}
-              >
-                {isWhatsAppBotBlocked(selectedConversation) ? (
-                  <ShieldAlert aria-hidden="true" />
-                ) : (
-                  <Bot aria-hidden="true" />
-                )}
-                <span>
-                  <strong>
-                    {isWhatsAppBotBlocked(selectedConversation)
-                      ? 'Bot bloqueado'
-                      : 'Bot autorizado'}
-                  </strong>
-                  <small>
-                    {isWhatsAppBotBlocked(selectedConversation)
-                      ? 'A automação não pode responder neste estado.'
-                      : 'A Tenant API permite a automação neste estado.'}
-                  </small>
-                </span>
-              </div>
-              <div
-                className={styles.highlight({
-                  tone: isWhatsAppHumanActive(selectedConversation) ? 'info' : 'neutral',
-                })}
-              >
-                <Headset aria-hidden="true" />
-                <span>
-                  <strong>
-                    {isWhatsAppHumanActive(selectedConversation)
-                      ? 'Humano ativo'
-                      : 'Sem humano ativo'}
-                  </strong>
-                  <small>
-                    {selectedConversation.assignedTo?.name ??
-                      'Nenhum responsável assumiu o atendimento.'}
-                  </small>
-                </span>
-              </div>
-              <div
-                className={styles.highlight({
-                  tone: isWhatsAppAwaitingProposal(selectedConversation) ? 'warning' : 'neutral',
-                })}
-              >
-                <FileText aria-hidden="true" />
-                <span>
-                  <strong>
-                    {isWhatsAppAwaitingProposal(selectedConversation)
-                      ? 'Aguardando proposta'
-                      : 'Sem proposta pendente'}
-                  </strong>
-                  <small>
-                    {selectedConversation.flowStep === 'commercial-follow-up-menu'
-                      ? 'Segundo contato retomado no acompanhamento comercial.'
-                      : FLOW_STEP_LABELS[selectedConversation.flowStep]}
-                  </small>
-                </span>
-              </div>
-            </div>
-
-            <div className={styles.dimensionGrid()}>
-              <div className={styles.dimensionItem()}>
-                <Building2 aria-hidden="true" />
-                <span>
-                  <small>Departamento</small>
-                  <strong>{DEPARTMENT_LABELS[selectedConversation.department]}</strong>
-                </span>
-              </div>
-              <div className={styles.dimensionItem()}>
-                <Bot aria-hidden="true" />
-                <span>
-                  <small>Estado da conversa</small>
-                  <strong>
-                    {CONVERSATION_STATE_LABELS[selectedConversation.conversationState]}
-                  </strong>
-                </span>
-              </div>
-              <div className={styles.dimensionItem()}>
-                <RotateCcw aria-hidden="true" />
-                <span>
-                  <small>Etapa do fluxo</small>
-                  <strong>{FLOW_STEP_LABELS[selectedConversation.flowStep]}</strong>
-                </span>
-              </div>
-              <div className={styles.dimensionItem()}>
-                <Clock3 aria-hidden="true" />
-                <span>
-                  <small>Status da solicitação</small>
-                  <strong>{REQUEST_STATUS_LABELS[selectedConversation.requestStatus]}</strong>
-                </span>
-              </div>
-            </div>
-
-            <div className={styles.assignment()}>
-              <UserRound aria-hidden="true" />
-              <span>
-                {selectedConversation.assignedTo === null
-                  ? 'Nenhum atendente humano responsável'
-                  : `Responsável: ${selectedConversation.assignedTo.name}`}
-              </span>
-              <small>Canal: {selectedConversation.channel.name}</small>
-            </div>
-
-            <div className={styles.actionsPanel()}>
-              <p className={styles.actionsTitle()}>Ações reais pela Tenant API</p>
-              <div className={styles.actions()}>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleVersionedAction(
-                      takeOverWhatsAppConversationAction,
-                      'Atendimento humano assumido com sucesso.',
-                    )
-                  }
-                  disabled={
-                    isUpdatingConversation || !canTakeOverWhatsAppConversation(selectedConversation)
-                  }
-                  className={styles.actionButton({ action: 'human' })}
-                >
-                  <Headset aria-hidden="true" />
-                  Assumir
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleVersionedAction(
-                      returnWhatsAppConversationToBotAction,
-                      'Conversa devolvida ao bot na etapa permitida.',
-                    )
-                  }
-                  disabled={
-                    isUpdatingConversation ||
-                    !canReturnWhatsAppConversationToBot(selectedConversation)
-                  }
-                  className={styles.actionButton({ action: 'bot' })}
-                >
-                  <Bot aria-hidden="true" />
-                  Devolver ao bot
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleConversationSelection(selectedConversation)}
-                  disabled={
-                    isUpdatingConversation ||
-                    !canMarkWhatsAppConversationAsRead(selectedConversation)
-                  }
-                  className={styles.actionButton({ action: 'read' })}
-                >
-                  <CheckCheck aria-hidden="true" />
-                  Marcar como lida
-                </button>
-              </div>
-
-              <div className={styles.forwardRow()}>
-                <label htmlFor="forward-department">Encaminhar para</label>
-                <select
-                  id="forward-department"
-                  value={targetDepartment}
-                  onChange={(event) => {
-                    if (isWhatsAppConversationDepartment(event.target.value)) {
-                      setTargetDepartment(event.target.value);
-                    }
-                  }}
-                  disabled={
-                    isUpdatingConversation || !canForwardWhatsAppConversation(selectedConversation)
-                  }
-                  className={styles.compactSelect()}
-                >
-                  {WHATSAPP_CONVERSATION_DEPARTMENTS.map((department) => (
-                    <option key={department} value={department}>
-                      {DEPARTMENT_LABELS[department]}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={handleForward}
-                  disabled={
-                    isUpdatingConversation || !canForwardWhatsAppConversation(selectedConversation)
-                  }
-                  className={styles.actionButton({ action: 'forward' })}
-                >
-                  <Forward aria-hidden="true" />
-                  Encaminhar
-                </button>
-              </div>
-
-              <div className={styles.unavailableActions()}>
-                <span>Não publicados pela matriz do painel:</span>
-                <button type="button" disabled title="Sem endpoint real no contrato atual.">
-                  <Clock3 aria-hidden="true" />
-                  Aguardar cliente
-                </button>
-                <button type="button" disabled title="Sem endpoint real no contrato atual.">
-                  <CircleStop aria-hidden="true" />
-                  Fechar
-                </button>
-                <button type="button" disabled title="Sem endpoint real no contrato atual.">
-                  <MessageSquareWarning aria-hidden="true" />
-                  Cancelar
-                </button>
-              </div>
-            </div>
-
-            <section aria-labelledby="quote-request-title" className={styles.quotePanel()}>
-              <div className={styles.panelHeading()}>
-                <div>
-                  <p className={styles.panelEyebrow()}>Solicitação estruturada</p>
-                  <h4 id="quote-request-title">Orçamento atual</h4>
-                </div>
-                {isWhatsAppQuoteSummaryConfirmed(selectedConversation) ? (
-                  <span className={styles.confirmedBadge()}>
-                    <CheckCheck aria-hidden="true" />
-                    Resumo confirmado
-                  </span>
-                ) : null}
-              </div>
-
-              {selectedConversation.currentQuoteRequest ? (
-                <>
-                  <dl className={styles.quoteGrid()}>
-                    {[
-                      ['Sequência', selectedConversation.currentQuoteRequest.sequence],
-                      ['Contato', selectedConversation.currentQuoteRequest.contactName],
-                      ['Documento', selectedConversation.currentQuoteRequest.document],
-                      ['E-mail', selectedConversation.currentQuoteRequest.email],
-                      ['Serviço', selectedConversation.currentQuoteRequest.serviceType],
-                      ['Origem', selectedConversation.currentQuoteRequest.origin],
-                      ['Destino', selectedConversation.currentQuoteRequest.destination],
-                      [
-                        'Saída',
-                        selectedConversation.currentQuoteRequest.departureAt
-                          ? formatDateTime(selectedConversation.currentQuoteRequest.departureAt)
-                          : null,
-                      ],
-                      [
-                        'Retorno',
-                        selectedConversation.currentQuoteRequest.returnAt
-                          ? formatDateTime(selectedConversation.currentQuoteRequest.returnAt)
-                          : null,
-                      ],
-                      ['Passageiros', selectedConversation.currentQuoteRequest.passengerCount],
-                      ['Veículo', selectedConversation.currentQuoteRequest.vehicleType],
-                      ['À disposição', selectedConversation.currentQuoteRequest.vehicleAtDisposal],
-                      ['Traslados locais', selectedConversation.currentQuoteRequest.localTransfers],
-                      ['Observações', selectedConversation.currentQuoteRequest.notes],
-                    ].map(([label, value]) => (
-                      <div key={String(label)}>
-                        <dt>{label}</dt>
-                        <dd>{quoteValue(value)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  {Object.keys(selectedConversation.currentQuoteRequest.structuredData).length >
-                  0 ? (
-                    <div className={styles.structuredData()}>
-                      <strong>Dados adicionais confirmados</strong>
-                      <dl>
-                        {Object.entries(
-                          selectedConversation.currentQuoteRequest.structuredData,
-                        ).map(([key, value]) => (
-                          <div key={key}>
-                            <dt>{key}</dt>
-                            <dd>{quoteValue(value)}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <p className={styles.emptyPanelText()}>
-                  Nenhuma solicitação de orçamento vinculada a esta conversa.
-                </p>
-              )}
-            </section>
-
-            <section aria-labelledby="audit-title" className={styles.auditPanel()}>
-              <div>
-                <p className={styles.panelEyebrow()}>Auditoria essencial</p>
-                <h4 id="audit-title">Concorrência e atividade</h4>
-              </div>
-              <dl>
-                <div>
-                  <dt>Versão otimista</dt>
-                  <dd>{selectedConversation.version}</dd>
-                </div>
-                <div>
-                  <dt>Atualizada em</dt>
-                  <dd>{formatDateTime(selectedConversation.updatedAt)}</dd>
-                </div>
-                <div>
-                  <dt>Último inbound</dt>
-                  <dd>{formatDateTime(selectedConversation.lastInboundAt)}</dd>
-                </div>
-                <div>
-                  <dt>Último outbound</dt>
-                  <dd>{formatDateTime(selectedConversation.lastOutboundAt)}</dd>
-                </div>
-                <div>
-                  <dt>Encerrada em</dt>
-                  <dd>{formatDateTime(selectedConversation.closedAt)}</dd>
-                </div>
-              </dl>
-              {selectedConversation.transitions.length > 0 ? (
-                <ol className={styles.transitionList()}>
-                  {selectedConversation.transitions.map((transition) => (
-                    <li key={transition.id}>
-                      <div>
-                        <strong>{transition.name}</strong>
-                        <span>
-                          versão {transition.expectedVersion} → {transition.resultingVersion}
-                        </span>
-                      </div>
-                      <p>
-                        {CONVERSATION_STATE_LABELS[transition.from.conversationState]} →{' '}
-                        {CONVERSATION_STATE_LABELS[transition.to.conversationState]} ·{' '}
-                        {FLOW_STEP_LABELS[transition.to.flowStep]}
-                      </p>
-                      <small>
-                        {transition.actorType}
-                        {transition.actorUserId ? ` · ${transition.actorUserId}` : ''} ·{' '}
-                        {formatDateTime(transition.createdAt)}
-                      </small>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p>Nenhuma transição foi registrada para esta conversa.</p>
-              )}
-            </section>
-
-            <section aria-labelledby="message-history-title" className={styles.history()}>
-              <div className={styles.historyHeader()}>
-                <div>
-                  <p className={styles.panelEyebrow()}>Histórico completo</p>
-                  <h4 id="message-history-title">Mensagens e anexos</h4>
-                </div>
-                <span>{selectedConversation.messages.length} mensagens</span>
-              </div>
-
-              {isLoadingDetail && !loadedConversationIds.has(selectedConversation.id) ? (
-                <div className={styles.loadingState()} role="status">
-                  <LoaderCircle aria-hidden="true" />
-                  Carregando histórico completo...
-                </div>
-              ) : detailError ? (
-                <div className={styles.detailError()} role="alert">
-                  <AlertCircle aria-hidden="true" />
-                  <span>{detailError}</span>
-                  <button
-                    type="button"
-                    onClick={() => void loadConversationDetail(selectedConversation.id)}
-                  >
-                    Tentar novamente
-                  </button>
-                </div>
-              ) : selectedConversation.messages.length > 0 ? (
-                <div className={styles.messages()}>
-                  {selectedConversation.messages.map((message) => {
-                    const failedAttempt = [...message.attempts]
-                      .reverse()
-                      .find((attempt) => attempt.status === 'failed');
-
-                    return (
-                      <article
-                        key={message.id}
-                        className={styles.messageRow({
-                          direction: message.direction,
-                        })}
-                      >
-                        <div
-                          className={styles.messageBubble({
-                            direction: message.direction,
-                          })}
-                        >
-                          <div className={styles.messageMeta()}>
-                            <strong>
-                              {message.direction === 'inbound'
-                                ? selectedConversation.contact.name
-                                : 'Atendimento'}
-                            </strong>
-                            <span>{DELIVERY_STATUS_LABELS[message.deliveryStatus]}</span>
-                          </div>
-                          {message.text ? (
-                            <p className={styles.messageContent()}>{message.text}</p>
-                          ) : null}
-                          {message.attachment ? (
-                            <div className={styles.attachment()}>
-                              <Paperclip aria-hidden="true" />
-                              <span>
-                                <strong>
-                                  {message.attachment.fileName ?? MESSAGE_KIND_LABELS[message.kind]}
-                                </strong>
-                                <small>
-                                  {message.attachment.mimeType ?? MESSAGE_KIND_LABELS[message.kind]}{' '}
-                                  · {formatFileSize(message.attachment.size)}
-                                </small>
-                              </span>
-                              {message.attachment.url ? (
-                                <a href={message.attachment.url} target="_blank" rel="noreferrer">
-                                  Abrir anexo
-                                </a>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          {failedAttempt ? (
-                            <p className={styles.failureReason()}>
-                              <AlertCircle aria-hidden="true" />
-                              {failedAttempt.errorCode ? `${failedAttempt.errorCode}: ` : ''}
-                              {failedAttempt.errorMessage ??
-                                'Falha registrada sem motivo detalhado.'}
-                            </p>
-                          ) : null}
-                          <time className={styles.messageTime()}>
-                            {formatDateTime(message.occurredAt)}
-                          </time>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className={styles.emptyPanelText()}>
-                  Esta conversa ainda não possui mensagens persistidas.
-                </p>
-              )}
-            </section>
-
-            <section aria-labelledby="human-message-title" className={styles.composer()}>
-              <div className={styles.composerHeading()}>
-                <div>
-                  <p className={styles.panelEyebrow()}>Atendimento humano</p>
-                  <h4 id="human-message-title">Responder pelo painel</h4>
-                </div>
-                <span
-                  className={styles.composerStatus({
-                    enabled: canCurrentUserSendMessage,
-                  })}
-                >
-                  {canCurrentUserSendMessage ? 'Envio autorizado' : 'Envio bloqueado'}
-                </span>
-              </div>
-              <label htmlFor="human-message" className={styles.visuallyHidden()}>
-                Mensagem para {selectedConversation.contact.name}
-              </label>
-              <textarea
-                id="human-message"
-                value={messageDraft}
-                onChange={(event) => setMessageDraft(event.target.value)}
-                maxLength={HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH}
-                rows={4}
-                disabled={!canCurrentUserSendMessage || isSendingMessage}
-                placeholder={
-                  canCurrentUserSendMessage
-                    ? `Responder para ${selectedConversation.contact.name}`
-                    : 'Assuma esta conversa para responder ao cliente.'
-                }
-                className={styles.composerInput()}
-              />
-              <div className={styles.composerFooter()}>
-                <p>
-                  {canCurrentUserSendMessage
-                    ? `${messageDraft.length.toLocaleString('pt-BR')} / ${HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH.toLocaleString(
-                        'pt-BR',
-                      )} caracteres`
-                    : selectedConversation.conversationState !== 'human-active'
-                      ? 'O bot permanece bloqueado somente depois que um atendente assume.'
-                      : 'Somente o atendente responsável pode responder nesta conversa.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleSendHumanMessage}
-                  disabled={
-                    !canCurrentUserSendMessage ||
-                    isSendingMessage ||
-                    messageDraft.trim().length === 0
-                  }
-                  className={styles.sendButton()}
-                >
-                  {isSendingMessage ? (
-                    <LoaderCircle aria-hidden="true" className="animate-spin" />
-                  ) : (
-                    <Send aria-hidden="true" />
-                  )}
-                  {isSendingMessage ? 'Registrando...' : 'Enviar mensagem'}
-                </button>
-              </div>
-            </section>
-
-            <footer className={styles.detailFooter()}>
-              <p className={styles.integrationNotice()}>
-                <CheckCheck aria-hidden="true" />
-                Atualização por polling da rota server-side com backoff. O painel controla a
-                automação somente pela Tenant API.
-              </p>
-              <p
-                aria-live="polite"
-                className={styles.feedback({
-                  tone: feedbackTone,
-                })}
-              >
-                {isUpdatingConversation
-                  ? 'Atualizando conversa com expectedVersion...'
-                  : feedbackMessage}
-              </p>
-            </footer>
-          </>
-        ) : (
-          <div className={styles.emptyDetail()}>
-            <Inbox aria-hidden="true" className={styles.emptyDetailIcon()} />
-            <p className={styles.emptyDetailTitle()}>Selecione uma conversa</p>
-            <p className={styles.emptyDetailDescription()}>
-              O histórico, as quatro dimensões e as ações reais aparecerão aqui.
-            </p>
-          </div>
-        )}
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

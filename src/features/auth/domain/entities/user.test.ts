@@ -3,13 +3,11 @@ import {
   DEPARTMENTS,
   PERMISSION_ACTIONS,
   PERMISSION_RESOURCES,
-  ROLES,
   USER_TYPES,
   type ClientUser,
   type Department,
   type EmployeeUser,
   type Permission,
-  type Role,
   type User,
   type UserType,
 } from './user';
@@ -21,21 +19,16 @@ describe('user authorization contracts', () => {
 
   it('defines all internal departments', () => {
     expect(DEPARTMENTS).toEqual([
-      'human-resources',
-      'personnel-department',
       'commercial',
       'purchasing',
+      'controllership',
+      'personnel-department',
+      'financial',
+      'management',
       'maintenance',
       'monitoring',
       'operations',
-      'cleaning',
-      'financial',
-      'information-technology',
     ]);
-  });
-
-  it('defines organizational roles separately from departments', () => {
-    expect(ROLES).toEqual(['director', 'manager', 'driver']);
   });
 
   it('defines the supported client categories', () => {
@@ -92,7 +85,6 @@ describe('user authorization contracts', () => {
       name: 'Maria',
       type: 'employee',
       departments: ['commercial'],
-      roles: ['manager'],
       permissions: ['dashboard:view', 'commercial:view', 'commercial:manage'],
       clientCategory: null,
       isActive: true,
@@ -100,7 +92,6 @@ describe('user authorization contracts', () => {
 
     expect(employee.type).toBe('employee');
     expect(employee.departments).toContain('commercial');
-    expect(employee.roles).toContain('manager');
     expect(employee.clientCategory).toBeNull();
   });
 
@@ -110,7 +101,6 @@ describe('user authorization contracts', () => {
       name: 'Empresa Exemplo',
       type: 'client',
       departments: [],
-      roles: [],
       permissions: ['dashboard:view', 'profile:view', 'contracts:view', 'trips:view'],
       clientCategory: 'continuous-charter',
       isActive: true,
@@ -118,7 +108,6 @@ describe('user authorization contracts', () => {
 
     expect(client.type).toBe('client');
     expect(client.departments).toEqual([]);
-    expect(client.roles).toEqual([]);
     expect(client.clientCategory).toBe('continuous-charter');
   });
 
@@ -129,7 +118,6 @@ describe('user authorization contracts', () => {
         name: 'João',
         type: 'employee',
         departments: ['operations'],
-        roles: ['driver'],
         permissions: ['operations:view', 'drivers:view'],
         clientCategory: null,
         isActive: true,
@@ -139,7 +127,6 @@ describe('user authorization contracts', () => {
         name: 'Cliente Eventual',
         type: 'client',
         departments: [],
-        roles: [],
         permissions: ['dashboard:view', 'quotes:create', 'service-requests:create'],
         clientCategory: 'eventual-charter',
         isActive: true,
@@ -156,11 +143,9 @@ describe('user authorization contracts', () => {
   it('accepts values from the derived union types', () => {
     const userType: UserType = 'employee';
     const department: Department = 'human-resources';
-    const role: Role = 'director';
 
     expect(userType).toBe('employee');
     expect(department).toBe('human-resources');
-    expect(role).toBe('director');
   });
 
   it('accepts permissions using the resource and action format', () => {

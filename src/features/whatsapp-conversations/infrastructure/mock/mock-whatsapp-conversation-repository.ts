@@ -64,13 +64,23 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
     return mockConversations
       .filter(
         (conversation) =>
+          (!filters?.department || conversation.department === filters.department) &&
           (!filters?.state || conversation.conversationState === filters.state) &&
+          (!filters?.requestStatus ||
+            (conversation.department === 'commercial' &&
+              conversation.requestStatus === filters.requestStatus)) &&
           (!search ||
             `${conversation.contact.name} ${conversation.contact.phone}`
               .toLocaleLowerCase('pt-BR')
               .includes(search)),
       )
       .map(cloneConversation);
+  }
+
+  getDashboardConversations(
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<readonly WhatsAppConversation[]> {
+    return this.getConversations(filters);
   }
 
   async getConversationById(conversationId: string): Promise<WhatsAppConversation | null> {
@@ -119,6 +129,59 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
     expectedVersion: number,
   ): Promise<WhatsAppConversation> {
     return updateConversation(conversationId, expectedVersion, { unreadCount: 0 });
+  }
+
+  async closeConversationAfterRejection(
+    conversationId: string,
+    expectedVersion: number,
+  ): Promise<WhatsAppConversation> {
+    const current = mockConversations[getConversationIndex(conversationId)];
+    if (current.requestStatus !== 'rejected') {
+      throw new WhatsAppConversationRepositoryError(
+        'validation',
+        'O atendimento só pode ser encerrado depois que a proposta for recusada.',
+      );
+    }
+
+    return updateConversation(conversationId, expectedVersion, {
+      conversationState: 'closed',
+      flowStep: 'closed',
+      assignedTo: null,
+      unreadCount: 0,
+      closedAt: new Date().toISOString(),
+    });
+  }
+
+  async closeConversation(
+    conversationId: string,
+    expectedVersion: number,
+    reason?: string | null,
+  ): Promise<WhatsAppConversation> {
+    const current = mockConversations[getConversationIndex(conversationId)];
+    if (
+      ['collecting-information', 'waiting-for-customer', 'under-review'].includes(
+        current.requestStatus,
+      )
+    ) {
+      throw new WhatsAppConversationRepositoryError(
+        'conflict',
+        'A conversa possui uma solicitação de orçamento em andamento.',
+      );
+    }
+    if (current.requestStatus === 'rejected' && !reason?.trim()) {
+      throw new WhatsAppConversationRepositoryError(
+        'validation',
+        'Informe o motivo do encerramento da proposta recusada.',
+      );
+    }
+
+    return updateConversation(conversationId, expectedVersion, {
+      conversationState: 'closed',
+      flowStep: 'closed',
+      assignedTo: null,
+      unreadCount: 0,
+      closedAt: new Date().toISOString(),
+    });
   }
 
   async sendHumanMessage(

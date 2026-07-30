@@ -1,29 +1,51 @@
 import { cva } from 'class-variance-authority';
 
 export const dashboardPageStyles = {
-  content: cva('mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8'),
+  content: cva('mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 sm:py-6 lg:px-8'),
 
-  eyebrow: cva('text-sm font-semibold text-blue-600'),
+  eyebrow: cva('text-sm font-semibold text-primary'),
 
-  title: cva('mt-2 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl'),
+  heading: cva('mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'),
 
-  description: cva('mt-3 max-w-2xl text-base leading-7 text-slate-600'),
+  title: cva('max-w-3xl text-2xl font-bold tracking-tight text-foreground sm:text-3xl'),
 
-  cardGrid: cva('mt-10 grid gap-5 md:grid-cols-3'),
+  description: cva('mt-1 max-w-3xl text-sm leading-6 text-muted-foreground'),
 
-  card: cva('gap-0 border-0 bg-white py-0 shadow-sm ring-slate-200'),
+  liveBadge: cva(
+    'inline-flex w-fit shrink-0 items-center gap-2 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary [&_svg]:size-3.5',
+  ),
 
-  cardHeader: cva('gap-3 px-6 pt-6'),
+  errorBanner: cva(
+    'mt-4 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0',
+  ),
 
-  cardIcon: cva('flex size-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700'),
+  graphGrid: cva('mt-6 grid gap-5 xl:grid-cols-2'),
 
-  cardTitle: cva('text-base font-bold text-slate-950'),
+  graphCard: cva('shadow-sm'),
 
-  cardDescription: cva('leading-6 text-slate-600'),
+  graphTitle: cva('text-base font-semibold'),
 
-  cardContent: cva('px-6 pb-6 pt-4'),
+  graphContent: cva('space-y-5 pb-5'),
 
-  cardValue: cva('text-2xl font-bold text-slate-950'),
+  graphRow: cva('space-y-2'),
 
-  cardDetail: cva('mt-1 text-sm leading-6 text-slate-500'),
+  graphLabel: cva(
+    'flex items-center justify-between gap-3 text-sm text-muted-foreground [&>strong]:font-semibold [&>strong]:text-foreground',
+  ),
+
+  graphTrack: cva('h-2.5 overflow-hidden rounded-full bg-muted'),
+
+  graphBar: cva('block h-full rounded-full transition-[width] duration-500'),
+
+  emptyGraph: cva(
+    'rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground',
+  ),
+
+  summaryCard: cva('mt-6 shadow-sm'),
+
+  summaryContent: cva('flex items-center gap-4 p-5'),
+
+  summaryIcon: cva(
+    'flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary [&_svg]:size-5',
+  ),
 };

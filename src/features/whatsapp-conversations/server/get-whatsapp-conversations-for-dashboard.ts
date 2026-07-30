@@ -1,8 +1,11 @@
 import 'server-only';
 
 import {
+  closeWhatsAppConversation,
+  closeWhatsAppConversationAfterRejection,
   forwardWhatsAppConversation,
   getWhatsAppConversationById,
+  getWhatsAppDashboardConversations,
   getWhatsAppConversations,
   markWhatsAppConversationAsRead,
   returnWhatsAppConversationToBot,
@@ -18,6 +21,14 @@ import {
 export function getWhatsAppConversationsForDashboard(filters?: GetWhatsAppConversationsFilters) {
   return executeAuthenticatedWhatsAppRequest((repository) =>
     getWhatsAppConversations(repository, filters),
+  );
+}
+
+export function getWhatsAppConversationsForOperationalDashboard(
+  filters?: GetWhatsAppConversationsFilters,
+) {
+  return executeAuthenticatedWhatsAppRequest((repository) =>
+    getWhatsAppDashboardConversations(repository, filters),
   );
 }
 
@@ -73,6 +84,25 @@ export function markWhatsAppConversationAsReadForDashboard(
 ) {
   return executeAuthenticatedWhatsAppMutation((repository) =>
     markWhatsAppConversationAsRead(repository, conversationId, expectedVersion),
+  );
+}
+
+export function closeWhatsAppConversationAfterRejectionForDashboard(
+  conversationId: unknown,
+  expectedVersion: unknown,
+) {
+  return executeAuthenticatedWhatsAppMutation((repository) =>
+    closeWhatsAppConversationAfterRejection(repository, conversationId, expectedVersion),
+  );
+}
+
+export function closeWhatsAppConversationForDashboard(
+  conversationId: unknown,
+  expectedVersion: unknown,
+  reason?: unknown,
+) {
+  return executeAuthenticatedWhatsAppMutation((repository) =>
+    closeWhatsAppConversation(repository, conversationId, expectedVersion, reason),
   );
 }
 

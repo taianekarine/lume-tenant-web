@@ -1,15 +1,29 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { usePathname } from 'next/navigation';
 
 import type { EmployeeUser } from '@/features/auth/domain';
+import { getPendingQuoteProposalCountAction } from '@/features/quote-proposals/actions';
+import { SidebarProvider } from '@/shared/ui/sidebar';
 
 import { AuthenticatedNavigation } from './authenticated-navigation';
 
 jest.mock('next/navigation', () => ({
   usePathname: jest.fn(),
 }));
+jest.mock('@/features/quote-proposals/actions', () => ({
+  getPendingQuoteProposalCountAction: jest.fn(),
+}));
 
 const mockedUsePathname = jest.mocked(usePathname);
+const mockedPendingCount = jest.mocked(getPendingQuoteProposalCountAction);
+
+function renderNavigation(user: EmployeeUser) {
+  return render(
+    <SidebarProvider>
+      <AuthenticatedNavigation user={user} />
+    </SidebarProvider>,
+  );
+}
 
 function createEmployee(permissions: EmployeeUser['permissions'], isActive = true): EmployeeUser {
   return {
@@ -17,7 +31,6 @@ function createEmployee(permissions: EmployeeUser['permissions'], isActive = tru
     name: 'Maria Silva',
     type: 'employee',
     departments: ['commercial'],
-    roles: ['manager'],
     permissions,
     clientCategory: null,
     isActive,
@@ -27,6 +40,11 @@ function createEmployee(permissions: EmployeeUser['permissions'], isActive = tru
 describe('AuthenticatedNavigation', () => {
   beforeEach(() => {
     mockedUsePathname.mockReturnValue('/dashboard');
+    mockedPendingCount.mockReset();
+    mockedPendingCount.mockResolvedValue({
+      success: true,
+      pendingTotal: 0,
+    });
   });
 
   afterEach(() => {
@@ -34,7 +52,7 @@ describe('AuthenticatedNavigation', () => {
   });
 
   it('renders authorized destinations and identifies the current page', () => {
-    render(<AuthenticatedNavigation user={createEmployee(['dashboard:view'])} />);
+    renderNavigation(createEmployee(['dashboard:view']));
 
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/dashboard');
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
@@ -43,7 +61,7 @@ describe('AuthenticatedNavigation', () => {
   it('shows the AI agents module only with its permission', () => {
     mockedUsePathname.mockReturnValue('/ai-agents');
 
-    render(<AuthenticatedNavigation user={createEmployee(['dashboard:view', 'ai-agents:use'])} />);
+    renderNavigation(createEmployee(['dashboard:view', 'ai-agents:use']));
 
     expect(screen.getByRole('link', { name: 'Agentes de IA' })).toHaveAttribute(
       'href',
@@ -55,39 +73,79 @@ describe('AuthenticatedNavigation', () => {
     );
   });
 
-  it('shows the WhatsApp conversations module only with its permission', () => {
+  it('shows the WhatsApp conversations module only with its permission', async () => {
     mockedUsePathname.mockReturnValue('/whatsapp-conversations');
 
-    render(
-      <AuthenticatedNavigation
-        user={createEmployee(['dashboard:view', 'whatsapp-conversations:manage'])}
-      />,
-    );
+    renderNavigation(createEmployee(['dashboard:view', 'whatsapp-conversations:manage']));
 
-    expect(screen.getByRole('link', { name: 'Conversas WhatsApp' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Painel WhatsApp' })).toHaveAttribute(
       'href',
       '/whatsapp-conversations',
     );
-    expect(screen.getByRole('link', { name: 'Conversas WhatsApp' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Painel WhatsApp' })).toHaveAttribute(
       'aria-current',
       'page',
     );
+    await waitFor(() => expect(mockedPendingCount).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows one parent notification icon and the numeric count only in Pendentes', async () => {
+    mockedUsePathname.mockReturnValue('/quote-proposals/pending');
+    mockedPendingCount.mockResolvedValue({
+      success: true,
+      pendingTotal: 7,
+    });
+
+    renderNavigation(createEmployee(['whatsapp-conversations:manage']));
+
+    expect(await screen.findByLabelText('Orçamentos com notificação pendente')).toBeInTheDocument();
+    expect(screen.getByLabelText('7 orçamentos pendentes')).toHaveTextContent('7');
+    expect(screen.getByRole('link', { name: 'Orçamentos' })).toHaveAttribute(
+      'href',
+      '/quote-proposals/pending',
+    );
+    expect(screen.queryByText('Visão geral')).not.toBeInTheDocument();
+  });
+
+  it('refreshes the pending count when the notification event has no count payload', async () => {
+    mockedUsePathname.mockReturnValue('/quote-proposals/pending');
+    mockedPendingCount
+      .mockResolvedValueOnce({ success: true, pendingTotal: 0 })
+      .mockResolvedValueOnce({ success: true, pendingTotal: 4 });
+
+    renderNavigation(createEmployee(['whatsapp-conversations:manage']));
+    await waitFor(() => expect(mockedPendingCount).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('quote-proposals:count'));
+    });
+
+    expect(await screen.findByLabelText('4 orçamentos pendentes')).toHaveTextContent('4');
+    expect(mockedPendingCount).toHaveBeenCalledTimes(2);
   });
 
   it('does not render destinations without the required permission', () => {
-    const { container } = render(
-      <AuthenticatedNavigation user={createEmployee(['reports:view'])} />,
-    );
+    renderNavigation(createEmployee(['reports:view']));
 
     expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument();
-    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('places WhatsApp and budgets in the Commercial group', async () => {
+    renderNavigation(
+      createEmployee(['dashboard:view', 'ai-agents:use', 'whatsapp-conversations:manage']),
+    );
+
+    expect(screen.getByText('Geral')).toBeInTheDocument();
+    expect(screen.getByText('Comercial')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Painel WhatsApp' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Orçamentos' })).toBeInTheDocument();
+    expect(screen.queryByText('Operação')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockedPendingCount).toHaveBeenCalledTimes(1));
   });
 
   it('does not render navigation for an inactive user', () => {
-    const { container } = render(
-      <AuthenticatedNavigation user={createEmployee(['dashboard:view'], false)} />,
-    );
+    renderNavigation(createEmployee(['dashboard:view'], false));
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument();
   });
 });

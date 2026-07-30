@@ -5,9 +5,15 @@ export interface TenantUser {
   readonly email: string;
   readonly cpf: string | null;
   readonly departments: readonly string[];
-  readonly roles: readonly string[];
+  readonly isAdministrator: boolean;
+  readonly permissionCodes: readonly string[];
   readonly permissions: readonly string[];
   readonly isActive: boolean;
+  readonly status: TenantUserStatus;
+  readonly suspendedUntil: string | null;
+  readonly suspensionReason: string | null;
+  readonly mustChangePassword: boolean;
+  readonly hasProfilePicture: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -22,22 +28,13 @@ export interface TenantUserList {
   };
 }
 
-export interface TenantRole {
-  readonly id: string;
-  readonly code: string;
-  readonly name: string;
-  readonly description: string | null;
-  readonly permissions: readonly string[];
-  readonly isSystem: boolean;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-}
-
 export interface PermissionCatalog {
   readonly resources: readonly string[];
   readonly actions: readonly string[];
   readonly actionsByResource: Readonly<Record<string, readonly string[]>>;
   readonly permissions: readonly string[];
+  readonly permissionsByDepartment?: Readonly<Record<string, readonly string[]>>;
+  readonly implicitPermissions: readonly string[];
 }
 
 export interface LocalLicenseStatus {
@@ -50,61 +47,99 @@ export interface LocalLicenseStatus {
   readonly graceUntil: string;
 }
 
+export interface TenantNotificationItem {
+  readonly id: string;
+  readonly type: string;
+  readonly department: string;
+  readonly title: string;
+  readonly description: string;
+  readonly href: string;
+  readonly count: number;
+  readonly unreadCount: number;
+  readonly read: boolean;
+}
+
+export interface TenantNotificationSummary {
+  readonly items: readonly TenantNotificationItem[];
+  readonly total: number;
+  readonly unreadTotal: number;
+}
+
+export interface TenantNotificationReadReceipt {
+  readonly notificationId: string;
+  readonly pendingTotal: number;
+  readonly unreadTotal: number;
+  readonly markedRead: number;
+  readonly readAt: string;
+}
+
+export const COMMERCIAL_PENDING_QUOTES_NOTIFICATION_ID =
+  'commercial.pending-quote-proposals' as const;
+
+export interface TenantProfile {
+  readonly id: string;
+  readonly name: string;
+  readonly username: string;
+  readonly email: string;
+  readonly profilePictureDataUrl: string | null;
+}
+
 export interface CreateTenantUserInput {
   readonly name: string;
   readonly username: string;
   readonly email: string;
-  readonly cpf?: string;
   readonly password: string;
+  readonly isAdministrator: boolean;
   readonly departments: readonly string[];
-  readonly roleIds: readonly string[];
+  readonly permissionCodes: readonly string[];
 }
 
 export interface UpdateTenantUserInput {
   readonly name?: string;
   readonly email?: string;
   readonly cpf?: string | null;
+  readonly isAdministrator?: boolean;
   readonly departments?: readonly string[];
-  readonly roleIds?: readonly string[];
-  readonly isActive?: boolean;
+  readonly permissionCodes?: readonly string[];
 }
 
-export interface CreateTenantRoleInput {
-  readonly code: string;
-  readonly name: string;
-  readonly description?: string;
-  readonly permissions: readonly string[];
-}
+export type TenantUserStatus = 'active' | 'inactive' | 'suspended';
 
-export interface UpdateTenantRoleInput {
-  readonly code?: string;
-  readonly name?: string;
-  readonly description?: string | null;
-  readonly permissions?: readonly string[];
+export interface UpdateTenantUserStatusInput {
+  readonly status: TenantUserStatus;
+  readonly suspendedUntil?: string;
+  readonly suspensionReason?: string;
 }
 
 export const TENANT_DEPARTMENTS = [
-  'human-resources',
-  'personnel-department',
   'commercial',
   'purchasing',
+  'controllership',
+  'personnel-department',
+  'financial',
+  'management',
   'maintenance',
   'monitoring',
   'operations',
-  'cleaning',
-  'financial',
-  'information-technology',
 ] as const;
 
 export const TENANT_DEPARTMENT_LABELS: Readonly<Record<string, string>> = {
-  'human-resources': 'Recursos Humanos',
-  'personnel-department': 'Departamento Pessoal',
   commercial: 'Comercial',
   purchasing: 'Compras',
+  controllership: 'Controladoria',
+  'personnel-department': 'Departamento Pessoal',
+  financial: 'Financeiro',
+  management: 'Gerência',
   maintenance: 'Manutenção',
   monitoring: 'Monitoramento',
-  operations: 'Operações',
+  operations: 'Operacional',
+  // Compatibilidade de leitura para vínculos criados antes do catálogo atual.
+  'human-resources': 'Recursos Humanos',
+  controlling: 'Controladoria',
   cleaning: 'Limpeza',
-  financial: 'Financeiro',
   'information-technology': 'Tecnologia da Informação',
 };
+
+export function getTenantDepartmentLabel(department: string): string {
+  return TENANT_DEPARTMENT_LABELS[department] ?? 'Departamento legado';
+}

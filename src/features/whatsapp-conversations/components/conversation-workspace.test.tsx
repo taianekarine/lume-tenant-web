@@ -1,7 +1,8 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import {
+  closeWhatsAppConversationAction,
   forwardWhatsAppConversationAction,
   markWhatsAppConversationAsReadAction,
   returnWhatsAppConversationToBotAction,
@@ -13,6 +14,7 @@ import { createWhatsAppConversationFixture } from '../testing/whatsapp-conversat
 import { ConversationWorkspace } from './conversation-workspace';
 
 jest.mock('../actions', () => ({
+  closeWhatsAppConversationAction: jest.fn(),
   forwardWhatsAppConversationAction: jest.fn(),
   markWhatsAppConversationAsReadAction: jest.fn(),
   returnWhatsAppConversationToBotAction: jest.fn(),
@@ -21,6 +23,7 @@ jest.mock('../actions', () => ({
 }));
 
 const mockedForward = jest.mocked(forwardWhatsAppConversationAction);
+const mockedClose = jest.mocked(closeWhatsAppConversationAction);
 const mockedMarkAsRead = jest.mocked(markWhatsAppConversationAsReadAction);
 const mockedReturnToBot = jest.mocked(returnWhatsAppConversationToBotAction);
 const mockedSendMessage = jest.mocked(sendHumanWhatsAppMessageAction);
@@ -39,6 +42,10 @@ function mockFetchDetail(conversation: WhatsAppConversation) {
   return jest.mocked(global.fetch).mockResolvedValue(response({ conversation }));
 }
 
+async function openMessages(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Mensagens e anexos/ }));
+}
+
 describe('ConversationWorkspace', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
@@ -52,6 +59,34 @@ describe('ConversationWorkspace', () => {
       configurable: true,
       value: 'visible',
     });
+  });
+
+  it('keeps the selected contact identity and last interaction in a compact responsive row', () => {
+    const conversation = createWhatsAppConversationFixture({
+      contact: {
+        id: '00000000-0000-4000-8000-000000000301',
+        name: 'Taiane Karine',
+        phone: '553496305110',
+        profilePictureUrl: null,
+      },
+      lastMessageAt: '2026-07-29T19:50:00.000Z',
+    });
+    mockFetchDetail(conversation);
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    const contactHeading = screen.getByRole('heading', {
+      level: 3,
+      name: 'Taiane Karine',
+    });
+    const identityRow = contactHeading.parentElement;
+    const detailHeader = contactHeading.closest('header');
+
+    expect(identityRow).toHaveClass('flex', 'flex-wrap', 'items-center');
+    expect(identityRow).not.toHaveClass('flex-col');
+    expect(detailHeader).toHaveClass('px-4', 'py-2.5');
+    expect(screen.getAllByText('553496305110')).toHaveLength(2);
+    expect(screen.getByText(/Última interação: 29\/07\/2026, 16:50/)).toBeInTheDocument();
   });
 
   it('shows canonical dimensions, bot blocking, confirmed quote, second contact and complete history', async () => {
@@ -119,24 +154,28 @@ describe('ConversationWorkspace', () => {
       ],
     });
     mockFetchDetail(detail);
+    const user = userEvent.setup();
 
     render(<ConversationWorkspace initialConversations={[summary]} />);
+    await openMessages(user);
 
     expect(screen.getAllByText('Departamento')).toHaveLength(2);
     expect(screen.getByText('Estado da conversa')).toBeInTheDocument();
     expect(screen.getByText('Etapa do fluxo')).toBeInTheDocument();
-    expect(screen.getAllByText('Status da solicitação')).toHaveLength(2);
+    expect(screen.getAllByText('Status comercial')).toHaveLength(2);
     expect(screen.getByText('Bot autorizado')).toBeInTheDocument();
     expect(
       screen.getByText('Segundo contato retomado no acompanhamento comercial.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Resumo confirmado')).toBeInTheDocument();
     expect(await screen.findByText('proposta.pdf')).toBeInTheDocument();
-    expect(screen.getByText('Falha no envio')).toBeInTheDocument();
-    expect(screen.getByText(/PROVIDER_TIMEOUT/)).toBeInTheDocument();
-    expect(screen.getByText('confirm-quote')).toBeInTheDocument();
-    expect(screen.getByText('versão 7 → 8')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Abrir anexo' })).toHaveAttribute(
+    expect(screen.getByText(/· Falha no envio$/)).toBeInTheDocument();
+    expect(screen.getByText('Evolution não respondeu.')).toBeInTheDocument();
+    expect(screen.queryByText(/PROVIDER_TIMEOUT/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Dados adicionais confirmados')).not.toBeInTheDocument();
+    expect(screen.queryByText('Auditoria essencial')).not.toBeInTheDocument();
+    expect(screen.queryByText('confirm-quote')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Abrir' })).toHaveAttribute(
       'href',
       'https://files.example.test/proposta.pdf',
     );
@@ -164,7 +203,7 @@ describe('ConversationWorkspace', () => {
         expectedVersion: 3,
       });
     });
-    expect(await screen.findByText('Atendimento humano assumido com sucesso.')).toBeInTheDocument();
+    expect(await screen.findByText('Atendimento assumido com sucesso.')).toBeInTheDocument();
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
   });
 
@@ -221,13 +260,13 @@ describe('ConversationWorkspace', () => {
     });
     const user = userEvent.setup();
     render(<ConversationWorkspace initialConversations={[conversation]} />);
-    await screen.findByText('Esta conversa ainda não possui mensagens persistidas.');
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
     await user.click(screen.getByRole('button', { name: 'Assumir' }));
 
     expect(await screen.findByText('Conflito: atendimento recarregado.')).toBeInTheDocument();
     expect(await screen.findByText('Responsável: Outro atendente')).toBeInTheDocument();
-    expect(screen.getAllByText('Bot bloqueado')).toHaveLength(2);
+    expect(screen.getAllByText('Bot bloqueado')).toHaveLength(1);
   });
 
   it('renders empty and initial error states and retries the list request', async () => {
@@ -247,6 +286,33 @@ describe('ConversationWorkspace', () => {
     expect(await screen.findByText('Ana Paula')).toBeInTheDocument();
   });
 
+  it('exibe rótulos legíveis e somente os nove departamentos do MVP nos filtros', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      department: 'personnel-department',
+      requestStatus: 'not-started',
+      currentQuoteRequest: null,
+      unreadCount: 0,
+    });
+    mockFetchDetail(conversation);
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    expect(screen.queryByText('personnel-department')).not.toBeInTheDocument();
+    const departmentFilter = screen.getByRole('combobox', { name: 'Departamento' });
+    expect(departmentFilter).toHaveTextContent('Todos');
+    await user.click(departmentFilter);
+
+    expect(await screen.findAllByRole('option')).toHaveLength(10);
+    expect(await screen.findByRole('option', { name: 'Departamento Pessoal' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Operacional' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Recursos Humanos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Limpeza' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'Tecnologia da Informação' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows detail loading, error and retry without inventing data', async () => {
     const conversation = createWhatsAppConversationFixture({ messages: [] });
     let resolveFirstRequest: ((value: Response) => void) | undefined;
@@ -261,6 +327,7 @@ describe('ConversationWorkspace', () => {
       .mockResolvedValueOnce(response({ conversation }));
     const user = userEvent.setup();
     render(<ConversationWorkspace initialConversations={[conversation]} />);
+    await openMessages(user);
 
     expect(await screen.findByText('Carregando histórico completo...')).toBeInTheDocument();
     await act(async () => {
@@ -270,22 +337,266 @@ describe('ConversationWorkspace', () => {
 
     await user.click(screen.getByRole('button', { name: 'Tentar novamente' }));
 
-    expect(
-      await screen.findByText('Esta conversa ainda não possui mensagens persistidas.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Nenhuma mensagem registrada')).toBeInTheDocument();
   });
 
-  it('keeps unsupported waiting, close and cancel actions disabled', async () => {
+  it('abre o Message com largura dobrada no desktop e sem rolagem horizontal', async () => {
+    const conversation = createWhatsAppConversationFixture({ messages: [], unreadCount: 0 });
+    mockFetchDetail(conversation);
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+    await openMessages(user);
+
+    const messageSheet = screen.getByRole('dialog');
+    expect(messageSheet).toHaveClass(
+      'w-full',
+      'overflow-x-hidden',
+      'data-[side=right]:w-full',
+      'sm:data-[side=right]:w-[min(84rem,calc(100vw-2rem))]',
+      'sm:max-w-none',
+    );
+    expect(messageSheet).not.toHaveClass('sm:max-w-2xl');
+  });
+
+  it('mantém o encerramento indisponível enquanto existe proposta em andamento', async () => {
     const conversation = createWhatsAppConversationFixture({ unreadCount: 0 });
     mockFetchDetail(conversation);
     render(<ConversationWorkspace initialConversations={[conversation]} />);
-    await screen.findByText('Esta conversa ainda não possui mensagens persistidas.');
 
-    expect(screen.getByRole('button', { name: 'Aguardar cliente' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Fechar' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Encerrar atendimento' })).toBeDisabled();
     expect(mockedForward).not.toHaveBeenCalled();
     expect(mockedMarkAsRead).not.toHaveBeenCalled();
+  });
+
+  it('confirma e encerra um atendimento cuja proposta foi recusada', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      requestStatus: 'rejected',
+      unreadCount: 0,
+      version: 6,
+    });
+    const closed = createWhatsAppConversationFixture({
+      ...conversation,
+      conversationState: 'closed',
+      flowStep: 'closed',
+      assignedTo: null,
+      closedAt: '2026-07-28T12:00:00.000Z',
+      version: 7,
+    });
+    mockFetchDetail(conversation);
+    mockedClose.mockResolvedValue({ success: true, conversation: closed });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    await user.click(screen.getByRole('button', { name: 'Encerrar atendimento' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      'Quando o cliente enviar uma nova mensagem, o bot iniciará outro atendimento',
+    );
+    const confirmButton = screen.getByRole('button', { name: 'Confirmar encerramento' });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox', { name: /Motivo do encerramento/ }), {
+      target: { value: 'Cliente recusou o valor da proposta.' },
+    });
+    await user.click(confirmButton);
+
+    await waitFor(() => {
+      expect(mockedClose).toHaveBeenCalledWith({
+        conversationId: conversation.id,
+        expectedVersion: 6,
+        reason: 'Cliente recusou o valor da proposta.',
+      });
+    });
+    expect(
+      await screen.findByText(/Atendimento encerrado\. O próximo contato/),
+    ).toBeInTheDocument();
+  });
+
+  it('permite encerrar uma conversa sem proposta em andamento', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      requestStatus: 'not-started',
+      currentQuoteRequest: null,
+      unreadCount: 0,
+      version: 4,
+    });
+    const closed = createWhatsAppConversationFixture({
+      ...conversation,
+      conversationState: 'closed',
+      flowStep: 'closed',
+      assignedTo: null,
+      closedAt: '2026-07-28T13:00:00.000Z',
+      version: 5,
+    });
+    mockFetchDetail(conversation);
+    mockedClose.mockResolvedValue({ success: true, conversation: closed });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
+    expect(closeButton).toBeEnabled();
+    await user.click(closeButton);
+    await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
+
+    await waitFor(() => {
+      expect(mockedClose).toHaveBeenCalledWith({
+        conversationId: conversation.id,
+        expectedVersion: 4,
+        reason: undefined,
+      });
+    });
+  });
+
+  it('permite encerrar no MVP mesmo quando existe proposta aprovada', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      requestStatus: 'approved',
+      hasApprovedQuoteRequest: true,
+      unreadCount: 0,
+      version: 8,
+    });
+    const closed = createWhatsAppConversationFixture({
+      ...conversation,
+      conversationState: 'closed',
+      flowStep: 'closed',
+      assignedTo: null,
+      closedAt: '2026-07-29T13:00:00.000Z',
+      version: 9,
+    });
+    mockFetchDetail(conversation);
+    mockedClose.mockResolvedValue({ success: true, conversation: closed });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
+    expect(closeButton).toBeEnabled();
+    await user.click(closeButton);
+    await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
+
+    await waitFor(() => {
+      expect(mockedClose).toHaveBeenCalledWith({
+        conversationId: conversation.id,
+        expectedVersion: 8,
+        reason: undefined,
+      });
+    });
+  });
+
+  it('mantém o estado autoritativo quando a API recusa o encerramento aprovado', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      requestStatus: 'approved',
+      hasApprovedQuoteRequest: true,
+      unreadCount: 0,
+      version: 8,
+    });
+    mockFetchDetail(conversation);
+    mockedClose.mockResolvedValue({
+      success: false,
+      code: 'conflict',
+      message: 'A Tenant API recusou o encerramento.',
+      conversation,
+    });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    await user.click(screen.getByRole('button', { name: 'Encerrar atendimento' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
+
+    expect(await screen.findAllByText('A Tenant API recusou o encerramento.')).not.toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Confirmar encerramento' })).toBeInTheDocument();
+    expect(screen.queryByText(/Atendimento encerrado\. O próximo contato/)).not.toBeInTheDocument();
+  });
+
+  it('exibe data, responsável e motivo no histórico de encerramentos', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'closed',
+      flowStep: 'closed',
+      requestStatus: 'rejected',
+      closedAt: '2026-07-28T13:00:00.000Z',
+      unreadCount: 0,
+      transitions: [
+        {
+          id: '00000000-0000-4000-8000-000000000911',
+          commandId: '00000000-0000-4000-8000-000000000912',
+          name: 'close',
+          expectedVersion: 7,
+          resultingVersion: 8,
+          actorType: 'user',
+          actorUserId: '00000000-0000-4000-8000-000000000913',
+          actor: {
+            type: 'user',
+            user: {
+              id: '00000000-0000-4000-8000-000000000913',
+              name: 'Maria Atendente',
+            },
+          },
+          from: {
+            department: 'commercial',
+            conversationState: 'human-active',
+            flowStep: 'human-service',
+            requestStatus: 'rejected',
+          },
+          to: {
+            department: 'commercial',
+            conversationState: 'closed',
+            flowStep: 'closed',
+            requestStatus: 'rejected',
+          },
+          metadata: { reason: 'Cliente recusou o valor.' },
+          createdAt: '2026-07-28T13:00:00.000Z',
+        },
+      ],
+    });
+    mockFetchDetail(conversation);
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    expect(screen.getByRole('heading', { name: 'Histórico de encerramentos' })).toBeInTheDocument();
+    expect(screen.getByText('Maria Atendente')).toBeInTheDocument();
+    expect(screen.getByText('Cliente recusou o valor.')).toBeInTheDocument();
+    expect(screen.getByText(/28\/07\/2026/)).toBeInTheDocument();
+  });
+
+  it('never offers the current department as a forwarding destination', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      department: 'commercial',
+      unreadCount: 0,
+    });
+    const forwarded = createWhatsAppConversationFixture({
+      ...conversation,
+      department: 'operations',
+      conversationState: 'sent-to-human',
+      version: 4,
+    });
+    mockFetchDetail(conversation);
+    mockedForward.mockResolvedValue({ success: true, conversation: forwarded });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    const destination = screen.getByRole('combobox', { name: 'Encaminhar para' });
+    await user.click(destination);
+    const operationsOption = await screen.findByRole('option', { name: /Opera/ });
+    expect(screen.queryByRole('option', { name: 'Comercial' })).not.toBeInTheDocument();
+    await user.click(operationsOption);
+    await user.click(screen.getByRole('button', { name: 'Encaminhar' }));
+
+    await waitFor(() => {
+      expect(mockedForward).toHaveBeenCalledWith({
+        conversationId: conversation.id,
+        expectedVersion: conversation.version,
+        targetDepartment: 'operations',
+      });
+    });
   });
 
   it('sends a human message with optimistic version and shows its pending state', async () => {
@@ -329,7 +640,8 @@ describe('ConversationWorkspace', () => {
     render(
       <ConversationWorkspace initialConversations={[conversation]} currentUserId={assignedTo.id} />,
     );
-    await screen.findByText('Esta conversa ainda não possui mensagens persistidas.');
+    await openMessages(user);
+    await screen.findByText('Nenhuma mensagem registrada');
 
     const input = screen.getByRole('textbox', {
       name: `Mensagem para ${conversation.contact.name}`,
@@ -347,11 +659,155 @@ describe('ConversationWorkspace', () => {
       });
     });
     expect(await screen.findAllByText(message.text)).toHaveLength(2);
-    expect(screen.getByText('Envio pendente')).toBeInTheDocument();
+    expect(screen.getByText(/· Envio pendente$/)).toBeInTheDocument();
     expect(
-      screen.getByText('Mensagem registrada. Aguardando confirmação de envio pelo provedor.'),
-    ).toBeInTheDocument();
+      screen.getAllByText('Mensagem registrada. Aguardando confirmação de envio pelo provedor.'),
+    ).not.toHaveLength(0);
     expect(input).toHaveValue('');
+  });
+
+  it('sends through main Enter and numpad Enter while preserving Shift+Enter for a new line', async () => {
+    const assignedTo = { id: 'employee-001', name: 'Usuário Comercial' };
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      assignedTo,
+      version: 8,
+      unreadCount: 0,
+      messages: [],
+    });
+    const firstMessage = {
+      id: '00000000-0000-4000-8000-000000000721',
+      direction: 'outbound' as const,
+      deliveryStatus: 'pending' as const,
+      kind: 'text' as const,
+      text: 'Mensagem pelo Enter',
+      attachment: null,
+      sentBy: assignedTo,
+      occurredAt: '2026-07-28T22:47:00.000Z',
+      attempts: [],
+    };
+    const secondMessage = {
+      ...firstMessage,
+      id: '00000000-0000-4000-8000-000000000722',
+      text: 'Mensagem pelo numpad',
+      occurredAt: '2026-07-28T22:48:00.000Z',
+    };
+    const firstUpdated = createWhatsAppConversationFixture({
+      ...conversation,
+      version: 9,
+      messages: [firstMessage],
+    });
+    const secondUpdated = createWhatsAppConversationFixture({
+      ...conversation,
+      version: 10,
+      messages: [firstMessage, secondMessage],
+    });
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response({ conversation }))
+      .mockResolvedValue(response({ conversation: secondUpdated }));
+    mockedSendMessage
+      .mockResolvedValueOnce({
+        success: true,
+        conversation: firstUpdated,
+        message: firstMessage,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        conversation: secondUpdated,
+        message: secondMessage,
+      });
+    const user = userEvent.setup();
+    render(
+      <ConversationWorkspace initialConversations={[conversation]} currentUserId={assignedTo.id} />,
+    );
+    await openMessages(user);
+    const input = screen.getByRole('textbox', {
+      name: `Mensagem para ${conversation.contact.name}`,
+    });
+
+    await user.type(input, firstMessage.text);
+    await user.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(mockedSendMessage).not.toHaveBeenCalled();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(mockedSendMessage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(input).toBeEnabled());
+
+    await user.type(input, secondMessage.text);
+    fireEvent.keyDown(input, { key: 'Enter', code: 'NumpadEnter' });
+    await waitFor(() => expect(mockedSendMessage).toHaveBeenCalledTimes(2));
+    const firstMetadata = await screen.findByText(
+      '28/07/2026, 19:47 · Usuário Comercial · Envio pendente',
+    );
+    expect(firstMetadata).toHaveClass(
+      'w-full',
+      'min-w-0',
+      'max-w-full',
+      'whitespace-normal',
+      'break-words',
+      'text-center',
+      '[overflow-wrap:anywhere]',
+    );
+    expect(firstMetadata).not.toHaveClass('min-w-max', 'whitespace-nowrap');
+    expect(firstMetadata.parentElement).toHaveClass(
+      'w-full',
+      'max-w-full',
+      'min-w-0',
+      'justify-center',
+    );
+    expect(firstMetadata.parentElement).not.toHaveClass('overflow-x-auto', 'whitespace-nowrap');
+    expect(
+      await screen.findByText('28/07/2026, 19:48 · Usuário Comercial · Envio pendente'),
+    ).toBeInTheDocument();
+  });
+
+  it('allows an unassigned conversation to be taken over inside Message', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'sent-to-human',
+      flowStep: 'human-service',
+      assignedTo: null,
+      unreadCount: 0,
+    });
+    const updated = createWhatsAppConversationFixture({
+      ...conversation,
+      conversationState: 'human-active',
+      assignedTo: { id: 'employee-001', name: 'Usuário Comercial' },
+      version: conversation.version + 1,
+    });
+    mockFetchDetail(conversation);
+    mockedTakeOver.mockResolvedValue({ success: true, conversation: updated });
+    const user = userEvent.setup();
+    render(
+      <ConversationWorkspace initialConversations={[conversation]} currentUserId="employee-001" />,
+    );
+    await openMessages(user);
+    const characterCounter = screen.getByText(/0\s*\/\s*10\.000 caracteres/);
+    const takeOverButton = screen.getByRole('button', { name: 'Assumir atendimento' });
+    const sendButton = screen.getByRole('button', { name: 'Enviar mensagem' });
+    const actions = takeOverButton.parentElement;
+
+    expect(characterCounter).toHaveClass('whitespace-nowrap');
+    expect(actions).toBe(sendButton.parentElement);
+    expect(actions).toHaveClass(
+      'grid',
+      'w-full',
+      'min-w-0',
+      'max-w-full',
+      'grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
+      'overflow-x-hidden',
+    );
+    expect(takeOverButton).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden');
+    expect(sendButton).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden');
+
+    await user.click(takeOverButton);
+
+    await waitFor(() =>
+      expect(mockedTakeOver).toHaveBeenCalledWith({
+        conversationId: conversation.id,
+        expectedVersion: conversation.version,
+      }),
+    );
   });
 
   it('preserves the draft and idempotency identifiers after a send conflict', async () => {
@@ -385,13 +841,14 @@ describe('ConversationWorkspace', () => {
     render(
       <ConversationWorkspace initialConversations={[conversation]} currentUserId={assignedTo.id} />,
     );
+    await openMessages(user);
     const input = screen.getByRole('textbox', {
       name: `Mensagem para ${conversation.contact.name}`,
     });
     await user.type(input, 'Rascunho importante');
 
     await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
-    expect(await screen.findByText('Conflito: o rascunho foi preservado.')).toBeInTheDocument();
+    expect(await screen.findAllByText('Conflito: o rascunho foi preservado.')).not.toHaveLength(0);
     expect(input).toHaveValue('Rascunho importante');
 
     const firstInput = mockedSendMessage.mock.calls[0][0];
@@ -408,7 +865,7 @@ describe('ConversationWorkspace', () => {
       text: firstInput.text,
     });
     expect(input).toHaveValue('Rascunho importante');
-    expect(await screen.findByText('Falha temporária; tente novamente.')).toBeInTheDocument();
+    expect(await screen.findAllByText('Falha temporária; tente novamente.')).not.toHaveLength(0);
   });
 
   it('preserves the original version after an ambiguous send failure', async () => {
@@ -446,7 +903,8 @@ describe('ConversationWorkspace', () => {
     render(
       <ConversationWorkspace initialConversations={[conversation]} currentUserId={assignedTo.id} />,
     );
-    await screen.findByText('Esta conversa ainda não possui mensagens persistidas.');
+    await openMessages(user);
+    await screen.findByText('Nenhuma mensagem registrada');
 
     const input = screen.getByRole('textbox', {
       name: `Mensagem para ${conversation.contact.name}`,
@@ -454,8 +912,8 @@ describe('ConversationWorkspace', () => {
     await user.type(input, 'Mensagem com confirmação incerta');
     await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
     expect(
-      await screen.findByText('A resposta da API se perdeu; o resultado é incerto.'),
-    ).toBeInTheDocument();
+      await screen.findAllByText('A resposta da API se perdeu; o resultado é incerto.'),
+    ).not.toHaveLength(0);
 
     const firstInput = mockedSendMessage.mock.calls[0][0];
     await user.click(screen.getByRole('button', { name: 'Atualizar' }));
@@ -518,12 +976,14 @@ describe('ConversationWorkspace', () => {
       .mockResolvedValueOnce(response({ conversation: failedDetail }));
     const user = userEvent.setup();
     render(<ConversationWorkspace initialConversations={[summary]} />);
+    await openMessages(user);
 
-    expect(await screen.findByText('Envio pendente')).toBeInTheDocument();
+    expect(await screen.findByText(/· Envio pendente$/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Atualizar' }));
 
-    expect(await screen.findByText('Falha no envio')).toBeInTheDocument();
-    expect(screen.getByText(/EVOLUTION_UNAVAILABLE/)).toBeInTheDocument();
+    expect(await screen.findByText(/· Falha no envio$/)).toBeInTheDocument();
+    expect(screen.getByText('Evolution indisponível.')).toBeInTheDocument();
+    expect(screen.queryByText(/EVOLUTION_UNAVAILABLE/)).not.toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
@@ -535,17 +995,17 @@ describe('ConversationWorkspace', () => {
       unreadCount: 0,
     });
     mockFetchDetail(conversation);
+    const user = userEvent.setup();
     render(
       <ConversationWorkspace initialConversations={[conversation]} currentUserId="employee-001" />,
     );
+    await openMessages(user);
 
     expect(
       screen.getByRole('textbox', { name: `Mensagem para ${conversation.contact.name}` }),
     ).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled();
-    expect(
-      screen.getByText('Somente o atendente responsável pode responder nesta conversa.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Assuma esta conversa para responder ao cliente.')).toBeInTheDocument();
   });
 
   it('polls only when visible and applies backoff after a failure', async () => {

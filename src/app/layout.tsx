@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import { tenantBranding } from '@/config/tenant-branding';
 import { ThemeProvider } from '@/shared/providers/theme-provider';
+import { Toaster } from '@/shared/ui/toast';
 
 import './globals.css';
 
@@ -25,6 +26,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

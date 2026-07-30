@@ -1,4 +1,6 @@
 import {
+  canCloseWhatsAppConversation,
+  canReturnWhatsAppConversationToBot,
   canSendHumanWhatsAppMessage,
   canWhatsAppBotReply,
   isWhatsAppAwaitingProposal,
@@ -79,21 +81,133 @@ describe('WhatsApp conversation domain', () => {
     ).toBe(false);
   });
 
+  it('returns active attendant conversations and unassigned approved follow-ups to the bot', () => {
+    const waitingForAttendant = createWhatsAppConversationFixture({
+      conversationState: 'sent-to-human',
+      assignedTo: null,
+    });
+
+    expect(canReturnWhatsAppConversationToBot(waitingForAttendant)).toBe(true);
+    expect(
+      canReturnWhatsAppConversationToBot({
+        ...waitingForAttendant,
+        conversationState: 'human-active',
+        assignedTo: { id: 'employee-001', name: 'Atendente Comercial' },
+      }),
+    ).toBe(true);
+    expect(
+      canReturnWhatsAppConversationToBot({
+        ...waitingForAttendant,
+        conversationState: 'waiting-for-customer',
+        requestStatus: 'approved',
+        hasApprovedQuoteRequest: true,
+      }),
+    ).toBe(true);
+    expect(
+      canReturnWhatsAppConversationToBot({
+        ...waitingForAttendant,
+        conversationState: 'waiting-for-customer',
+        requestStatus: 'waiting-for-customer',
+        hasApprovedQuoteRequest: false,
+      }),
+    ).toBe(false);
+    expect(
+      canReturnWhatsAppConversationToBot({
+        ...waitingForAttendant,
+        conversationState: 'waiting-for-customer',
+        requestStatus: 'approved',
+        hasApprovedQuoteRequest: true,
+        assignedTo: { id: 'employee-001', name: 'Atendente Comercial' },
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps the approved-proposal close guard disabled during the MVP', () => {
+    const closable = createWhatsAppConversationFixture({
+      conversationState: 'sent-to-human',
+      requestStatus: 'not-started',
+      currentQuoteRequest: null,
+      hasApprovedQuoteRequest: false,
+    });
+
+    expect(canCloseWhatsAppConversation(closable)).toBe(true);
+    expect(
+      canCloseWhatsAppConversation({
+        ...closable,
+        hasApprovedQuoteRequest: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps the normal assigned attendant return-to-bot action available', () => {
+    const waitingForAttendant = createWhatsAppConversationFixture({
+      conversationState: 'sent-to-human',
+      assignedTo: null,
+    });
+
+    expect(canReturnWhatsAppConversationToBot(waitingForAttendant)).toBe(true);
+    expect(
+      canReturnWhatsAppConversationToBot({
+        ...waitingForAttendant,
+        conversationState: 'human-active',
+        assignedTo: { id: 'employee-001', name: 'Atendente Comercial' },
+      }),
+    ).toBe(true);
+  });
+
+  it('still blocks closing while a proposal is in progress', () => {
+    const closable = createWhatsAppConversationFixture({
+      conversationState: 'sent-to-human',
+      requestStatus: 'under-review',
+      hasApprovedQuoteRequest: true,
+    });
+
+    expect(canCloseWhatsAppConversation(closable)).toBe(false);
+  });
+
   it('recognizes a confirmed request awaiting a proposal and after a second contact', () => {
+    const currentQuoteRequest = createWhatsAppConversationFixture().currentQuoteRequest;
+    expect(currentQuoteRequest).not.toBeNull();
     const awaitingProposal = createWhatsAppConversationFixture({
       conversationState: 'sent-to-human',
       flowStep: 'quote-send-pending',
       requestStatus: 'under-review',
+      currentQuoteRequest: {
+        ...currentQuoteRequest!,
+        status: 'under-review',
+      },
     });
     const secondContact = createWhatsAppConversationFixture({
-      conversationState: 'bot-active',
-      flowStep: 'commercial-follow-up-menu',
+      conversationState: 'sent-to-human',
+      flowStep: 'human-service',
       requestStatus: 'under-review',
+      currentQuoteRequest: {
+        ...currentQuoteRequest!,
+        status: 'under-review',
+      },
     });
 
     expect(isWhatsAppAwaitingProposal(awaitingProposal)).toBe(true);
     expect(isWhatsAppQuoteSummaryConfirmed(awaitingProposal)).toBe(true);
     expect(isWhatsAppQuoteSummaryConfirmed(secondContact)).toBe(true);
-    expect(isWhatsAppAwaitingProposal(secondContact)).toBe(false);
+    expect(isWhatsAppAwaitingProposal(secondContact)).toBe(true);
+    expect(
+      isWhatsAppAwaitingProposal({
+        ...secondContact,
+        conversationState: 'closed',
+      }),
+    ).toBe(false);
+    expect(
+      isWhatsAppAwaitingProposal({
+        ...secondContact,
+        department: 'financial',
+      }),
+    ).toBe(false);
+    expect(
+      isWhatsAppAwaitingProposal({
+        ...secondContact,
+        currentQuoteRequest: null,
+      }),
+    ).toBe(false);
   });
 });

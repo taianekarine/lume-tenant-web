@@ -39,11 +39,41 @@ function isAuthenticatedSession(value: unknown): value is AuthenticatedSession {
     typeof user.name === 'string' &&
     (user.type === 'employee' || user.type === 'client') &&
     isStringArray(user.departments) &&
-    isStringArray(user.roles) &&
     isStringArray(user.permissions) &&
     hasValidClientCategory &&
     typeof user.isActive === 'boolean'
   );
+}
+
+function sanitizeAuthenticatedSession(session: AuthenticatedSession): AuthenticatedSession {
+  const sharedUser = {
+    id: session.user.id,
+    name: session.user.name,
+    permissions: [...session.user.permissions],
+    isActive: session.user.isActive,
+  };
+
+  return {
+    version: session.version,
+    id: session.id,
+    user:
+      session.user.type === 'employee'
+        ? {
+            ...sharedUser,
+            type: 'employee',
+            departments: [...session.user.departments],
+            clientCategory: null,
+          }
+        : {
+            ...sharedUser,
+            type: 'client',
+            departments: [],
+            clientCategory: session.user.clientCategory,
+          },
+    issuedAt: session.issuedAt,
+    expiresAt: session.expiresAt,
+    rememberDevice: session.rememberDevice,
+  };
 }
 
 function parseNumericDate(value: string, fieldName: string): number {
@@ -113,7 +143,7 @@ export async function decryptAuthenticatedSession(
 
     const session: unknown = JSON.parse(payload.session);
 
-    return isAuthenticatedSession(session) ? session : null;
+    return isAuthenticatedSession(session) ? sanitizeAuthenticatedSession(session) : null;
   } catch {
     return null;
   }

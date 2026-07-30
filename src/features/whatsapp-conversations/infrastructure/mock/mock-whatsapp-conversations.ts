@@ -42,7 +42,9 @@ export const INITIAL_MOCK_WHATSAPP_CONVERSATIONS: readonly WhatsAppConversation[
       serviceType: 'Fretamento eventual',
       origin: 'Belo Horizonte',
       destination: 'Contagem',
+      departureDate: null,
       departureAt: null,
+      returnDate: null,
       returnAt: null,
       passengerCount: 20,
       vehicleType: null,
@@ -54,6 +56,7 @@ export const INITIAL_MOCK_WHATSAPP_CONVERSATIONS: readonly WhatsAppConversation[
       createdAt: '2026-07-21T13:36:00.000Z',
       updatedAt: '2026-07-21T13:40:00.000Z',
     },
+    hasApprovedQuoteRequest: false,
     messages: [
       {
         id: '00000000-0000-4000-8000-000000000501',

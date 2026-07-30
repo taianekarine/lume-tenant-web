@@ -23,7 +23,6 @@ const session: AuthenticatedSession = {
     name: 'Maria Silva',
     type: 'employee',
     departments: [],
-    roles: ['manager'],
     permissions: ['dashboard:view', 'ai-agents:use'],
     clientCategory: null,
     isActive: true,
@@ -45,9 +44,10 @@ describe('AiAgentsPage', () => {
   it('presents the protected catalog and marks its navigation item as current', () => {
     render(<AiAgentsPage session={session} />);
 
+    expect(document.querySelector('main.mx-auto')).toHaveClass('py-5', 'sm:py-6');
     expect(screen.getByRole('heading', { name: 'Agentes de IA' })).toBeInTheDocument();
     expect(screen.getByText('Integração em preparação')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Agentes de IA' })).toHaveAttribute(
+    expect(screen.getAllByRole('link', { name: 'Agentes de IA' })[0]).toHaveAttribute(
       'aria-current',
       'page',
     );

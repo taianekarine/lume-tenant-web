@@ -12,9 +12,11 @@ export const DEPARTMENT_LABELS: Record<WhatsAppConversationDepartment, string> =
   'personnel-department': 'Departamento Pessoal',
   commercial: 'Comercial',
   purchasing: 'Compras',
+  controlling: 'Controladoria',
   maintenance: 'Manutenção',
   monitoring: 'Monitoramento',
-  operations: 'Operações',
+  management: 'Gerência',
+  operations: 'Operacional',
   cleaning: 'Limpeza',
   financial: 'Financeiro',
   'information-technology': 'Tecnologia da Informação',
@@ -23,8 +25,8 @@ export const DEPARTMENT_LABELS: Record<WhatsAppConversationDepartment, string> =
 export const CONVERSATION_STATE_LABELS: Record<WhatsAppConversationState, string> = {
   'bot-active': 'Bot ativo',
   'waiting-for-customer': 'Aguardando o cliente',
-  'sent-to-human': 'Encaminhada para humano',
-  'human-active': 'Humano ativo',
+  'sent-to-human': 'Encaminhada para atendente',
+  'human-active': 'Atendente ativo',
   closed: 'Encerrada',
 };
 
@@ -35,7 +37,7 @@ export const FLOW_STEP_LABELS: Record<WhatsAppConversationFlowStep, string> = {
   'quote-summary-confirmation': 'Confirmação do resumo',
   'quote-send-pending': 'Envio da proposta pendente',
   'commercial-follow-up-menu': 'Acompanhamento comercial',
-  'human-service': 'Atendimento humano',
+  'human-service': 'Atendimento com atendente',
   closed: 'Fluxo encerrado',
 };
 
@@ -87,7 +89,7 @@ export function getConversationControlLabel(conversationState: WhatsAppConversat
 
   return {
     bot: 'Bot ativo',
-    human: 'Humano ativo',
+    human: 'Atendente ativo',
     paused: 'Bot bloqueado',
     closed: 'Encerrada',
   }[control];

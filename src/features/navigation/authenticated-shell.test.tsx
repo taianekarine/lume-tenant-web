@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { usePathname } from 'next/navigation';
 
 import type { EmployeeUser } from '@/features/auth/domain';
@@ -12,6 +13,9 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/features/auth/components', () => ({
   LogoutButton: () => <button type="button">Sair</button>,
 }));
+jest.mock('@/features/quote-proposals/actions', () => ({
+  getPendingQuoteProposalCountAction: jest.fn(),
+}));
 
 const mockedUsePathname = jest.mocked(usePathname);
 
@@ -20,7 +24,6 @@ const employee: EmployeeUser = {
   name: 'Maria Silva',
   type: 'employee',
   departments: ['commercial'],
-  roles: ['manager'],
   permissions: ['dashboard:view', 'ai-agents:use'],
   clientCategory: null,
   isActive: true,
@@ -36,7 +39,7 @@ describe('AuthenticatedShell', () => {
   });
 
   it('shares the authorized navigation and session actions with internal pages', () => {
-    render(
+    const { container } = render(
       <AuthenticatedShell user={employee}>
         <main>Conteúdo protegido</main>
       </AuthenticatedShell>,
@@ -47,9 +50,30 @@ describe('AuthenticatedShell', () => {
         name: 'Navegação da área interna',
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('link', { name: 'Dashboard' })
+        .some((link) => link.getAttribute('href')?.includes('/dashboard')),
+    ).toBe(true);
     expect(screen.queryByRole('link', { name: /Site institucional/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sair' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Maria Silva Atendente/ })).toHaveAttribute(
+      'aria-haspopup',
+      'menu',
+    );
     expect(screen.getByText('Conteúdo protegido')).toBeInTheDocument();
+    expect(container.querySelector('header [data-slot="separator"]')).not.toBeInTheDocument();
+  });
+
+  it('supports the official responsive sidebar trigger', async () => {
+    const user = userEvent.setup();
+    render(
+      <AuthenticatedShell user={employee}>
+        <main>Conteúdo protegido</main>
+      </AuthenticatedShell>,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Alternar menu lateral' });
+    await user.click(trigger);
+    expect(document.cookie).toContain('sidebar_state=false');
   });
 });

@@ -1,3 +1,5 @@
+export * from './close-whatsapp-conversation-after-rejection';
+export * from './close-whatsapp-conversation';
 export * from './forward-whatsapp-conversation';
 export * from './get-whatsapp-conversation-by-id';
 export * from './get-whatsapp-conversations';

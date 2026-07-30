@@ -18,7 +18,6 @@ function createUser(permissions: EmployeeUser['permissions'] = ['ai-agents:use']
     name: 'Maria Silva',
     type: 'employee',
     departments: [],
-    roles: ['manager'],
     permissions,
     clientCategory: null,
     isActive: true,
