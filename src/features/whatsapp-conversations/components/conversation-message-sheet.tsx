@@ -110,7 +110,7 @@ export function ConversationMessageSheet({
       >
         <MessageCircleMore aria-hidden="true" />
         <span className="sr-only">Mensagens e anexos — </span>
-        Histórico completo
+        Abrir chat
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
           {conversation.messages.length}
         </span>

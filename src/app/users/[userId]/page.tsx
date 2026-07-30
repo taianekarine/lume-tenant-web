@@ -19,7 +19,7 @@ export default async function UserEditorRoute({
   readonly params: Promise<{ userId: string }>;
   readonly searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const session = await requireManagementTenantSession(['users:manage']);
+  const session = await requireManagementTenantSession(['users:update']);
   const [{ userId }, query] = await Promise.all([params, searchParams]);
   let user: TenantUser;
   let permissionCatalog: PermissionCatalog;

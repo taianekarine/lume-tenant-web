@@ -24,7 +24,12 @@ export default async function UsersRoute({
     page?: string;
   }>;
 }) {
-  const session = await requireManagementTenantSession(['users:view', 'users:manage']);
+  const session = await requireManagementTenantSession([
+    'users:view',
+    'users:create',
+    'users:update',
+    'users:manage',
+  ]);
   const query = await searchParams;
   let users: TenantUserList;
   let permissionCatalog: PermissionCatalog;
@@ -68,7 +73,9 @@ export default async function UsersRoute({
         <UsersManagement
           users={users}
           permissionCatalog={permissionCatalog}
-          canManage={session.user.permissions.includes('users:manage')}
+          canCreate={session.user.permissions.includes('users:create')}
+          canEdit={session.user.permissions.includes('users:update')}
+          canManageAccess={session.user.permissions.includes('users:manage')}
           filters={filters}
         />
       </main>

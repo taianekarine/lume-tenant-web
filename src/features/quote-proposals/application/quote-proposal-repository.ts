@@ -96,6 +96,7 @@ export interface QuoteProposalRepository {
   getSent(page?: number, pageSize?: number): Promise<PendingQuoteProposalQueue>;
   getApproved(page?: number, pageSize?: number): Promise<PendingQuoteProposalQueue>;
   getCancelled(page?: number, pageSize?: number): Promise<PendingQuoteProposalQueue>;
+  getByConversation(conversationId: string): Promise<readonly PendingQuoteProposal[]>;
   getDocumentHistory(quoteRequestId: string): Promise<QuoteProposalDocumentHistory>;
   create(command: CreateQuoteProposalCommand): Promise<PendingQuoteProposal>;
   decide(

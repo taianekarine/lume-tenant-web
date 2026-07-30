@@ -267,7 +267,7 @@ export function QuoteProposalArchive({
         }
         itemLabel={content.itemLabel}
         showDecisionActions={canManage && category === 'sent'}
-        showCreateAction={canManage}
+        showCreateAction={false}
         onCreated={registerCreated}
         onDecided={registerDecision}
         onError={setFeedback}

@@ -81,14 +81,15 @@ balanceador. Nenhuma sonda expõe segredos ou JWTs.
    que a resposta visual é a mesma.
 6. Valide um usuário `active`, outro `inactive` e uma suspensão temporária com
    motivo; confirme bloqueio de login/sessão e posterior ativação.
-7. Execute abertura de conversa, takeover, envio controlado pelo atendente no
-   painel **Histórico completo / Mensagens e anexos** e um canário de orçamento
-   com PDF não sensível.
-8. Valide o encerramento de uma conversa sem proposta ativa e confirme no
-   histórico data, atendente e motivo. Repita com uma proposta já aprovada e
-   confirme que o MVP permite o comando. Confirme também que uma proposta ainda
-   em andamento bloqueia o encerramento e que qualquer recusa da Tenant API é
-   exibida sem simular sucesso.
+7. Execute abertura de conversa, takeover, envio controlado pelo atendente em
+   **Abrir chat** e um canário de orçamento criado pelo workspace com PDF não
+   sensível. Confirme também a grafia do nome do PDF com caracteres acentuados.
+8. Valide o encerramento de uma conversa sem proposta ativa, confirme no
+   histórico de ações data, atendente e motivo e verifique a mensagem automática
+   de despedida no WhatsApp. Repita com uma proposta já aprovada e confirme que
+   o MVP permite o comando. Confirme também que uma proposta ainda em andamento
+   bloqueia o encerramento e que qualquer recusa da Tenant API é exibida sem
+   simular sucesso.
 9. Verifique o sino em usuários de departamentos diferentes e confirme que cada
    um recebe somente notificações do próprio escopo. No Comercial, valide o
    aviso de novo orçamento pendente.

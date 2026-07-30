@@ -169,6 +169,34 @@ describe('LumeApiQuoteProposalRepository', () => {
     );
   });
 
+  it('loads and deduplicates every quote linked to one conversation', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse({
+        items: [apiQueueItem()],
+        page: 1,
+        pageSize: 100,
+        total: 1,
+        totalPages: 1,
+      }),
+    );
+    const repository = new LumeApiQuoteProposalRepository(
+      'http://tenant.test/api/v1/',
+      'access-token',
+      fetcher,
+    );
+
+    await expect(repository.getByConversation(conversationId)).resolves.toEqual([
+      expect.objectContaining({ quoteRequestId, conversationId }),
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    for (const stage of ['pending', 'sent', 'approved', 'cancelled']) {
+      expect(fetcher).toHaveBeenCalledWith(
+        `http://tenant.test/api/v1/whatsapp/quote-proposals?stage=${stage}&page=1&pageSize=100&conversationId=${conversationId}`,
+        expect.any(Object),
+      );
+    }
+  });
+
   it('loads every PDF linked to one quote request detail', async () => {
     const secondDocument = {
       ...apiDocument('sent'),

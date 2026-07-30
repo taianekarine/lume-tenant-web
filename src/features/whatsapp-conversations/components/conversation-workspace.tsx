@@ -5,7 +5,6 @@ import {
   AlertCircle,
   Bot,
   Building2,
-  CheckCheck,
   CircleStop,
   Clock3,
   FileText,
@@ -13,6 +12,7 @@ import {
   Headset,
   History,
   Inbox,
+  MessageCircle,
   Phone,
   RefreshCw,
   RotateCcw,
@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 
 import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
-import { formatCivilDateTime } from '@/shared/lib/civil-date-time';
 import { Button } from '@/shared/ui/button';
 import {
   Dialog,
@@ -51,7 +50,6 @@ import { HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH } from '../application';
 import {
   canCloseWhatsAppConversation,
   canForwardWhatsAppConversation,
-  canMarkWhatsAppConversationAsRead,
   canReturnWhatsAppConversationToBot,
   canSendHumanWhatsAppMessage,
   canTakeOverWhatsAppConversation,
@@ -59,7 +57,6 @@ import {
   isWhatsAppBotBlocked,
   isWhatsAppConversationDepartment,
   isWhatsAppHumanActive,
-  isWhatsAppQuoteSummaryConfirmed,
   WHATSAPP_ROUTABLE_DEPARTMENTS,
   WHATSAPP_REQUEST_STATUSES,
   type WhatsAppConversation,
@@ -78,6 +75,7 @@ import {
 } from './conversation-labels';
 import { ConversationMessageSheet } from './conversation-message-sheet';
 import { ConversationMetricsCards } from './conversation-metrics-cards';
+import { ConversationQuoteActions } from './conversation-quote-actions';
 import { conversationWorkspaceStyles as styles } from './conversation-workspace.styles';
 
 export interface ConversationWorkspaceProps {
@@ -196,13 +194,6 @@ function hasPendingOutboundMessage(conversation: WhatsAppConversation): boolean 
   );
 }
 
-function quoteValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return 'Não informado';
-  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
-
 function getClosureReason(transition: WhatsAppConversation['transitions'][number]): string | null {
   const reason = transition.metadata.reason;
   return typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : null;
@@ -212,6 +203,32 @@ function getClosureActor(transition: WhatsAppConversation['transitions'][number]
   if (transition.actor?.user?.name) return transition.actor.user.name;
   if (transition.actorType === 'user') return 'Atendente não identificado';
   return 'Automação';
+}
+
+const TRANSITION_LABELS: Readonly<Record<string, string>> = {
+  'present-main-menu': 'Menu principal apresentado',
+  'select-commercial': 'Atendimento comercial selecionado',
+  'start-department-contact': 'Contato com departamento iniciado',
+  'start-quote': 'Coleta de orçamento iniciada',
+  'new-quote-request': 'Novo orçamento solicitado',
+  'present-quote-summary': 'Resumo do orçamento apresentado',
+  'correct-quote': 'Orçamento corrigido',
+  'confirm-quote': 'Resumo do orçamento confirmado',
+  'proposal-delivery-confirmed': 'Entrega da proposta confirmada',
+  'proposal-response-received': 'Resposta da proposta registrada',
+  'return-to-main-menu': 'Retorno ao menu principal',
+  'take-over': 'Atendimento assumido',
+  'return-to-bot': 'Atendimento devolvido ao bot',
+  forward: 'Atendimento encaminhado',
+  'mark-read': 'Conversa marcada como lida',
+  close: 'Atendimento encerrado',
+  'close-after-rejection': 'Atendimento encerrado após recusa',
+  'resume-awaited-reply': 'Resposta aguardada retomada',
+  'resume-contextual-contact': 'Contato contextual retomado',
+};
+
+function getTransitionLabel(name: string): string {
+  return TRANSITION_LABELS[name] ?? 'Ação registrada';
 }
 
 async function responseMessage(response: Response): Promise<string> {
@@ -253,6 +270,9 @@ export function ConversationWorkspace({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [closeReason, setCloseReason] = useState('');
   const [manualCommercialStatus, setManualCommercialStatus] =
     useState<ManualCommercialStatus>('under-review');
@@ -479,10 +499,7 @@ export function ConversationWorkspace({
     selectedConversation !== null &&
     canSendHumanWhatsAppMessage(selectedConversation) &&
     selectedConversation.assignedTo?.id === currentUserId;
-  const closureHistory =
-    selectedConversation?.transitions.filter(
-      (transition) => transition.name === 'close' || transition.name === 'close-after-rejection',
-    ) ?? [];
+  const actionHistory = selectedConversation?.transitions ?? [];
 
   function applyActionResult(result: WhatsAppConversationActionResult, successMessage: string) {
     if (result.conversation) {
@@ -505,6 +522,9 @@ export function ConversationWorkspace({
     setDetailError('');
     setMessageDraft('');
     setIsCloseDialogOpen(false);
+    setIsForwardDialogOpen(false);
+    setIsStatusDialogOpen(false);
+    setIsHistoryDialogOpen(false);
     setCloseReason('');
     setManualCommercialStatus(
       isManualCommercialStatus(conversation.requestStatus)
@@ -558,6 +578,7 @@ export function ConversationWorkspace({
         targetDepartment: effectiveTargetDepartment,
       });
       applyActionResult(result, 'Atendimento encaminhado com sucesso.');
+      if (result.success) setIsForwardDialogOpen(false);
     });
   }
 
@@ -614,6 +635,7 @@ export function ConversationWorkspace({
       setManualCommercialStatusReason('');
       await refreshList(true);
       await loadConversationDetail(selectedConversation.id);
+      setIsStatusDialogOpen(false);
     });
   }
 
@@ -974,6 +996,14 @@ export function ConversationWorkspace({
                     </p>
                   </div>
                 </div>
+                <div className={styles.headerAssignment()}>
+                  <UserRound aria-hidden="true" />
+                  <span>
+                    {selectedConversation.assignedTo === null
+                      ? 'Sem atendente responsável'
+                      : `Responsável: ${selectedConversation.assignedTo.name}`}
+                  </span>
+                </div>
               </header>
 
               <div className={styles.highlightGrid()}>
@@ -1071,6 +1101,13 @@ export function ConversationWorkspace({
                     <strong>{getFlowStepLabel(selectedConversation)}</strong>
                   </span>
                 </div>
+                <div className={styles.dimensionItem()}>
+                  <MessageCircle aria-hidden="true" />
+                  <span>
+                    <small>Canal</small>
+                    <strong>{selectedConversation.channel.name}</strong>
+                  </span>
+                </div>
                 {selectedConversation.department === 'commercial' ? (
                   <div className={styles.dimensionItem()}>
                     <Clock3 aria-hidden="true" />
@@ -1082,212 +1119,216 @@ export function ConversationWorkspace({
                 ) : null}
               </div>
 
-              <div className={styles.assignment()}>
-                <UserRound aria-hidden="true" />
-                <span>
-                  {selectedConversation.assignedTo === null
-                    ? 'Nenhum atendente responsável'
-                    : `Responsável: ${selectedConversation.assignedTo.name}`}
-                </span>
-                <small>Canal: {selectedConversation.channel.name}</small>
-              </div>
-
               <div className={styles.actionsPanel()}>
                 <p className={styles.actionsTitle()}>Ações do atendimento</p>
-                <div className={styles.actions()}>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleVersionedAction(
-                        takeOverWhatsAppConversationAction,
-                        'Atendimento assumido com sucesso.',
-                      )
-                    }
-                    disabled={
-                      isUpdatingConversation ||
-                      !canTakeOverWhatsAppConversation(selectedConversation)
-                    }
-                    className={styles.actionButton({ action: 'human' })}
-                  >
-                    <Headset aria-hidden="true" />
-                    Assumir
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleVersionedAction(
-                        returnWhatsAppConversationToBotAction,
-                        'Conversa devolvida ao bot na etapa permitida.',
-                      )
-                    }
-                    disabled={
-                      isUpdatingConversation ||
-                      !canReturnWhatsAppConversationToBot(selectedConversation)
-                    }
-                    className={styles.actionButton({ action: 'bot' })}
-                  >
-                    <Bot aria-hidden="true" />
-                    Devolver ao bot
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleConversationSelection(selectedConversation)}
-                    disabled={
-                      isUpdatingConversation ||
-                      !canMarkWhatsAppConversationAsRead(selectedConversation)
-                    }
-                    className={styles.actionButton({ action: 'read' })}
-                  >
-                    <CheckCheck aria-hidden="true" />
-                    Marcar como lida
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsCloseDialogOpen(true)}
-                    disabled={
-                      isUpdatingConversation || !canCloseWhatsAppConversation(selectedConversation)
-                    }
-                    title={
-                      canCloseWhatsAppConversation(selectedConversation)
-                        ? 'Encerrar a conversa atual e permitir um novo atendimento pelo bot.'
-                        : selectedConversation.conversationState === 'closed'
-                          ? 'Este atendimento já está encerrado.'
-                          : 'Disponível quando não houver proposta em andamento.'
-                    }
-                    className={styles.actionButton({ action: 'close' })}
-                  >
-                    <CircleStop aria-hidden="true" />
-                    Encerrar atendimento
-                  </button>
-                  <ConversationMessageSheet
-                    conversation={selectedConversation}
-                    open={isMessagesOpen}
-                    onOpenChange={setIsMessagesOpen}
-                    isLoading={isLoadingDetail}
-                    isLoaded={loadedConversationIds.has(selectedConversation.id)}
-                    detailError={detailError}
-                    onRetry={() => void loadConversationDetail(selectedConversation.id)}
-                    onRefresh={() => void refreshList(true)}
-                    messageDraft={messageDraft}
-                    onMessageDraftChange={setMessageDraft}
-                    canSendMessage={canCurrentUserSendMessage}
-                    canTakeOver={canTakeOverWhatsAppConversation(selectedConversation)}
-                    isTakingOver={isUpdatingConversation}
-                    onTakeOver={() =>
-                      handleVersionedAction(
-                        takeOverWhatsAppConversationAction,
-                        'Atendimento assumido com sucesso.',
-                      )
-                    }
-                    isSendingMessage={isSendingMessage}
-                    onSendMessage={handleSendHumanMessage}
-                    feedbackMessage={feedbackMessage}
-                    feedbackTone={feedbackTone}
-                  />
-                </div>
-
-                <div className={styles.forwardRow()}>
-                  <label htmlFor="forward-department">Encaminhar para</label>
-                  <Select
-                    value={effectiveTargetDepartment}
-                    onValueChange={(value) => {
-                      if (isWhatsAppConversationDepartment(value)) {
-                        setTargetDepartment(value);
-                      }
-                    }}
-                    disabled={
-                      isUpdatingConversation ||
-                      !canForwardWhatsAppConversation(selectedConversation)
-                    }
-                  >
-                    <SelectTrigger id="forward-department" className={styles.compactSelect()}>
-                      <span>{DEPARTMENT_LABELS[effectiveTargetDepartment]}</span>
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {WHATSAPP_ROUTABLE_DEPARTMENTS.filter(
-                        (department) => department !== selectedConversation.department,
-                      ).map((department) => (
-                        <SelectItem key={department} value={department}>
-                          {DEPARTMENT_LABELS[department]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <button
-                    type="button"
-                    onClick={handleForward}
-                    disabled={
-                      isUpdatingConversation ||
-                      !canForwardWhatsAppConversation(selectedConversation)
-                    }
-                    className={styles.actionButton({ action: 'forward' })}
-                  >
-                    <Forward aria-hidden="true" />
-                    Encaminhar
-                  </button>
-                </div>
-
-                {selectedConversation.department === 'commercial' &&
-                selectedConversation.currentQuoteRequest &&
-                selectedConversation.conversationState !== 'closed' &&
-                selectedConversation.assignedTo?.id === currentUserId ? (
-                  <div className="grid gap-2 rounded-xl border bg-muted/30 p-3 lg:grid-cols-[auto_minmax(13rem,1fr)_auto] lg:items-end">
-                    <label htmlFor="commercial-status" className="text-sm font-medium lg:pb-2">
-                      Alterar status comercial
-                    </label>
-                    <div className="grid gap-2">
-                      <Select
-                        value={manualCommercialStatus}
-                        onValueChange={(value) => {
-                          if (isManualCommercialStatus(value)) {
-                            setManualCommercialStatus(value);
-                            if (value !== 'rejected' && value !== 'cancelled') {
-                              setManualCommercialStatusReason('');
-                            }
-                          }
-                        }}
-                        disabled={isUpdatingConversation}
-                      >
-                        <SelectTrigger id="commercial-status" className={styles.compactSelect()}>
-                          <span>{REQUEST_STATUS_LABELS[manualCommercialStatus]}</span>
-                        </SelectTrigger>
-                        <SelectContent alignItemWithTrigger={false}>
-                          {MANUAL_COMMERCIAL_STATUSES.map((status) => (
-                            <SelectItem key={status} value={status}>
-                              {REQUEST_STATUS_LABELS[status]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {manualCommercialStatus === 'rejected' ||
-                      manualCommercialStatus === 'cancelled' ? (
-                        <Textarea
-                          aria-label="Motivo da alteração do status comercial"
-                          value={manualCommercialStatusReason}
-                          onChange={(event) => setManualCommercialStatusReason(event.target.value)}
-                          minLength={3}
-                          maxLength={500}
-                          rows={2}
-                          placeholder="Informe o motivo para manter a auditoria completa."
-                        />
-                      ) : null}
-                    </div>
-                    <Button
+                <div className={styles.actionColumns()}>
+                  <div className={styles.actions()}>
+                    <button
                       type="button"
-                      variant="outline"
-                      onClick={handleManualCommercialStatus}
+                      onClick={() =>
+                        handleVersionedAction(
+                          takeOverWhatsAppConversationAction,
+                          'Atendimento assumido com sucesso.',
+                        )
+                      }
                       disabled={
                         isUpdatingConversation ||
-                        manualCommercialStatus === selectedConversation.requestStatus ||
-                        ((manualCommercialStatus === 'rejected' ||
-                          manualCommercialStatus === 'cancelled') &&
-                          manualCommercialStatusReason.trim().length < 3)
+                        !canTakeOverWhatsAppConversation(selectedConversation)
                       }
+                      className={styles.actionButton({ action: 'human' })}
                     >
-                      Atualizar status
-                    </Button>
+                      <Headset aria-hidden="true" />
+                      Assumir
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleVersionedAction(
+                          returnWhatsAppConversationToBotAction,
+                          'Conversa devolvida ao bot na etapa permitida.',
+                        )
+                      }
+                      disabled={
+                        isUpdatingConversation ||
+                        !canReturnWhatsAppConversationToBot(selectedConversation)
+                      }
+                      className={styles.actionButton({ action: 'bot' })}
+                    >
+                      <Bot aria-hidden="true" />
+                      Devolver ao bot
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCloseDialogOpen(true)}
+                      disabled={
+                        isUpdatingConversation ||
+                        !canCloseWhatsAppConversation(selectedConversation)
+                      }
+                      className={styles.actionButton({ action: 'close' })}
+                    >
+                      <CircleStop aria-hidden="true" />
+                      Encerrar
+                    </button>
                   </div>
-                ) : null}
+                  <div className={styles.actions()}>
+                    <ConversationMessageSheet
+                      conversation={selectedConversation}
+                      open={isMessagesOpen}
+                      onOpenChange={setIsMessagesOpen}
+                      isLoading={isLoadingDetail}
+                      isLoaded={loadedConversationIds.has(selectedConversation.id)}
+                      detailError={detailError}
+                      onRetry={() => void loadConversationDetail(selectedConversation.id)}
+                      onRefresh={() => void refreshList(true)}
+                      messageDraft={messageDraft}
+                      onMessageDraftChange={setMessageDraft}
+                      canSendMessage={canCurrentUserSendMessage}
+                      canTakeOver={canTakeOverWhatsAppConversation(selectedConversation)}
+                      isTakingOver={isUpdatingConversation}
+                      onTakeOver={() =>
+                        handleVersionedAction(
+                          takeOverWhatsAppConversationAction,
+                          'Atendimento assumido com sucesso.',
+                        )
+                      }
+                      isSendingMessage={isSendingMessage}
+                      onSendMessage={handleSendHumanMessage}
+                      feedbackMessage={feedbackMessage}
+                      feedbackTone={feedbackTone}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsForwardDialogOpen(true)}
+                      disabled={
+                        isUpdatingConversation ||
+                        !canForwardWhatsAppConversation(selectedConversation)
+                      }
+                      className={styles.actionButton({ action: 'forward' })}
+                    >
+                      <Forward aria-hidden="true" />
+                      Encaminhar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsStatusDialogOpen(true)}
+                      disabled={
+                        isUpdatingConversation ||
+                        selectedConversation.department !== 'commercial' ||
+                        selectedConversation.currentQuoteRequest === null ||
+                        selectedConversation.conversationState === 'closed' ||
+                        selectedConversation.assignedTo?.id !== currentUserId
+                      }
+                      className={styles.actionButton({ action: 'read' })}
+                    >
+                      <Clock3 aria-hidden="true" />
+                      Alterar status
+                    </button>
+                  </div>
+                </div>
+
+                <Dialog open={isForwardDialogOpen} onOpenChange={setIsForwardDialogOpen}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Encaminhar atendimento</DialogTitle>
+                      <DialogDescription>
+                        Selecione um departamento diferente do atual.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Select
+                      value={effectiveTargetDepartment}
+                      onValueChange={(value) => {
+                        if (isWhatsAppConversationDepartment(value)) setTargetDepartment(value);
+                      }}
+                      disabled={isUpdatingConversation}
+                    >
+                      <SelectTrigger className="w-full" aria-label="Departamento de destino">
+                        <span>{DEPARTMENT_LABELS[effectiveTargetDepartment]}</span>
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {WHATSAPP_ROUTABLE_DEPARTMENTS.filter(
+                          (department) => department !== selectedConversation.department,
+                        ).map((department) => (
+                          <SelectItem key={department} value={department}>
+                            {DEPARTMENT_LABELS[department]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                      <Button
+                        type="button"
+                        onClick={handleForward}
+                        disabled={isUpdatingConversation}
+                      >
+                        <Forward aria-hidden="true" />
+                        Confirmar encaminhamento
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>Alterar status comercial</DialogTitle>
+                      <DialogDescription>
+                        A alteração será registrada no histórico do atendimento.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <Select
+                      value={manualCommercialStatus}
+                      onValueChange={(value) => {
+                        if (isManualCommercialStatus(value)) {
+                          setManualCommercialStatus(value);
+                          if (value !== 'rejected' && value !== 'cancelled') {
+                            setManualCommercialStatusReason('');
+                          }
+                        }
+                      }}
+                      disabled={isUpdatingConversation}
+                    >
+                      <SelectTrigger className="w-full">
+                        <span>{REQUEST_STATUS_LABELS[manualCommercialStatus]}</span>
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {MANUAL_COMMERCIAL_STATUSES.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {REQUEST_STATUS_LABELS[status]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {manualCommercialStatus === 'rejected' ||
+                    manualCommercialStatus === 'cancelled' ? (
+                      <Textarea
+                        aria-label="Motivo da alteração do status comercial"
+                        value={manualCommercialStatusReason}
+                        onChange={(event) => setManualCommercialStatusReason(event.target.value)}
+                        minLength={3}
+                        maxLength={500}
+                        rows={3}
+                        placeholder="Informe o motivo para manter a auditoria completa."
+                      />
+                    ) : null}
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>Cancelar</DialogClose>
+                      <Button
+                        type="button"
+                        onClick={handleManualCommercialStatus}
+                        disabled={
+                          isUpdatingConversation ||
+                          manualCommercialStatus === selectedConversation.requestStatus ||
+                          ((manualCommercialStatus === 'rejected' ||
+                            manualCommercialStatus === 'cancelled') &&
+                            manualCommercialStatusReason.trim().length < 3)
+                        }
+                      >
+                        Atualizar status
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
                 <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
                   <DialogContent>
@@ -1344,107 +1385,86 @@ export function ConversationWorkspace({
               <section aria-labelledby="quote-request-title" className={styles.quotePanel()}>
                 <div className={styles.panelHeading()}>
                   <div>
-                    <p className={styles.panelEyebrow()}>Solicitação estruturada</p>
-                    <h4 id="quote-request-title">Orçamento atual</h4>
+                    <p className={styles.panelEyebrow()}>Atendimento comercial</p>
+                    <h4 id="quote-request-title">Orçamentos</h4>
                   </div>
-                  {isWhatsAppQuoteSummaryConfirmed(selectedConversation) ? (
-                    <span className={styles.confirmedBadge()}>
-                      <CheckCheck aria-hidden="true" />
-                      Resumo confirmado
-                    </span>
-                  ) : null}
+                  <div className={styles.quoteActions()}>
+                    <ConversationQuoteActions
+                      conversation={selectedConversation}
+                      currentUserId={currentUserId}
+                      onChanged={() => {
+                        void refreshList(true);
+                        void loadConversationDetail(selectedConversation.id);
+                      }}
+                      onError={(message) => {
+                        setFeedbackMessage(message);
+                        setFeedbackTone('error');
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsHistoryDialogOpen(true)}
+                    >
+                      <History aria-hidden="true" />
+                      Histórico de ações
+                    </Button>
+                  </div>
                 </div>
-
-                {selectedConversation.currentQuoteRequest ? (
-                  <>
-                    <dl className={styles.quoteGrid()}>
-                      {[
-                        ['Sequência', selectedConversation.currentQuoteRequest.sequence],
-                        ['Contato', selectedConversation.currentQuoteRequest.contactName],
-                        ['Documento', selectedConversation.currentQuoteRequest.document],
-                        ['E-mail', selectedConversation.currentQuoteRequest.email],
-                        ['Serviço', selectedConversation.currentQuoteRequest.serviceType],
-                        ['Origem', selectedConversation.currentQuoteRequest.origin],
-                        ['Destino', selectedConversation.currentQuoteRequest.destination],
-                        [
-                          'Saída',
-                          formatCivilDateTime(
-                            selectedConversation.currentQuoteRequest.departureDate,
-                            selectedConversation.currentQuoteRequest.departureAt,
-                          ),
-                        ],
-                        [
-                          'Retorno',
-                          selectedConversation.currentQuoteRequest.returnDate ||
-                          selectedConversation.currentQuoteRequest.returnAt
-                            ? formatCivilDateTime(
-                                selectedConversation.currentQuoteRequest.returnDate,
-                                selectedConversation.currentQuoteRequest.returnAt,
-                              )
-                            : null,
-                        ],
-                        ['Passageiros', selectedConversation.currentQuoteRequest.passengerCount],
-                        ['Veículo', selectedConversation.currentQuoteRequest.vehicleType],
-                        [
-                          'À disposição',
-                          selectedConversation.currentQuoteRequest.vehicleAtDisposal,
-                        ],
-                        [
-                          'Traslados locais',
-                          selectedConversation.currentQuoteRequest.localTransfers,
-                        ],
-                        ['Observações', selectedConversation.currentQuoteRequest.notes],
-                      ].map(([label, value]) => (
-                        <div key={String(label)}>
-                          <dt>{label}</dt>
-                          <dd>{quoteValue(value)}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    {/* Os dados estruturados permanecem no contrato para uma futura visão técnica,
-                      mas não são exibidos na operação diária do atendente. */}
-                  </>
-                ) : (
-                  <p className={styles.emptyPanelText()}>
-                    Nenhuma solicitação de orçamento vinculada a esta conversa.
-                  </p>
-                )}
               </section>
 
-              {closureHistory.length > 0 ? (
-                <section
-                  aria-labelledby="closure-history-title"
-                  className={styles.closureHistory()}
-                >
-                  <div className={styles.closureHistoryHeading()}>
-                    <History aria-hidden="true" />
-                    <div>
-                      <p className={styles.panelEyebrow()}>Registro do atendimento</p>
-                      <h4 id="closure-history-title">Histórico de encerramentos</h4>
+              <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+                <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+                  <DialogHeader>
+                    <DialogTitle>Histórico de ações da conversa</DialogTitle>
+                    <DialogDescription>
+                      Alterações de condução, departamento, etapa e status em ordem cronológica.
+                    </DialogDescription>
+                  </DialogHeader>
+                  {actionHistory.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma ação foi registrada nesta conversa.
+                    </p>
+                  ) : (
+                    <div className={styles.closureHistoryList()}>
+                      {actionHistory.map((transition) => (
+                        <article key={transition.id} className={styles.closureHistoryItem()}>
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <strong>{getTransitionLabel(transition.name)}</strong>
+                            <time className="text-xs text-muted-foreground">
+                              {formatDateTime(transition.createdAt)}
+                            </time>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Responsável</dt>
+                              <dd>{getClosureActor(transition)}</dd>
+                            </div>
+                            <div>
+                              <dt>Departamento</dt>
+                              <dd>
+                                {DEPARTMENT_LABELS[transition.from.department]} →{' '}
+                                {DEPARTMENT_LABELS[transition.to.department]}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Estado</dt>
+                              <dd>
+                                {CONVERSATION_STATE_LABELS[transition.from.conversationState]} →{' '}
+                                {CONVERSATION_STATE_LABELS[transition.to.conversationState]}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Motivo</dt>
+                              <dd>{getClosureReason(transition) ?? 'Não informado'}</dd>
+                            </div>
+                          </dl>
+                        </article>
+                      ))}
                     </div>
-                  </div>
-                  <div className={styles.closureHistoryList()}>
-                    {closureHistory.map((transition) => (
-                      <article key={transition.id} className={styles.closureHistoryItem()}>
-                        <dl>
-                          <div>
-                            <dt>Data e hora</dt>
-                            <dd>{formatDateTime(transition.createdAt)}</dd>
-                          </div>
-                          <div>
-                            <dt>Encerrado por</dt>
-                            <dd>{getClosureActor(transition)}</dd>
-                          </div>
-                          <div>
-                            <dt>Motivo</dt>
-                            <dd>{getClosureReason(transition) ?? 'Não informado'}</dd>
-                          </div>
-                        </dl>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
+                  )}
+                </DialogContent>
+              </Dialog>
 
               <footer className={styles.detailFooter()}>
                 <p

@@ -46,6 +46,7 @@ import {
 } from '@/features/tenant-administration/domain';
 import {
   getPermissionActionLabel,
+  getPermissionCodeLabel,
   getPermissionResourceLabel,
 } from '@/features/tenant-administration/permissions/permission-labels';
 import { Button } from '@/shared/ui/button';
@@ -214,7 +215,7 @@ function PermissionFields({
                       )
                     }
                   />
-                  <FieldLabel htmlFor={id}>{getPermissionActionLabel(action)}</FieldLabel>
+                  <FieldLabel htmlFor={id}>{getPermissionCodeLabel(resource, action)}</FieldLabel>
                 </Field>
               );
             })}
@@ -953,12 +954,16 @@ function paginationHref(filters: UserListFilters, page: number): string {
 export function UsersManagement({
   users,
   permissionCatalog,
-  canManage,
+  canCreate,
+  canEdit,
+  canManageAccess,
   filters = {},
 }: {
   readonly users: TenantUserList;
   readonly permissionCatalog: PermissionCatalog;
-  readonly canManage: boolean;
+  readonly canCreate: boolean;
+  readonly canEdit: boolean;
+  readonly canManageAccess: boolean;
   readonly filters?: UserListFilters;
 }) {
   const hasFilters = Boolean(
@@ -975,7 +980,7 @@ export function UsersManagement({
             {users.meta.total} conta(s) encontrada(s) neste tenant.
           </p>
         </div>
-        {canManage ? <CreateUserDialog permissionCatalog={permissionCatalog} /> : null}
+        {canCreate ? <CreateUserDialog permissionCatalog={permissionCatalog} /> : null}
       </div>
 
       <UsersFilters filters={filters} permissionCatalog={permissionCatalog} />
@@ -992,7 +997,7 @@ export function UsersManagement({
             <EmptyDescription>
               {hasFilters
                 ? 'Revise os filtros informados ou limpe a pesquisa.'
-                : canManage
+                : canCreate
                   ? 'Use “Novo usuário” para criar a primeira conta.'
                   : 'Nenhuma conta está disponível para consulta.'}
             </EmptyDescription>
@@ -1067,18 +1072,22 @@ export function UsersManagement({
                     ) : null}
                   </TableCell>
                   <TableCell>
-                    {canManage ? (
+                    {canEdit || canManageAccess ? (
                       <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          render={<Link href={`/users/${user.id}`} />}
-                          nativeButton={false}
-                          size="sm"
-                          variant="outline"
-                        >
-                          Editar acessos
-                        </Button>
-                        <PasswordResetButton userId={user.id} />
-                        <UserStatusActions user={user} />
+                        {canEdit ? (
+                          <>
+                            <Button
+                              render={<Link href={`/users/${user.id}`} />}
+                              nativeButton={false}
+                              size="sm"
+                              variant="outline"
+                            >
+                              Editar acessos
+                            </Button>
+                            <PasswordResetButton userId={user.id} />
+                          </>
+                        ) : null}
+                        {canManageAccess ? <UserStatusActions user={user} /> : null}
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">Somente consulta</span>

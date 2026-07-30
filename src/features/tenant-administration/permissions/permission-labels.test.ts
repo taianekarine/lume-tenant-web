@@ -1,4 +1,8 @@
-import { getPermissionActionLabel, getPermissionResourceLabel } from './permission-labels';
+import {
+  getPermissionActionLabel,
+  getPermissionCodeLabel,
+  getPermissionResourceLabel,
+} from './permission-labels';
 
 describe('permission labels', () => {
   it.each([
@@ -30,5 +34,11 @@ describe('permission labels', () => {
   it('keeps catalog additions usable without a frontend allow-list', () => {
     expect(getPermissionResourceLabel('quality-assurance')).toBe('Módulo adicional');
     expect(getPermissionActionLabel('review')).toBe('Ação disponível');
+  });
+
+  it('describes the user access boundaries explicitly', () => {
+    expect(getPermissionCodeLabel('users', 'create')).toBe('Criar usuário');
+    expect(getPermissionCodeLabel('users', 'update')).toBe('Editar acesso');
+    expect(getPermissionCodeLabel('users', 'manage')).toBe('Gerenciar acesso');
   });
 });

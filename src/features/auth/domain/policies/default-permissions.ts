@@ -177,7 +177,6 @@ export const DEFAULT_DEPARTMENT_PERMISSIONS = {
     'users:view',
     'users:create',
     'users:update',
-    'users:delete',
     'users:manage',
     'ai-agents:view',
     'ai-agents:create',

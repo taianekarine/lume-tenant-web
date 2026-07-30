@@ -31,7 +31,8 @@ Operacional. Registros legados continuam legíveis para compatibilidade, sempre
 traduzidos para um rótulo humano, mas não voltam às opções de cadastro nem aos
 filtros e encaminhamentos do Painel WhatsApp.
 
-`/users` exige departamento Gerência e `users:view` ou `users:manage`;
+`/users` exige departamento Gerência e ao menos uma permissão entre
+`users:view`, `users:create`, `users:update` e `users:manage`;
 `/license` exige o mesmo departamento e `license:view`. Painel WhatsApp e
 Orçamentos exigem departamento Comercial e a permissão do módulo.
 
@@ -88,14 +89,14 @@ departamento) são calculados a partir dos dados reais retornados:
 - **Bot ativo:** `conversationState = bot-active`;
 - **Atendente ativo:** `conversationState = human-active`;
 - **Automação pausada:** `waiting-for-customer` ou `sent-to-human`;
-- **Mensagens não lidas:** soma de `unreadCount`.
+- **Conversas não lidas:** quantidade de conversas com `unreadCount > 0`.
 
 Na caixa de entrada, os mesmos indicadores são renderizados dentro do componente
 que executa o polling. Assim, cartões, lista e detalhe usam o mesmo snapshot e
 não divergem após uma transição.
 
 O histórico e o compositor não ocupam permanentemente o detalhe da conversa.
-O botão **Histórico completo / Mensagens e anexos** abre um `Sheet` com o
+O botão **Abrir chat** abre um `Sheet` com o
 componente oficial `Message` do shadcn/ui. Cada item apresenta direção, data,
 remetente, estado de entrega e anexos autorizados. O envio pelo atendente parte
 desse painel lateral e continua usando apenas uma Server Action e a Tenant API.
@@ -103,6 +104,14 @@ O `Sheet` mantém largura total no mobile e chega a 84 rem no desktop,
 aproximadamente o dobro do limite anterior de 42 rem. O container e as ações
 usam limites flexíveis e `overflow-x-hidden`, portanto textos, contador e botões
 não introduzem rolagem horizontal.
+
+O detalhe mantém telefone sob o nome, responsável e canal no cabeçalho e as
+dimensões canônicas em uma grade compacta. Assumir, devolver e encerrar ficam
+na coluna operacional; Abrir chat, Encaminhar e Alterar status ficam na coluna
+de apoio. Encaminhamento, status, lista de orçamentos e histórico de ações são
+modais, evitando que formulários e históricos imponham rolagem permanente à
+página. O botão Assumir fica desabilitado assim que houver responsável; a
+devolução ao bot usa exclusivamente o comando versionado da Tenant API.
 
 Mensagens enviadas pelo atendente usam `commandId` e `idempotencyKey` estáveis
 enquanto o rascunho não for confirmado. A Tenant API persiste a mensagem em
@@ -198,8 +207,10 @@ o formulário que consome `POST /auth/password/change`.
 
 Contas usam os estados `active`, `inactive` e `suspended`. A suspensão exige
 motivo e prazo em quantidade de dias ou data final. A Tenant API bloqueia novas
-autenticações e sessões existentes, enquanto o painel permite reativar,
-desativar ou suspender conforme `users:manage`.
+autenticações e sessões existentes. `users:update` edita dados, departamentos,
+permissões e recuperação de senha; `users:manage` atua somente no estado da
+conta, permitindo reativar, desativar ou suspender. `users:delete` não existe no
+catálogo nem na interface.
 
 Consulte [tenant-api-integration.md](tenant-api-integration.md) para os
 endpoints já integrados, o ciclo de renovação da sessão e as pendências de

@@ -48,7 +48,6 @@ export interface QuoteProposalWorkspaceProps {
   readonly initialPendingTotal?: number;
   readonly initialSentProposals?: readonly PendingQuoteProposal[];
   readonly initialSentTotal?: number;
-  readonly initialManualQuoteSeeds?: readonly PendingQuoteProposal[];
   /** @deprecated Compatibilidade temporária com consumidores anteriores à separação de filas. */
   readonly initialProposals?: readonly PendingQuoteProposal[];
   readonly initialError?: string | null;
@@ -188,7 +187,6 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
   const initialSentProposals = props.initialSentProposals ?? [];
   const initialPendingTotal = props.initialPendingTotal ?? initialPendingProposals.length;
   const initialSentTotal = props.initialSentTotal ?? initialSentProposals.length;
-  const manualQuoteSeeds = props.initialManualQuoteSeeds ?? [];
   const initialError = props.initialError ?? null;
   const showHistory = props.showHistory ?? true;
   const canManage = props.canManage ?? true;
@@ -550,21 +548,6 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
           </div>
         ) : null}
         <EmptyQueue />
-        {canManage && manualQuoteSeeds.length > 0 ? (
-          <ProposalHistory
-            proposals={manualQuoteSeeds}
-            total={manualQuoteSeeds.length}
-            onCreated={registerCreatedProposal}
-            onDecided={registerProposalDecision}
-            onError={registerProposalError}
-            title="Novo orçamento avulso"
-            description="Selecione um atendimento comercial assumido por você para cadastrar o resumo e, se desejar, enviar a proposta."
-            emptyMessage="Nenhum atendimento comercial assumido por você está disponível."
-            itemLabel={{ singular: 'atendimento', plural: 'atendimentos' }}
-            showDecisionActions={false}
-            compactCreateOnly
-          />
-        ) : null}
         {showHistory ? (
           <ProposalHistory
             proposals={sentProposals}
@@ -980,22 +963,6 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
           </section>
         )}
       </div>
-
-      {canManage && manualQuoteSeeds.length > 0 ? (
-        <ProposalHistory
-          proposals={manualQuoteSeeds}
-          total={manualQuoteSeeds.length}
-          onCreated={registerCreatedProposal}
-          onDecided={registerProposalDecision}
-          onError={registerProposalError}
-          title="Novo orçamento avulso"
-          description="Selecione um atendimento comercial assumido por você para cadastrar o resumo e, se desejar, enviar a proposta."
-          emptyMessage="Nenhum atendimento comercial assumido por você está disponível."
-          itemLabel={{ singular: 'atendimento', plural: 'atendimentos' }}
-          showDecisionActions={false}
-          compactCreateOnly
-        />
-      ) : null}
 
       {showHistory ? (
         <ProposalHistory

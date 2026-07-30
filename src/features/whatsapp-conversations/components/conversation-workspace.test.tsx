@@ -82,9 +82,8 @@ describe('ConversationWorkspace', () => {
     const identityRow = contactHeading.parentElement;
     const detailHeader = contactHeading.closest('header');
 
-    expect(identityRow).toHaveClass('flex', 'flex-wrap', 'items-center');
-    expect(identityRow).not.toHaveClass('flex-col');
-    expect(detailHeader).toHaveClass('px-4', 'py-2.5');
+    expect(identityRow).toHaveClass('flex', 'flex-col', 'items-start');
+    expect(detailHeader).toHaveClass('px-4', 'py-2', 'bg-emerald-50/70');
     expect(screen.getAllByText('553496305110')).toHaveLength(2);
     expect(screen.getByText(/Última interação: 29\/07\/2026, 16:50/)).toBeInTheDocument();
   });
@@ -157,7 +156,6 @@ describe('ConversationWorkspace', () => {
     const user = userEvent.setup();
 
     render(<ConversationWorkspace initialConversations={[summary]} />);
-    await openMessages(user);
 
     expect(screen.getAllByText('Departamento')).toHaveLength(2);
     expect(screen.getByText('Estado da conversa')).toBeInTheDocument();
@@ -167,7 +165,10 @@ describe('ConversationWorkspace', () => {
     expect(
       screen.getByText('Segundo contato retomado no acompanhamento comercial.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Resumo confirmado')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Orçamentos' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lista de orçamentos' })).toBeInTheDocument();
+    expect(screen.queryByText('Resumo confirmado')).not.toBeInTheDocument();
+    await openMessages(user);
     expect(await screen.findByText('proposta.pdf')).toBeInTheDocument();
     expect(screen.getByText(/· Falha no envio$/)).toBeInTheDocument();
     expect(screen.getByText('Evolution não respondeu.')).toBeInTheDocument();
@@ -234,6 +235,24 @@ describe('ConversationWorkspace', () => {
       });
     });
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not allow a second take-over and enables return when an attendant is already assigned', () => {
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'sent-to-human',
+      flowStep: 'human-service',
+      assignedTo: { id: 'employee-002', name: 'Outro atendente' },
+      unreadCount: 0,
+    });
+    mockFetchDetail(conversation);
+
+    render(
+      <ConversationWorkspace initialConversations={[conversation]} currentUserId="employee-001" />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Assumir' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Devolver ao bot' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Marcar como lid[ao]/i })).not.toBeInTheDocument();
   });
 
   it('shows a conflict and replaces stale state with the reloaded conversation', async () => {
@@ -364,7 +383,7 @@ describe('ConversationWorkspace', () => {
     mockFetchDetail(conversation);
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    expect(screen.getByRole('button', { name: 'Encerrar atendimento' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Encerrar' })).toBeDisabled();
     expect(mockedForward).not.toHaveBeenCalled();
     expect(mockedMarkAsRead).not.toHaveBeenCalled();
   });
@@ -391,7 +410,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Encerrar atendimento' }));
+    await user.click(screen.getByRole('button', { name: 'Encerrar' }));
     expect(screen.getByRole('dialog')).toHaveTextContent(
       'Quando o cliente enviar uma nova mensagem, o bot iniciará outro atendimento',
     );
@@ -437,7 +456,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
+    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
     expect(closeButton).toBeEnabled();
     await user.click(closeButton);
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
@@ -474,7 +493,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
+    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
     expect(closeButton).toBeEnabled();
     await user.click(closeButton);
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
@@ -508,7 +527,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Encerrar atendimento' }));
+    await user.click(screen.getByRole('button', { name: 'Encerrar' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
 
     expect(await screen.findAllByText('A Tenant API recusou o encerramento.')).not.toHaveLength(0);
@@ -558,9 +577,14 @@ describe('ConversationWorkspace', () => {
     });
     mockFetchDetail(conversation);
 
+    const user = userEvent.setup();
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    expect(screen.getByRole('heading', { name: 'Histórico de encerramentos' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Histórico de ações' }));
+    expect(
+      screen.getByRole('heading', { name: 'Histórico de ações da conversa' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Atendimento encerrado')).toBeInTheDocument();
     expect(screen.getByText('Maria Atendente')).toBeInTheDocument();
     expect(screen.getByText('Cliente recusou o valor.')).toBeInTheDocument();
     expect(screen.getByText(/28\/07\/2026/)).toBeInTheDocument();
@@ -583,12 +607,13 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const destination = screen.getByRole('combobox', { name: 'Encaminhar para' });
+    await user.click(screen.getByRole('button', { name: 'Encaminhar' }));
+    const destination = screen.getByRole('combobox', { name: 'Departamento de destino' });
     await user.click(destination);
     const operationsOption = await screen.findByRole('option', { name: /Opera/ });
     expect(screen.queryByRole('option', { name: 'Comercial' })).not.toBeInTheDocument();
     await user.click(operationsOption);
-    await user.click(screen.getByRole('button', { name: 'Encaminhar' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar encaminhamento' }));
 
     await waitFor(() => {
       expect(mockedForward).toHaveBeenCalledWith({

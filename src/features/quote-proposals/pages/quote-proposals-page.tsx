@@ -12,7 +12,6 @@ export interface PendingQuoteProposalsPageProps {
   readonly total: number;
   readonly initialError?: string | null;
   readonly canManage?: boolean;
-  readonly manualQuoteSeeds?: readonly PendingQuoteProposal[];
 }
 
 export function PendingQuoteProposalsPage({
@@ -21,7 +20,6 @@ export function PendingQuoteProposalsPage({
   total,
   initialError = null,
   canManage = true,
-  manualQuoteSeeds = [],
 }: PendingQuoteProposalsPageProps) {
   return (
     <AuthenticatedShell user={session.user}>
@@ -43,7 +41,6 @@ export function PendingQuoteProposalsPage({
           initialError={initialError}
           showHistory={false}
           canManage={canManage}
-          initialManualQuoteSeeds={manualQuoteSeeds}
         />
       </main>
     </AuthenticatedShell>

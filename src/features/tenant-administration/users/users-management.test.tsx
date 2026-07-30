@@ -110,17 +110,66 @@ const users: TenantUserList = {
 describe('users management permissions', () => {
   it('hides every mutation control without users:manage', () => {
     render(
-      <UsersManagement users={users} permissionCatalog={permissionCatalog} canManage={false} />,
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate={false}
+        canEdit={false}
+        canManageAccess={false}
+      />,
     );
 
     expect(screen.queryByRole('button', { name: 'Novo usuário' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Editar acessos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar acessos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Recuperar senha' })).not.toBeInTheDocument();
     expect(screen.getByText('Taiane Karine')).toBeInTheDocument();
   });
 
+  it('limits users:manage to account lifecycle actions', () => {
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate={false}
+        canEdit={false}
+        canManageAccess
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Desativar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Suspender' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Novo usuário' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Editar acessos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Recuperar senha' })).not.toBeInTheDocument();
+  });
+
+  it('limits users:update to editing access and password recovery', () => {
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate={false}
+        canEdit
+        canManageAccess={false}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Editar acessos' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Recuperar senha' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Desativar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Suspender' })).not.toBeInTheDocument();
+  });
+
   it('shows search, filters and lifecycle actions with users:manage', () => {
-    render(<UsersManagement users={users} permissionCatalog={permissionCatalog} canManage />);
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit
+        canManageAccess
+      />,
+    );
 
     expect(screen.getByRole('searchbox', { name: 'Pesquisar' })).toBeInTheDocument();
     expect(screen.getByLabelText('Departamento')).toBeInTheDocument();
@@ -137,7 +186,15 @@ describe('users management permissions', () => {
 
   it('publishes implicit permissions in the effective-permission filter', async () => {
     const interaction = userEvent.setup();
-    render(<UsersManagement users={users} permissionCatalog={permissionCatalog} canManage />);
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit
+        canManageAccess
+      />,
+    );
 
     await interaction.click(screen.getByLabelText('Permissão efetiva'));
 
@@ -147,7 +204,15 @@ describe('users management permissions', () => {
 
   it('applies a selected permission immediately and exposes a removable filter label', async () => {
     const interaction = userEvent.setup();
-    render(<UsersManagement users={users} permissionCatalog={permissionCatalog} canManage />);
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit
+        canManageAccess
+      />,
+    );
 
     await interaction.click(screen.getByLabelText('Permissão efetiva'));
     await interaction.click(await screen.findByRole('option', { name: 'Licença · Visualizar' }));
@@ -170,7 +235,9 @@ describe('users management permissions', () => {
       <UsersManagement
         users={users}
         permissionCatalog={permissionCatalog}
-        canManage
+        canCreate
+        canEdit
+        canManageAccess
         filters={{
           department: 'commercial',
           permission: 'commercial:view',
@@ -196,7 +263,13 @@ describe('users management permissions', () => {
   it('synchronizes controlled filters after rerender and cancels a stale search debounce', () => {
     jest.useFakeTimers();
     const { rerender } = render(
-      <UsersManagement users={users} permissionCatalog={permissionCatalog} canManage />,
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit
+        canManageAccess
+      />,
     );
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Pesquisar' }), {
@@ -207,7 +280,9 @@ describe('users management permissions', () => {
       <UsersManagement
         users={users}
         permissionCatalog={permissionCatalog}
-        canManage
+        canCreate
+        canEdit
+        canManageAccess
         filters={{
           department: 'financial',
           permission: 'license:view',
@@ -239,7 +314,9 @@ describe('users management permissions', () => {
       <UsersManagement
         users={users}
         permissionCatalog={permissionCatalog}
-        canManage
+        canCreate
+        canEdit
+        canManageAccess
         filters={{
           department: 'financial',
           permission: 'license:view',
@@ -272,7 +349,9 @@ describe('users management permissions', () => {
       <UsersManagement
         users={legacyUsers}
         permissionCatalog={permissionCatalog}
-        canManage={false}
+        canCreate={false}
+        canEdit={false}
+        canManageAccess={false}
       />,
     );
 
@@ -288,7 +367,9 @@ describe('users management permissions', () => {
       <UsersManagement
         users={{ ...users, data: [{ ...tenantUser, isActive: false, status: 'inactive' }] }}
         permissionCatalog={permissionCatalog}
-        canManage
+        canCreate
+        canEdit
+        canManageAccess
       />,
     );
 
@@ -313,7 +394,9 @@ describe('users management permissions', () => {
       <UsersManagement
         users={{ ...users, data: [{ ...tenantUser, isActive: false, status: 'inactive' }] }}
         permissionCatalog={permissionCatalog}
-        canManage
+        canCreate
+        canEdit
+        canManageAccess
       />,
     );
 
@@ -357,7 +440,15 @@ describe('user editor form', () => {
 
   it('uses the three-step creation flow and only shows compatible permissions', async () => {
     const interaction = userEvent.setup();
-    render(<UsersManagement users={users} permissionCatalog={permissionCatalog} canManage />);
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit
+        canManageAccess
+      />,
+    );
 
     await interaction.click(screen.getByRole('button', { name: 'Novo usuário' }));
     const dialog = screen.getByRole('dialog');
@@ -403,7 +494,15 @@ describe('user editor form', () => {
 
   it('does not expose administrator assignment when creating a user', async () => {
     const interaction = userEvent.setup();
-    render(<UsersManagement users={users} permissionCatalog={permissionCatalog} canManage />);
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit
+        canManageAccess
+      />,
+    );
 
     await interaction.click(screen.getByRole('button', { name: 'Novo usuário' }));
     const dialog = screen.getByRole('dialog');
@@ -438,7 +537,9 @@ describe('user editor form', () => {
       <UsersManagement
         users={{ ...users, data: [{ ...tenantUser, isAdministrator: true }] }}
         permissionCatalog={permissionCatalog}
-        canManage
+        canCreate
+        canEdit
+        canManageAccess
       />,
     );
 

@@ -21,6 +21,7 @@ import {
   getPendingQuoteProposalCountForDashboard,
   getPendingQuoteProposalsForDashboard,
   getQuoteProposalDocumentHistoryForDashboard,
+  getQuoteProposalsForConversationForDashboard,
   getSentQuoteProposalsForDashboard,
   sendQuoteProposalDocumentForDashboard,
   updateQuoteProposalStatusForDashboard,
@@ -157,6 +158,16 @@ export type QuoteProposalDocumentHistoryActionResult =
   | {
       readonly success: true;
       readonly documents: readonly QuoteProposalDocument[];
+    }
+  | {
+      readonly success: false;
+      readonly message: string;
+    };
+
+export type ConversationQuoteProposalsActionResult =
+  | {
+      readonly success: true;
+      readonly proposals: readonly PendingQuoteProposal[];
     }
   | {
       readonly success: false;
@@ -403,6 +414,41 @@ export async function getQuoteProposalDocumentHistoryAction(
     return {
       success: false,
       message: 'Não foi possível consultar o histórico de PDFs pela Tenant API.',
+    };
+  }
+}
+
+export async function getConversationQuoteProposalsAction(
+  conversationId: unknown,
+): Promise<ConversationQuoteProposalsActionResult> {
+  const session = await getCurrentAuthenticatedSession();
+  if (session === null || !canReadQuoteProposals(session.user)) {
+    return {
+      success: false,
+      message: 'Não foi possível consultar os orçamentos nesta sessão.',
+    };
+  }
+
+  const parsedId = identifierSchema.safeParse(conversationId);
+  if (!parsedId.success) {
+    return {
+      success: false,
+      message: 'A conversa informada é inválida.',
+    };
+  }
+
+  try {
+    return {
+      success: true,
+      proposals: await getQuoteProposalsForConversationForDashboard(parsedId.data),
+    };
+  } catch (error) {
+    if (error instanceof QuoteProposalRepositoryError) {
+      return { success: false, message: error.message };
+    }
+    return {
+      success: false,
+      message: 'Não foi possível consultar os orçamentos pela Tenant API.',
     };
   }
 }

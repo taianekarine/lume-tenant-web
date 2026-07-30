@@ -46,3 +46,13 @@ export function getPermissionResourceLabel(resource: string): string {
 export function getPermissionActionLabel(action: string): string {
   return ACTION_LABELS[action] ?? 'Ação disponível';
 }
+
+export function getPermissionCodeLabel(resource: string, action: string): string {
+  if (resource === 'users') {
+    if (action === 'create') return 'Criar usuário';
+    if (action === 'update') return 'Editar acesso';
+    if (action === 'manage') return 'Gerenciar acesso';
+  }
+
+  return getPermissionActionLabel(action);
+}

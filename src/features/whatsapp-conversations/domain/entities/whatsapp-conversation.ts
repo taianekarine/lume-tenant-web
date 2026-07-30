@@ -273,7 +273,9 @@ export function isWhatsAppQuoteSummaryConfirmed(conversation: WhatsAppConversati
 
 export function canTakeOverWhatsAppConversation(conversation: WhatsAppConversation): boolean {
   return (
-    conversation.conversationState !== 'closed' && conversation.conversationState !== 'human-active'
+    conversation.conversationState !== 'closed' &&
+    conversation.conversationState !== 'human-active' &&
+    conversation.assignedTo === null
   );
 }
 

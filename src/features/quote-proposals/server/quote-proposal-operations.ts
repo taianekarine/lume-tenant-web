@@ -41,6 +41,12 @@ export function getCancelledQuoteProposalsForDashboard(page = 1, pageSize = 100)
   );
 }
 
+export function getQuoteProposalsForConversationForDashboard(conversationId: string) {
+  return executeAuthenticatedQuoteProposalRequest((repository) =>
+    repository.getByConversation(conversationId),
+  );
+}
+
 export function getQuoteProposalDocumentHistoryForDashboard(
   quoteRequestId: string,
 ): Promise<QuoteProposalDocumentHistory> {

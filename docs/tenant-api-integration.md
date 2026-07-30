@@ -80,7 +80,8 @@ implícitas publicadas no catálogo não são oferecidas para remoção.
 O departamento estabelece o limite estrutural e a permissão individual
 autoriza a página ou ação dentro desse limite:
 
-- `/users` exige vínculo Gerência e `users:view` ou `users:manage`;
+- `/users` exige vínculo Gerência e ao menos uma permissão entre `users:view`,
+  `users:create`, `users:update` e `users:manage`;
 - `/license` exige vínculo Gerência e `license:view`;
 - `/whatsapp-conversations` e `/quote-proposals` exigem vínculo Comercial e
   `whatsapp-conversations:manage`.
@@ -232,7 +233,7 @@ Os motivos de falha das tentativas de envio continuam vinculados às respectivas
 mensagens.
 
 O histórico de mensagens e o compositor ficam no painel lateral aberto por
-**Histórico completo / Mensagens e anexos**. A apresentação usa o componente
+**Abrir chat**. A apresentação usa o componente
 [`Message`](https://ui.shadcn.com/docs/components/base/message) do shadcn/ui
 para distinguir mensagens recebidas e enviadas, mostrar o estado de entrega e
 listar anexos. O rodapé de uma mensagem enviada exibe a data, a hora e
@@ -330,7 +331,8 @@ Ao confirmar o primeiro envio, a Tenant API vincula automaticamente a conversa
 ao usuário autenticado quando ainda não existe atendente responsável. O
 frontend apenas reapresenta a atribuição retornada; não tenta inferir ou
 persistir o responsável no navegador.
-`Nova proposta` usa React Hook Form, Zod e os componentes oficiais `Field`,
+`Criar orçamento`, disponível no detalhe da conversa comercial assumida pelo
+usuário atual, usa React Hook Form, Zod e os componentes oficiais `Field`,
 `Input`, `Select`, `Checkbox`, `Textarea` e `Dialog`; o nome é preenchido pelo
 último orçamento e permanece editável. O botão `Cadastrar` chama
 `POST /whatsapp/quote-proposals`, cria uma nova sequência autoritativa e devolve
@@ -352,14 +354,16 @@ consulta e o download aceitam leitura ou gestão do módulo Comercial/WhatsApp,
 mas sempre exigem vínculo com o departamento Comercial; permissões de outro
 departamento não ampliam esse acesso.
 
-Na fila pendente, **Novo orçamento avulso** consulta as conversas comerciais
-abertas e mostra apenas as que estão assumidas pelo usuário atual. O atendente
-seleciona uma conversa, revisa ou completa o resumo — data de saída obrigatória,
-horário opcional — e reutiliza o mesmo fluxo idempotente de criação, upload e
-envio. O Painel WhatsApp permite alterar manualmente o status do orçamento
-corrente por `PATCH /whatsapp/quote-proposals/:id/status`; a interface envia
-`expectedVersion`, `commandId` e motivo quando obrigatório, e então recarrega a
-conversa autoritativa.
+As rotas de Orçamentos não oferecem criação avulsa. O atendente abre a conversa,
+assume o atendimento e cria o orçamento no próprio workspace, revisando ou
+completando o resumo — data de saída obrigatória, horário opcional — e
+reutilizando o mesmo fluxo idempotente de criação, upload e envio. O botão
+**Lista de orçamentos** consulta as quatro etapas com
+`conversationId=<uuid>`, elimina duplicatas por solicitação e apresenta todos
+os PDFs vinculados. O Painel WhatsApp permite alterar manualmente o status do
+orçamento corrente por `PATCH /whatsapp/quote-proposals/:id/status`; a
+interface envia `expectedVersion`, `commandId` e motivo quando obrigatório, e
+então recarrega a conversa autoritativa.
 
 O objeto livre `structuredData` continua validado no adapter, mas não é
 renderizado para o atendente. A tela exibe apenas o resumo confirmado com
@@ -442,7 +446,10 @@ O ciclo de conta é:
 - `suspended`: bloqueio temporário com motivo obrigatório e término calculado
   por quantidade de dias ou data final.
 
-Usuários com `users:manage` podem ativar, desativar ou suspender. A Tenant API
+`users:update` habilita **Editar acesso**: dados, departamentos, permissões e
+recuperação de senha. `users:manage` habilita somente **Gerenciar acesso**:
+ativar novamente, desativar ou suspender. Não existe checkbox nem ação
+`users:delete`, porque a API não oferece exclusão de usuários. A Tenant API
 persiste o estado, o prazo e o motivo e também invalida sessões conforme sua
 política; o frontend não decide o estado efetivo da autenticação.
 

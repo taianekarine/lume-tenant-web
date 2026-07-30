@@ -469,182 +469,209 @@ export function ProposalHistory({
   }
 
   return (
-    <section aria-labelledby="sent-proposals-title" className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="sent-proposals-title" className="text-lg font-semibold">
-            {title}
-          </h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
-        <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-          {total} {total === 1 ? itemLabel.singular : itemLabel.plural}
-        </span>
-      </div>
-
-      {groups.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            {emptyMessage}
-          </CardContent>
-        </Card>
+    <section
+      aria-label={compactCreateOnly ? 'Criar orçamento' : undefined}
+      aria-labelledby={compactCreateOnly ? undefined : 'sent-proposals-title'}
+      className="space-y-3"
+    >
+      {compactCreateOnly ? (
+        groups[0] && showCreateAction && groups[0].current.conversationState !== 'closed' ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => openNewProposal(groups[0]!.current)}
+          >
+            <FilePlus2 aria-hidden="true" />
+            Criar orçamento
+          </Button>
+        ) : null
       ) : (
-        <div className="space-y-4">
-          {groups.map(({ key, current, history }) => (
-            <Card key={key} className="gap-0 overflow-hidden py-2 px-0">
-              <CardHeader className="flex grid-cols-none flex-row items-start justify-between gap-3 border-b p-2">
-                <div className="min-w-0">
-                  <CardTitle className="truncate text-base">{current.contact.name}</CardTitle>
-                  <p className="mt-1 text-sm text-muted-foreground">{current.contact.phone}</p>
-                </div>
-                {showCreateAction && current.conversationState !== 'closed' ? (
-                  <Button type="button" variant="outline" onClick={() => openNewProposal(current)}>
-                    <FilePlus2 aria-hidden="true" />
-                    {compactCreateOnly ? 'Criar orçamento' : 'Nova proposta'}
-                  </Button>
-                ) : null}
-              </CardHeader>
-              {compactCreateOnly ? (
-                <CardContent className="grid gap-1 px-3 py-2 text-sm text-muted-foreground sm:grid-cols-2">
-                  <span>
-                    Rota:{' '}
-                    <strong className="text-foreground">
-                      {current.summary.origin || 'não informada'} →{' '}
-                      {current.summary.destination || 'não informado'}
-                    </strong>
-                  </span>
-                  <span>
-                    Última etapa:{' '}
-                    <strong className="text-foreground">
-                      {current.summary.sequence > 0
-                        ? `orçamento #${current.summary.sequence}`
-                        : 'sem orçamento anterior'}
-                    </strong>
-                  </span>
-                </CardContent>
-              ) : (
-                <CardContent className="p-0">
-                  <Table className="table-fixed">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[20%]">Solicitação</TableHead>
-                        <TableHead className="w-[20%]">Rota</TableHead>
-                        <TableHead className="w-[22%]">Arquivo e envio</TableHead>
-                        <TableHead className="w-[23%]">Decisão</TableHead>
-                        <TableHead className="w-[15%] text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {history.map((proposal) => (
-                        <TableRow key={proposal.quoteRequestId}>
-                          <TableCell className="break-words whitespace-normal align-top">
-                            <strong>#{proposal.summary.sequence}</strong>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Solicitada em {formatDateTime(proposal.requestedAt)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              por {proposal.requestedBy.name}
-                            </p>
-                          </TableCell>
-                          <TableCell className="break-words whitespace-normal align-top">
-                            <p className="font-medium">
-                              {proposal.summary.origin ?? 'Não informada'} →{' '}
-                              {proposal.summary.destination ?? 'Não informado'}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {proposal.summary.passengerCount ?? '—'} passageiros
-                            </p>
-                          </TableCell>
-                          <TableCell className="break-words whitespace-normal align-top">
-                            <p className="font-medium">
-                              {proposal.proposalDocument?.fileName ?? 'PDF da proposta'}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Enviada em {formatDateTime(proposal.proposalDocument?.sentAt)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              por{' '}
-                              {proposal.proposalDocument?.sentBy?.name ??
-                                proposal.proposalDocument?.uploadedBy?.name ??
-                                'Atendente'}
-                            </p>
-                          </TableCell>
-                          <TableCell className="break-words whitespace-normal align-top">
-                            <span
-                              className={
-                                proposal.decision.status === 'approved'
-                                  ? 'font-semibold text-emerald-700 dark:text-emerald-300'
-                                  : proposal.decision.status === 'rejected' ||
-                                      proposal.decision.status === 'cancelled'
-                                    ? 'font-semibold text-destructive'
-                                    : 'font-medium text-muted-foreground'
-                              }
-                            >
-                              {decisionLabel(proposal)}
-                            </span>
-                            {proposal.decision.reason ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {proposal.decision.reason}
-                              </p>
-                            ) : null}
-                            {proposal.decision.decidedBy ? (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                por {proposal.decision.decidedBy.name} em{' '}
-                                {formatDateTime(proposal.decision.decidedAt)}
-                              </p>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="whitespace-normal align-top">
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {proposal.proposalDocument ? (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => void openDocumentHistory(proposal)}
-                                >
-                                  <ExternalLink aria-hidden="true" />
-                                  Visualizar PDF
-                                </Button>
-                              ) : null}
-                              {showDecisionActions ? (
-                                <>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={isPending || proposal.decision.status !== 'pending'}
-                                    onClick={() => decide(proposal, 'approved')}
-                                  >
-                                    <CheckCircle2 aria-hidden="true" />
-                                    Aprovar
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="destructive"
-                                    size="sm"
-                                    disabled={isPending || proposal.decision.status !== 'pending'}
-                                    onClick={() => {
-                                      rejectionForm.reset();
-                                      setRejectedProposal(proposal);
-                                    }}
-                                  >
-                                    <XCircle aria-hidden="true" />
-                                    Recusar
-                                  </Button>
-                                </>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              )}
+        <>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 id="sent-proposals-title" className="text-lg font-semibold">
+                {title}
+              </h2>
+              <p className="text-sm text-muted-foreground">{description}</p>
+            </div>
+            <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+              {total} {total === 1 ? itemLabel.singular : itemLabel.plural}
+            </span>
+          </div>
+
+          {groups.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                {emptyMessage}
+              </CardContent>
             </Card>
-          ))}
-        </div>
+          ) : (
+            <div className="space-y-4">
+              {groups.map(({ key, current, history }) => (
+                <Card key={key} className="gap-0 overflow-hidden py-2 px-0">
+                  <CardHeader className="flex grid-cols-none flex-row items-start justify-between gap-3 border-b p-2">
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-base">{current.contact.name}</CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">{current.contact.phone}</p>
+                    </div>
+                    {showCreateAction && current.conversationState !== 'closed' ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => openNewProposal(current)}
+                      >
+                        <FilePlus2 aria-hidden="true" />
+                        {compactCreateOnly ? 'Criar orçamento' : 'Nova proposta'}
+                      </Button>
+                    ) : null}
+                  </CardHeader>
+                  {compactCreateOnly ? (
+                    <CardContent className="grid gap-1 px-3 py-2 text-sm text-muted-foreground sm:grid-cols-2">
+                      <span>
+                        Rota:{' '}
+                        <strong className="text-foreground">
+                          {current.summary.origin || 'não informada'} →{' '}
+                          {current.summary.destination || 'não informado'}
+                        </strong>
+                      </span>
+                      <span>
+                        Última etapa:{' '}
+                        <strong className="text-foreground">
+                          {current.summary.sequence > 0
+                            ? `orçamento #${current.summary.sequence}`
+                            : 'sem orçamento anterior'}
+                        </strong>
+                      </span>
+                    </CardContent>
+                  ) : (
+                    <CardContent className="p-0">
+                      <Table className="table-fixed">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[20%]">Solicitação</TableHead>
+                            <TableHead className="w-[20%]">Rota</TableHead>
+                            <TableHead className="w-[22%]">Arquivo e envio</TableHead>
+                            <TableHead className="w-[23%]">Decisão</TableHead>
+                            <TableHead className="w-[15%] text-right">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {history.map((proposal) => (
+                            <TableRow key={proposal.quoteRequestId}>
+                              <TableCell className="break-words whitespace-normal align-top">
+                                <strong>#{proposal.summary.sequence}</strong>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Solicitada em {formatDateTime(proposal.requestedAt)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  por {proposal.requestedBy.name}
+                                </p>
+                              </TableCell>
+                              <TableCell className="break-words whitespace-normal align-top">
+                                <p className="font-medium">
+                                  {proposal.summary.origin ?? 'Não informada'} →{' '}
+                                  {proposal.summary.destination ?? 'Não informado'}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {proposal.summary.passengerCount ?? '—'} passageiros
+                                </p>
+                              </TableCell>
+                              <TableCell className="break-words whitespace-normal align-top">
+                                <p className="font-medium">
+                                  {proposal.proposalDocument?.fileName ?? 'PDF da proposta'}
+                                </p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  Enviada em {formatDateTime(proposal.proposalDocument?.sentAt)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  por{' '}
+                                  {proposal.proposalDocument?.sentBy?.name ??
+                                    proposal.proposalDocument?.uploadedBy?.name ??
+                                    'Atendente'}
+                                </p>
+                              </TableCell>
+                              <TableCell className="break-words whitespace-normal align-top">
+                                <span
+                                  className={
+                                    proposal.decision.status === 'approved'
+                                      ? 'font-semibold text-emerald-700 dark:text-emerald-300'
+                                      : proposal.decision.status === 'rejected' ||
+                                          proposal.decision.status === 'cancelled'
+                                        ? 'font-semibold text-destructive'
+                                        : 'font-medium text-muted-foreground'
+                                  }
+                                >
+                                  {decisionLabel(proposal)}
+                                </span>
+                                {proposal.decision.reason ? (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {proposal.decision.reason}
+                                  </p>
+                                ) : null}
+                                {proposal.decision.decidedBy ? (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    por {proposal.decision.decidedBy.name} em{' '}
+                                    {formatDateTime(proposal.decision.decidedAt)}
+                                  </p>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="whitespace-normal align-top">
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  {proposal.proposalDocument ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => void openDocumentHistory(proposal)}
+                                    >
+                                      <ExternalLink aria-hidden="true" />
+                                      Visualizar PDF
+                                    </Button>
+                                  ) : null}
+                                  {showDecisionActions ? (
+                                    <>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={
+                                          isPending || proposal.decision.status !== 'pending'
+                                        }
+                                        onClick={() => decide(proposal, 'approved')}
+                                      >
+                                        <CheckCircle2 aria-hidden="true" />
+                                        Aprovar
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="sm"
+                                        disabled={
+                                          isPending || proposal.decision.status !== 'pending'
+                                        }
+                                        onClick={() => {
+                                          rejectionForm.reset();
+                                          setRejectedProposal(proposal);
+                                        }}
+                                      >
+                                        <XCircle aria-hidden="true" />
+                                        Recusar
+                                      </Button>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <Dialog

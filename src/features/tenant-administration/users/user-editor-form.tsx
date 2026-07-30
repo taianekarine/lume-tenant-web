@@ -14,7 +14,7 @@ import {
   type TenantUser,
 } from '@/features/tenant-administration/domain';
 import {
-  getPermissionActionLabel,
+  getPermissionCodeLabel,
   getPermissionResourceLabel,
 } from '@/features/tenant-administration/permissions/permission-labels';
 import { Button } from '@/shared/ui/button';
@@ -152,7 +152,7 @@ function PermissionCheckboxes({
                         )
                       }
                     />
-                    <FieldLabel htmlFor={id}>{getPermissionActionLabel(action)}</FieldLabel>
+                    <FieldLabel htmlFor={id}>{getPermissionCodeLabel(resource, action)}</FieldLabel>
                   </Field>
                 );
               })}

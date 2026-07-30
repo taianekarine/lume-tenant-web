@@ -83,12 +83,13 @@ O empacotamento, as sondas e o procedimento de publicação/rollback estão em
 
 O Painel WhatsApp usa somente a Lume Tenant API, com histórico real, comandos
 versionados, resposta do atendente idempotente e polling server-side com
-backoff. O botão **Histórico completo / Mensagens e anexos** abre o painel
-lateral de atendimento, construído com o componente `Message` do shadcn/ui,
-para leitura do histórico, anexos e envio de texto pelo atendente. No desktop,
-esse painel pode usar até 84 rem de largura — aproximadamente o dobro da largura
-anterior — e, no celular, ocupa a largura disponível sem criar rolagem
-horizontal. O header
+backoff. O detalhe compacto exibe canal e responsável no cabeçalho, separa as
+ações operacionais em duas colunas e abre encaminhamento, status comercial,
+histórico de ações e orçamentos em modais. O botão **Abrir chat** abre o painel
+lateral construído com o componente `Message` do shadcn/ui para leitura do
+histórico, anexos e envio de texto pelo atendente. No desktop, esse painel pode
+usar até 84 rem de largura — aproximadamente o dobro da largura anterior — e,
+no celular, ocupa a largura disponível sem criar rolagem horizontal. O header
 autenticado também concentra o sino para todos os usuários ativos; a Tenant API
 retorna somente notificações compatíveis com seus departamentos. Não há
 integração direta do navegador com n8n, Redis ou Evolution.
@@ -100,12 +101,19 @@ desabilitada para possível reativação futura. A Tenant API permanece
 autoritativa: se ela recusar o comando, o painel mostra o erro e não simula o
 encerramento.
 
-O atendente responsável pode alterar o status comercial do orçamento atual no
-Painel WhatsApp. A ação recarrega a conversa autoritativa, exige motivo para
-recusa ou cancelamento e respeita a versão devolvida pela Tenant API. Na fila
-**Orçamentos > Pendentes**, o bloco **Novo orçamento avulso** lista somente
-atendimentos comerciais abertos já assumidos pelo usuário atual; o formulário
-vincula o novo resumo e seus PDFs à conversa escolhida.
+O atendente responsável pode alterar o status comercial no Painel WhatsApp.
+A ação recarrega a conversa autoritativa, exige motivo para recusa ou
+cancelamento e respeita a versão devolvida pela Tenant API. A criação de um
+orçamento também parte exclusivamente da conversa comercial já assumida; as
+rotas de Orçamentos permanecem dedicadas às filas Pendentes, Enviadas,
+Aprovadas e Canceladas.
+
+Na administração de usuários, `users:update` representa **Editar acesso** e
+permite alterar dados, departamentos, permissões e solicitar recuperação de
+senha. `users:manage` representa **Gerenciar acesso** e fica restrito ao ciclo
+de estado da conta (ativar novamente, desativar ou suspender). A aplicação não
+publica nem renderiza `users:delete`, pois exclusão de usuário não faz parte do
+contrato.
 
 ## Configuração passo a passo
 

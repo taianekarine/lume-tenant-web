@@ -338,6 +338,23 @@ export class LumeApiQuoteProposalRepository implements QuoteProposalRepository {
     return this.getByStage('cancelled', page, pageSize);
   }
 
+  async getByConversation(conversationId: string): Promise<readonly PendingQuoteProposal[]> {
+    const queues = await Promise.all(
+      (['pending', 'sent', 'approved', 'cancelled'] as const).map((stage) =>
+        this.getByStage(stage, 1, 100, conversationId),
+      ),
+    );
+    const unique = new Map<string, PendingQuoteProposal>();
+
+    for (const proposal of queues.flatMap((queue) => queue.items)) {
+      unique.set(proposal.quoteRequestId, proposal);
+    }
+
+    return [...unique.values()].sort(
+      (first, second) => Date.parse(second.requestedAt) - Date.parse(first.requestedAt),
+    );
+  }
+
   async getDocumentHistory(quoteRequestId: string): Promise<QuoteProposalDocumentHistory> {
     const detail = parseResponse(
       quoteProposalDetailSchema,
@@ -396,11 +413,15 @@ export class LumeApiQuoteProposalRepository implements QuoteProposalRepository {
     stage: QuoteProposalCategory,
     page: number,
     pageSize: number,
+    conversationId?: string,
   ): Promise<PendingQuoteProposalQueue> {
+    const conversationFilter = conversationId
+      ? `&conversationId=${encodeURIComponent(conversationId)}`
+      : '';
     const first = parseResponse(
       queueSchema,
       await this.request(
-        `/whatsapp/quote-proposals?stage=${stage}&page=${page}&pageSize=${pageSize}`,
+        `/whatsapp/quote-proposals?stage=${stage}&page=${page}&pageSize=${pageSize}${conversationFilter}`,
       ),
     );
 
@@ -418,7 +439,7 @@ export class LumeApiQuoteProposalRepository implements QuoteProposalRepository {
           parseResponse(
             queueSchema,
             await this.request(
-              `/whatsapp/quote-proposals?stage=${stage}&page=${currentPage}&pageSize=${pageSize}`,
+              `/whatsapp/quote-proposals?stage=${stage}&page=${currentPage}&pageSize=${pageSize}${conversationFilter}`,
             ),
           ),
       ),
