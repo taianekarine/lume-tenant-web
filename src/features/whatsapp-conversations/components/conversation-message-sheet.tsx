@@ -33,7 +33,11 @@ import { Skeleton } from '@/shared/ui/skeleton';
 import { Textarea } from '@/shared/ui/textarea';
 
 import { HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH } from '../application';
-import type { WhatsAppConversation } from '../domain';
+import type {
+  WhatsAppConversation,
+  WhatsAppMessageAttachment,
+  WhatsAppMessageKind,
+} from '../domain';
 import { DELIVERY_STATUS_LABELS, MESSAGE_KIND_LABELS } from './conversation-labels';
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
@@ -58,6 +62,108 @@ function formatFileSize(size: number | null): string {
 
 function getInitial(name: string): string {
   return name.trim().charAt(0).toLocaleUpperCase('pt-BR') || '?';
+}
+
+function MessageAttachmentPreview({
+  kind,
+  attachment,
+}: {
+  readonly kind: WhatsAppMessageKind;
+  readonly attachment: WhatsAppMessageAttachment;
+}) {
+  const label = attachment.fileName ?? MESSAGE_KIND_LABELS[kind];
+  const details = `${attachment.mimeType ?? MESSAGE_KIND_LABELS[kind]} · ${formatFileSize(attachment.size)}`;
+
+  if (!attachment.url) {
+    return (
+      <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
+        <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <strong className="block truncate text-xs">{label}</strong>
+          <small className="block text-muted-foreground">
+            {details} · conteúdo indisponível no provedor
+          </small>
+        </span>
+      </div>
+    );
+  }
+
+  if (kind === 'image' || kind === 'sticker') {
+    return (
+      <a
+        href={attachment.url}
+        target="_blank"
+        rel="noreferrer"
+        className="block overflow-hidden rounded-xl border bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`Abrir ${label}`}
+      >
+        {/* A origem HTTPS é validada pela Tenant API e varia por instância Evolution. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={attachment.url}
+          alt={kind === 'sticker' ? 'Figurinha recebida' : label}
+          loading="lazy"
+          className={
+            kind === 'sticker'
+              ? 'mx-auto max-h-48 w-auto max-w-full object-contain p-2'
+              : 'max-h-[28rem] w-full max-w-full object-contain'
+          }
+        />
+        <span className="block truncate border-t px-2 py-1 text-[11px] text-muted-foreground">
+          {details}
+        </span>
+      </a>
+    );
+  }
+
+  if (kind === 'video') {
+    return (
+      <div className="overflow-hidden rounded-xl border bg-background/70">
+        <video
+          src={attachment.url}
+          controls
+          preload="metadata"
+          className="max-h-[28rem] w-full max-w-full bg-black"
+          aria-label={label}
+        />
+        <p className="truncate px-2 py-1 text-[11px] text-muted-foreground">{details}</p>
+      </div>
+    );
+  }
+
+  if (kind === 'audio') {
+    return (
+      <div className="min-w-0 rounded-xl border bg-background/70 p-2">
+        <audio
+          src={attachment.url}
+          controls
+          preload="metadata"
+          className="h-10 w-full min-w-0"
+          aria-label={label}
+        />
+        <p className="mt-1 truncate text-[11px] text-muted-foreground">{details}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
+      <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1">
+        <strong className="block truncate text-xs">{label}</strong>
+        <small className="block truncate text-muted-foreground">{details}</small>
+      </span>
+      <a
+        href={attachment.url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <FileText aria-hidden="true" />
+        Abrir
+      </a>
+    </div>
+  );
 }
 
 export interface ConversationMessageSheetProps {
@@ -203,31 +309,10 @@ export function ConversationMessageSheet({
                               <p className="whitespace-pre-wrap">{message.text}</p>
                             ) : null}
                             {message.attachment ? (
-                              <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
-                                <Paperclip aria-hidden="true" className="size-4 shrink-0" />
-                                <span className="min-w-0 flex-1">
-                                  <strong className="block truncate text-xs">
-                                    {message.attachment.fileName ??
-                                      MESSAGE_KIND_LABELS[message.kind]}
-                                  </strong>
-                                  <small className="block truncate text-muted-foreground">
-                                    {message.attachment.mimeType ??
-                                      MESSAGE_KIND_LABELS[message.kind]}{' '}
-                                    · {formatFileSize(message.attachment.size)}
-                                  </small>
-                                </span>
-                                {message.attachment.url ? (
-                                  <a
-                                    href={message.attachment.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                  >
-                                    <FileText aria-hidden="true" />
-                                    Abrir
-                                  </a>
-                                ) : null}
-                              </div>
+                              <MessageAttachmentPreview
+                                kind={message.kind}
+                                attachment={message.attachment}
+                              />
                             ) : null}
                             {failedAttempt ? (
                               <p className="flex items-start gap-1 text-xs text-destructive">

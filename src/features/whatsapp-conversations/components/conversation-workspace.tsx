@@ -205,6 +205,23 @@ function getClosureActor(transition: WhatsAppConversation['transitions'][number]
   return 'Automação';
 }
 
+function getLatestClosureTransition(
+  transitions: WhatsAppConversation['transitions'],
+): WhatsAppConversation['transitions'][number] | null {
+  return transitions.reduce<WhatsAppConversation['transitions'][number] | null>(
+    (latest, transition) => {
+      if (transition.name !== 'close' && transition.name !== 'close-after-rejection') {
+        return latest;
+      }
+      if (latest === null) return transition;
+      return new Date(transition.createdAt).valueOf() > new Date(latest.createdAt).valueOf()
+        ? transition
+        : latest;
+    },
+    null,
+  );
+}
+
 const TRANSITION_LABELS: Readonly<Record<string, string>> = {
   'present-main-menu': 'Menu principal apresentado',
   'select-commercial': 'Atendimento comercial selecionado',
@@ -500,6 +517,7 @@ export function ConversationWorkspace({
     canSendHumanWhatsAppMessage(selectedConversation) &&
     selectedConversation.assignedTo?.id === currentUserId;
   const actionHistory = selectedConversation?.transitions ?? [];
+  const latestClosure = getLatestClosureTransition(actionHistory);
 
   function applyActionResult(result: WhatsAppConversationActionResult, successMessage: string) {
     if (result.conversation) {
@@ -999,9 +1017,11 @@ export function ConversationWorkspace({
                 <div className={styles.headerAssignment()}>
                   <UserRound aria-hidden="true" />
                   <span>
-                    {selectedConversation.assignedTo === null
-                      ? 'Sem atendente responsável'
-                      : `Responsável: ${selectedConversation.assignedTo.name}`}
+                    {selectedConversation.conversationState === 'closed' && latestClosure !== null
+                      ? `Encerrado por: ${getClosureActor(latestClosure)}`
+                      : selectedConversation.assignedTo === null
+                        ? 'Sem atendente responsável'
+                        : `Responsável: ${selectedConversation.assignedTo.name}`}
                   </span>
                 </div>
               </header>

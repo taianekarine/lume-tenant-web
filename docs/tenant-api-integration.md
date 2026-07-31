@@ -232,6 +232,12 @@ encerramento em um histórico útil: data e hora, atendente responsável e motiv
 Os motivos de falha das tentativas de envio continuam vinculados às respectivas
 mensagens.
 
+Em conversa encerrada, o cabeçalho usa a transição `close` ou
+`close-after-rejection` mais recente para mostrar **Encerrado por**. O comando
+de encerramento depende da permissão `whatsapp-conversations:manage`, não de a
+conversa permanecer no departamento Comercial; por isso o painel comercial
+pode concluir um contato já encaminhado a outra fila.
+
 O histórico de mensagens e o compositor ficam no painel lateral aberto por
 **Abrir chat**. A apresentação usa o componente
 [`Message`](https://ui.shadcn.com/docs/components/base/message) do shadcn/ui
@@ -239,6 +245,10 @@ para distinguir mensagens recebidas e enviadas, mostrar o estado de entrega e
 listar anexos. O rodapé de uma mensagem enviada exibe a data, a hora e
 `sentBy.name`, publicado pela Tenant API; quando esse campo não existe em um
 registro antigo, a atribuição atual é usada somente como fallback visual. O
+renderer usa `kind` e `media`: imagem e figurinha são exibidas, áudio e vídeo
+possuem controles nativos e documentos mantêm o link de abertura. Sem URL
+HTTPS fornecida pelo provedor, o chat conserva os metadados e sinaliza que o
+conteúdo não está disponível, sem inventar ou buscar o arquivo no navegador.
 compositor envia por clique, `Enter` ou `NumpadEnter`; `Shift+Enter` preserva a
 quebra de linha. Uma conversa ainda sem responsável pode ser assumida dentro
 do próprio painel lateral. O painel usa toda a largura do mobile e, no desktop,

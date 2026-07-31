@@ -83,14 +83,18 @@ O empacotamento, as sondas e o procedimento de publicação/rollback estão em
 
 O Painel WhatsApp usa somente a Lume Tenant API, com histórico real, comandos
 versionados, resposta do atendente idempotente e polling server-side com
-backoff. O detalhe compacto exibe canal e responsável no cabeçalho, separa as
+backoff. O detalhe compacto exibe canal e responsável no cabeçalho; quando a
+conversa está encerrada, projeta ali o atendente que executou o encerramento. Separa as
 ações operacionais em duas colunas e abre encaminhamento, status comercial,
 histórico de ações e orçamentos em modais. O botão **Abrir chat** abre o painel
 lateral construído com o componente `Message` do shadcn/ui para leitura do
 histórico, anexos e envio de texto pelo atendente. No desktop, esse painel pode
 usar até 84 rem de largura — aproximadamente o dobro da largura anterior — e,
-no celular, ocupa a largura disponível sem criar rolagem horizontal. O header
-autenticado também concentra o sino para todos os usuários ativos; a Tenant API
+no celular, ocupa a largura disponível sem criar rolagem horizontal.
+O chat apresenta imagens e figurinhas, reproduz áudio e vídeo e oferece a
+abertura de documentos quando a Evolution fornece uma URL HTTPS válida. Esses
+conteúdos permanecem no histórico, mas nunca são enviados à IA para leitura.
+O header autenticado também concentra o sino para todos os usuários ativos; a Tenant API
 retorna somente notificações compatíveis com seus departamentos. Não há
 integração direta do navegador com n8n, Redis ou Evolution.
 
@@ -99,7 +103,9 @@ desde que não exista outra proposta em coleta, aguardando cliente ou em anális
 A política mais restritiva foi preservada no domínio, mas está explicitamente
 desabilitada para possível reativação futura. A Tenant API permanece
 autoritativa: se ela recusar o comando, o painel mostra o erro e não simula o
-encerramento.
+encerramento. Um usuário Comercial com `whatsapp-conversations:manage` também
+pode encerrar, pelo mesmo comando versionado, contatos encaminhados a outra
+fila departamental.
 
 O atendente responsável pode alterar o status comercial no Painel WhatsApp.
 A ação recarrega a conversa autoritativa, exige motivo para recusa ou

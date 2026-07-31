@@ -100,12 +100,15 @@ O botão **Abrir chat** abre um `Sheet` com o
 componente oficial `Message` do shadcn/ui. Cada item apresenta direção, data,
 remetente, estado de entrega e anexos autorizados. O envio pelo atendente parte
 desse painel lateral e continua usando apenas uma Server Action e a Tenant API.
+Imagem, figurinha, áudio, vídeo e documento são renderizados conforme o
+`kind` persistido; nenhum conteúdo de mídia é encaminhado à IA.
 O `Sheet` mantém largura total no mobile e chega a 84 rem no desktop,
 aproximadamente o dobro do limite anterior de 42 rem. O container e as ações
 usam limites flexíveis e `overflow-x-hidden`, portanto textos, contador e botões
 não introduzem rolagem horizontal.
 
-O detalhe mantém telefone sob o nome, responsável e canal no cabeçalho e as
+O detalhe mantém telefone sob o nome, responsável e canal no cabeçalho; após o
+fechamento, o responsável é substituído pelo ator da transição de encerramento. As
 dimensões canônicas em uma grade compacta. Assumir, devolver e encerrar ficam
 na coluna operacional; Abrir chat, Encaminhar e Alterar status ficam na coluna
 de apoio. Encaminhamento, status, lista de orçamentos e histórico de ações são
@@ -129,7 +132,9 @@ com proposta aprovada, sem atendente e em `waiting-for-customer` também pode se
 devolvida ao bot para o menu de acompanhamento. Quando a solicitação foi
 recusada, o motivo efetivo é obrigatório. O painel apresenta o histórico de
 encerramento com data e hora, atendente responsável e motivo, sem expor o log
-técnico completo de transições.
+técnico completo de transições. A permissão de gerenciamento do Comercial
+autoriza o mesmo encerramento versionado em conversas encaminhadas a outros
+departamentos; o frontend não impõe um filtro departamental adicional.
 
 ## Fronteira para importação e exportação
 

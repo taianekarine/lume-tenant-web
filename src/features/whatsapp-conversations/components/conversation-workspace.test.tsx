@@ -182,6 +182,86 @@ describe('ConversationWorkspace', () => {
     );
   });
 
+  it('renders WhatsApp media inline without treating it as text', async () => {
+    const summary = createWhatsAppConversationFixture({ messages: [] });
+    const media = [
+      {
+        id: '00000000-0000-4000-8000-000000000511',
+        kind: 'image' as const,
+        url: 'https://files.example.test/imagem.jpg',
+        mimeType: 'image/jpeg',
+        fileName: 'imagem.jpg',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000512',
+        kind: 'video' as const,
+        url: 'https://files.example.test/video.mp4',
+        mimeType: 'video/mp4',
+        fileName: 'video.mp4',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000513',
+        kind: 'audio' as const,
+        url: 'https://files.example.test/audio.ogg',
+        mimeType: 'audio/ogg',
+        fileName: 'audio.ogg',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000514',
+        kind: 'document' as const,
+        url: 'https://files.example.test/arquivo.pdf',
+        mimeType: 'application/pdf',
+        fileName: 'arquivo.pdf',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000515',
+        kind: 'sticker' as const,
+        url: 'https://files.example.test/figurinha.webp',
+        mimeType: 'image/webp',
+        fileName: 'figurinha.webp',
+      },
+    ];
+    const detail = createWhatsAppConversationFixture({
+      ...summary,
+      messages: media.map((item, index) => ({
+        id: item.id,
+        direction: 'inbound',
+        deliveryStatus: 'delivered',
+        kind: item.kind,
+        text: null,
+        attachment: {
+          mimeType: item.mimeType,
+          size: 1_024 + index,
+          url: item.url,
+          fileName: item.fileName,
+          metadata: {},
+        },
+        occurredAt: `2026-07-30T1${index}:00:00.000Z`,
+        attempts: [],
+      })),
+    });
+    mockFetchDetail(detail);
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[summary]} />);
+    await openMessages(user);
+
+    expect(await screen.findByAltText('imagem.jpg')).toHaveAttribute(
+      'src',
+      'https://files.example.test/imagem.jpg',
+    );
+    expect(screen.getByAltText('Figurinha recebida')).toHaveAttribute(
+      'src',
+      'https://files.example.test/figurinha.webp',
+    );
+    expect(screen.getByLabelText('video.mp4')).toHaveAttribute('controls');
+    expect(screen.getByLabelText('audio.ogg')).toHaveAttribute('controls');
+    expect(screen.getByRole('link', { name: 'Abrir' })).toHaveAttribute(
+      'href',
+      'https://files.example.test/arquivo.pdf',
+    );
+  });
+
   it('sends expectedVersion when taking over and reloads after success', async () => {
     const conversation = createWhatsAppConversationFixture({ unreadCount: 0 });
     const updated = createWhatsAppConversationFixture({
@@ -470,6 +550,43 @@ describe('ConversationWorkspace', () => {
     });
   });
 
+  it('permite ao painel comercial encerrar atendimento encaminhado a outro departamento', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      department: 'operations',
+      conversationState: 'sent-to-human',
+      flowStep: 'human-service',
+      requestStatus: 'not-started',
+      currentQuoteRequest: null,
+      unreadCount: 0,
+      version: 10,
+    });
+    const closed = createWhatsAppConversationFixture({
+      ...conversation,
+      conversationState: 'closed',
+      flowStep: 'closed',
+      closedAt: '2026-07-31T16:00:00.000Z',
+      version: 11,
+    });
+    mockFetchDetail(conversation);
+    mockedClose.mockResolvedValue({ success: true, conversation: closed });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
+    expect(closeButton).toBeEnabled();
+    await user.click(closeButton);
+    await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
+
+    await waitFor(() => {
+      expect(mockedClose).toHaveBeenCalledWith({
+        conversationId: conversation.id,
+        expectedVersion: 10,
+        reason: undefined,
+      });
+    });
+  });
+
   it('permite encerrar no MVP mesmo quando existe proposta aprovada', async () => {
     const conversation = createWhatsAppConversationFixture({
       conversationState: 'human-active',
@@ -579,6 +696,8 @@ describe('ConversationWorkspace', () => {
 
     const user = userEvent.setup();
     render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    expect(screen.getByText('Encerrado por: Maria Atendente')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Histórico de ações' }));
     expect(
