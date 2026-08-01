@@ -2,6 +2,7 @@ import {
   canCloseWhatsAppConversation,
   canReturnWhatsAppConversationToBot,
   canSendHumanWhatsAppMessage,
+  canTakeOverWhatsAppConversation,
   canWhatsAppBotReply,
   isWhatsAppAwaitingProposal,
   isWhatsAppBotBlocked,
@@ -78,6 +79,47 @@ describe('WhatsApp conversation domain', () => {
         ...assigned,
         conversationState: 'bot-active',
       }),
+    ).toBe(false);
+  });
+
+  it('allows an unassigned conversation or its current assignee to resume human service', () => {
+    const resumable = createWhatsAppConversationFixture({
+      conversationState: 'waiting-for-customer',
+      assignedTo: null,
+    });
+    const currentAssignee = { id: 'employee-001', name: 'Atendente Comercial' };
+
+    expect(canTakeOverWhatsAppConversation(resumable, currentAssignee.id)).toBe(true);
+    expect(
+      canTakeOverWhatsAppConversation(
+        { ...resumable, assignedTo: currentAssignee },
+        currentAssignee.id,
+      ),
+    ).toBe(true);
+    expect(
+      canTakeOverWhatsAppConversation(
+        {
+          ...resumable,
+          assignedTo: { id: 'employee-002', name: 'Outro atendente' },
+        },
+        currentAssignee.id,
+      ),
+    ).toBe(false);
+    expect(
+      canTakeOverWhatsAppConversation(
+        {
+          ...resumable,
+          conversationState: 'human-active',
+          assignedTo: currentAssignee,
+        },
+        currentAssignee.id,
+      ),
+    ).toBe(false);
+    expect(
+      canTakeOverWhatsAppConversation(
+        { ...resumable, conversationState: 'closed' },
+        currentAssignee.id,
+      ),
     ).toBe(false);
   });
 

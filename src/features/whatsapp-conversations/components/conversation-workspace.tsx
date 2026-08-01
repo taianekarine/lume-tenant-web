@@ -1153,7 +1153,7 @@ export function ConversationWorkspace({
                       }
                       disabled={
                         isUpdatingConversation ||
-                        !canTakeOverWhatsAppConversation(selectedConversation)
+                        !canTakeOverWhatsAppConversation(selectedConversation, currentUserId)
                       }
                       className={styles.actionButton({ action: 'human' })}
                     >
@@ -1203,7 +1203,7 @@ export function ConversationWorkspace({
                       messageDraft={messageDraft}
                       onMessageDraftChange={setMessageDraft}
                       canSendMessage={canCurrentUserSendMessage}
-                      canTakeOver={canTakeOverWhatsAppConversation(selectedConversation)}
+                      canTakeOver={canTakeOverWhatsAppConversation(selectedConversation, currentUserId)}
                       isTakingOver={isUpdatingConversation}
                       onTakeOver={() =>
                         handleVersionedAction(

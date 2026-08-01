@@ -271,12 +271,18 @@ export function isWhatsAppQuoteSummaryConfirmed(conversation: WhatsAppConversati
   return ['under-review', 'approved', 'rejected', 'cancelled'].includes(conversation.requestStatus);
 }
 
-export function canTakeOverWhatsAppConversation(conversation: WhatsAppConversation): boolean {
-  return (
-    conversation.conversationState !== 'closed' &&
-    conversation.conversationState !== 'human-active' &&
-    conversation.assignedTo === null
-  );
+export function canTakeOverWhatsAppConversation(
+  conversation: WhatsAppConversation,
+  currentUserId: string | null = null,
+): boolean {
+  if (
+    conversation.conversationState === 'closed' ||
+    conversation.conversationState === 'human-active'
+  ) {
+    return false;
+  }
+
+  return conversation.assignedTo === null || conversation.assignedTo.id === currentUserId;
 }
 
 export function canReturnWhatsAppConversationToBot(conversation: WhatsAppConversation): boolean {

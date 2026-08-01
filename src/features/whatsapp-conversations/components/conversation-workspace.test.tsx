@@ -954,6 +954,70 @@ describe('ConversationWorkspace', () => {
     );
   });
 
+  it('allows the current assignee to resume a waiting conversation inside Message', async () => {
+    const assignedTo = { id: 'employee-001', name: 'Usuário Comercial' };
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'waiting-for-customer',
+      flowStep: 'quote-send-pending',
+      requestStatus: 'waiting-for-customer',
+      assignedTo,
+      unreadCount: 0,
+    });
+    const updated = createWhatsAppConversationFixture({
+      ...conversation,
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      assignedTo,
+      version: conversation.version + 1,
+    });
+
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response({ conversation }))
+      .mockResolvedValue(response({ conversation: updated }));
+
+    mockedTakeOver.mockResolvedValue({
+      success: true,
+      conversation: updated,
+    });
+
+    const user = userEvent.setup();
+
+    render(
+      <ConversationWorkspace
+        initialConversations={[conversation]}
+        currentUserId={assignedTo.id}
+      />,
+    );
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+
+    expect(screen.getByRole('button', { name: 'Assumir' })).toBeEnabled();
+
+    await openMessages(user);
+
+    const inputName = 'Mensagem para ' + conversation.contact.name;
+    const takeOverButton = screen.getByRole('button', {
+      name: /Assumir atendimento|Retomar atendimento/,
+    });
+
+    expect(takeOverButton).toBeEnabled();
+    expect(screen.getByRole('textbox', { name: inputName })).toBeDisabled();
+
+    await user.click(takeOverButton);
+
+    await waitFor(() =>
+      expect(mockedTakeOver).toHaveBeenCalledWith({
+        conversationId: conversation.id,
+        expectedVersion: conversation.version,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: inputName })).toBeEnabled(),
+    );
+  });
+
   it('preserves the draft and idempotency identifiers after a send conflict', async () => {
     const assignedTo = { id: 'employee-001', name: 'Usuário Comercial' };
     const conversation = createWhatsAppConversationFixture({
