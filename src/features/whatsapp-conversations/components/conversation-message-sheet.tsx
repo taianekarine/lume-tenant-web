@@ -2,6 +2,8 @@
 
 import {
   AlertCircle,
+  Download,
+  ExternalLink,
   FileText,
   LoaderCircle,
   MessageCircleMore,
@@ -9,6 +11,7 @@ import {
   RefreshCw,
   Send,
 } from 'lucide-react';
+import { useState } from 'react';
 
 import { CurrentUserAvatar } from '@/shared/current-user-avatar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
@@ -49,6 +52,36 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo',
 });
 
+const DOWNLOADABLE_MEDIA_KINDS = new Set<WhatsAppMessageKind>([
+  'image',
+  'document',
+  'audio',
+  'video',
+  'sticker',
+]);
+
+const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'text/plain': '.txt',
+  'text/csv': '.csv',
+  'audio/ogg': '.ogg',
+  'audio/mpeg': '.mp3',
+  'audio/mp4': '.m4a',
+  'audio/aac': '.aac',
+  'audio/wav': '.wav',
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/quicktime': '.mov',
+};
+
 function formatDateTime(value: string): string {
   return DATE_TIME_FORMATTER.format(new Date(value));
 }
@@ -64,55 +97,159 @@ function getInitial(name: string): string {
   return name.trim().charAt(0).toLocaleUpperCase('pt-BR') || '?';
 }
 
+function mediaContentUrl(conversationId: string, messageId: string): string {
+  return `/api/whatsapp-conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/content`;
+}
+
+function normalizeAttachmentLabel(
+  kind: WhatsAppMessageKind,
+  attachment: WhatsAppMessageAttachment,
+): string {
+  const raw = attachment.fileName?.split(/[\\/]/).pop()?.trim() ?? '';
+  const withoutEncryptedSuffix = raw.replace(/\.enc$/i, '');
+  const mimeType = attachment.mimeType?.toLowerCase().split(';')[0] ?? '';
+  const expectedExtension = MIME_EXTENSIONS[mimeType] ?? '';
+  let label = withoutEncryptedSuffix || `whatsapp-${kind}`;
+  const currentExtension = /\.[a-z0-9]{1,10}$/i.exec(label)?.[0]?.toLowerCase();
+
+  if (expectedExtension && !currentExtension) {
+    label += expectedExtension;
+  } else if (
+    expectedExtension &&
+    kind !== 'document' &&
+    currentExtension !== expectedExtension
+  ) {
+    label = `${label.slice(0, -(currentExtension?.length ?? 0))}${expectedExtension}`;
+  }
+
+  return label;
+}
+
+function AttachmentActions({
+  contentUrl,
+  label,
+  showOpen = true,
+}: {
+  readonly contentUrl: string;
+  readonly label: string;
+  readonly showOpen?: boolean;
+}) {
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      {showOpen ? (
+        <a
+          href={contentUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Abrir ${label}`}
+        >
+          <ExternalLink aria-hidden="true" className="size-3.5" />
+          Abrir
+        </a>
+      ) : null}
+      <a
+        href={`${contentUrl}?download=1`}
+        download
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`Baixar ${label}`}
+      >
+        <Download aria-hidden="true" className="size-3.5" />
+        Baixar
+      </a>
+    </span>
+  );
+}
+
+function UnavailableAttachment({
+  label,
+  details,
+  contentUrl,
+}: {
+  readonly label: string;
+  readonly details: string;
+  readonly contentUrl?: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
+      <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1">
+        <strong className="block truncate text-xs">{label}</strong>
+        <small className="block text-muted-foreground">
+          {details} · conteúdo indisponível
+        </small>
+      </span>
+      {contentUrl ? (
+        <a
+          href={contentUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 rounded-md px-2 py-1 text-xs font-medium hover:bg-muted"
+        >
+          Tentar abrir
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 function MessageAttachmentPreview({
+  conversationId,
+  messageId,
   kind,
   attachment,
 }: {
+  readonly conversationId: string;
+  readonly messageId: string;
   readonly kind: WhatsAppMessageKind;
   readonly attachment: WhatsAppMessageAttachment;
 }) {
-  const label = attachment.fileName ?? MESSAGE_KIND_LABELS[kind];
+  const [contentUnavailable, setContentUnavailable] = useState(false);
+  const label = normalizeAttachmentLabel(kind, attachment);
   const details = `${attachment.mimeType ?? MESSAGE_KIND_LABELS[kind]} · ${formatFileSize(attachment.size)}`;
+  const downloadable = DOWNLOADABLE_MEDIA_KINDS.has(kind);
+  const contentUrl = downloadable
+    ? mediaContentUrl(conversationId, messageId)
+    : undefined;
 
-  if (!attachment.url) {
+  if (!contentUrl || contentUnavailable) {
     return (
-      <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
-        <Paperclip aria-hidden="true" className="size-4 shrink-0" />
-        <span className="min-w-0 flex-1">
-          <strong className="block truncate text-xs">{label}</strong>
-          <small className="block text-muted-foreground">
-            {details} · conteúdo indisponível no provedor
-          </small>
-        </span>
-      </div>
+      <UnavailableAttachment
+        label={label}
+        details={details}
+        contentUrl={contentUrl}
+      />
     );
   }
 
   if (kind === 'image' || kind === 'sticker') {
     return (
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noreferrer"
-        className="block overflow-hidden rounded-xl border bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Abrir ${label}`}
-      >
-        {/* A origem HTTPS é validada pela Tenant API e varia por instância Evolution. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={attachment.url}
-          alt={kind === 'sticker' ? 'Figurinha recebida' : label}
-          loading="lazy"
-          className={
-            kind === 'sticker'
-              ? 'mx-auto max-h-48 w-auto max-w-full object-contain p-2'
-              : 'max-h-[28rem] w-full max-w-full object-contain'
-          }
-        />
-        <span className="block truncate border-t px-2 py-1 text-[11px] text-muted-foreground">
-          {details}
-        </span>
-      </a>
+      <div className="overflow-hidden rounded-xl border bg-background/70">
+        <a
+          href={contentUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Abrir ${label}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={contentUrl}
+            alt={kind === 'sticker' ? 'Figurinha recebida' : label}
+            loading="lazy"
+            onError={() => setContentUnavailable(true)}
+            className={
+              kind === 'sticker'
+                ? 'mx-auto max-h-48 w-auto max-w-full object-contain p-2'
+                : 'max-h-[28rem] w-full max-w-full object-contain'
+            }
+          />
+        </a>
+        <div className="flex min-w-0 items-center justify-between gap-2 border-t px-2 py-1 text-[11px] text-muted-foreground">
+          <span className="min-w-0 truncate">{details}</span>
+          <AttachmentActions contentUrl={contentUrl} label={label} showOpen={false} />
+        </div>
+      </div>
     );
   }
 
@@ -120,13 +257,17 @@ function MessageAttachmentPreview({
     return (
       <div className="overflow-hidden rounded-xl border bg-background/70">
         <video
-          src={attachment.url}
+          src={contentUrl}
           controls
           preload="metadata"
+          onError={() => setContentUnavailable(true)}
           className="max-h-[28rem] w-full max-w-full bg-black"
           aria-label={label}
         />
-        <p className="truncate px-2 py-1 text-[11px] text-muted-foreground">{details}</p>
+        <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted-foreground">
+          <span className="min-w-0 truncate">{details}</span>
+          <AttachmentActions contentUrl={contentUrl} label={label} />
+        </div>
       </div>
     );
   }
@@ -135,33 +276,29 @@ function MessageAttachmentPreview({
     return (
       <div className="min-w-0 rounded-xl border bg-background/70 p-2">
         <audio
-          src={attachment.url}
+          src={contentUrl}
           controls
           preload="metadata"
+          onError={() => setContentUnavailable(true)}
           className="h-10 w-full min-w-0"
           aria-label={label}
         />
-        <p className="mt-1 truncate text-[11px] text-muted-foreground">{details}</p>
+        <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <span className="min-w-0 truncate">{details}</span>
+          <AttachmentActions contentUrl={contentUrl} label={label} />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
-      <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+      <FileText aria-hidden="true" className="size-4 shrink-0" />
       <span className="min-w-0 flex-1">
         <strong className="block truncate text-xs">{label}</strong>
         <small className="block truncate text-muted-foreground">{details}</small>
       </span>
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <FileText aria-hidden="true" />
-        Abrir
-      </a>
+      <AttachmentActions contentUrl={contentUrl} label={label} />
     </div>
   );
 }
@@ -310,6 +447,8 @@ export function ConversationMessageSheet({
                             ) : null}
                             {message.attachment ? (
                               <MessageAttachmentPreview
+                                conversationId={conversation.id}
+                                messageId={message.id}
                                 kind={message.kind}
                                 attachment={message.attachment}
                               />
