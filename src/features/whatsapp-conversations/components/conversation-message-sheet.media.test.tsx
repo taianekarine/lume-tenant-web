@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { createWhatsAppConversationFixture } from '../testing/whatsapp-conversation-fixture';
 import { ConversationMessageSheet } from './conversation-message-sheet';
@@ -102,15 +102,17 @@ describe('ConversationMessageSheet media proxy', () => {
       'href',
       documentUrl,
     );
-    expect(screen.getAllByRole('link', { name: 'Baixar' })).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({}),
-      ]),
-    );
+    const downloadLinks = screen.getAllByRole('link', { name: 'Baixar' });
+    expect(downloadLinks).toHaveLength(3);
+    expect(
+      downloadLinks.some(
+        (link) => link.getAttribute('href') === `${documentUrl}?download=1`,
+      ),
+    ).toBe(true);
     expect(document.body).not.toHaveTextContent('.enc');
   });
 
-  it('falls back to the proxy when direct audio playback fails', () => {
+  it('falls back to the proxy when direct audio playback fails', async () => {
     renderSheet();
 
     const audio = screen.getByLabelText('audio.ogg');
@@ -118,9 +120,11 @@ describe('ConversationMessageSheet media proxy', () => {
 
     fireEvent.error(audio);
 
-    expect(audio).toHaveAttribute(
-      'src',
-      `/api/whatsapp-conversations/${conversationId}/messages/${audioMessageId}/content`,
+    await waitFor(() =>
+      expect(audio).toHaveAttribute(
+        'src',
+        `/api/whatsapp-conversations/${conversationId}/messages/${audioMessageId}/content`,
+      ),
     );
   });
 });
