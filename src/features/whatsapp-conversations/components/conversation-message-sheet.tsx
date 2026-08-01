@@ -126,33 +126,31 @@ function normalizeAttachmentLabel(
 }
 
 function AttachmentActions({
-  contentUrl,
-  label,
+  openUrl,
+  downloadUrl,
   showOpen = true,
 }: {
-  readonly contentUrl: string;
-  readonly label: string;
+  readonly openUrl: string;
+  readonly downloadUrl: string;
   readonly showOpen?: boolean;
 }) {
   return (
     <span className="flex shrink-0 items-center gap-1">
       {showOpen ? (
         <a
-          href={contentUrl}
+          href={openUrl}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={`Abrir ${label}`}
         >
           <ExternalLink aria-hidden="true" className="size-3.5" />
           Abrir
         </a>
       ) : null}
       <a
-        href={`${contentUrl}?download=1`}
+        href={`${downloadUrl}?download=1`}
         download
         className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Baixar ${label}`}
       >
         <Download aria-hidden="true" className="size-3.5" />
         Baixar
@@ -204,20 +202,35 @@ function MessageAttachmentPreview({
   readonly kind: WhatsAppMessageKind;
   readonly attachment: WhatsAppMessageAttachment;
 }) {
-  const [contentUnavailable, setContentUnavailable] = useState(false);
   const label = normalizeAttachmentLabel(kind, attachment);
   const details = `${attachment.mimeType ?? MESSAGE_KIND_LABELS[kind]} · ${formatFileSize(attachment.size)}`;
   const downloadable = DOWNLOADABLE_MEDIA_KINDS.has(kind);
-  const contentUrl = downloadable
+  const proxyUrl = downloadable
     ? mediaContentUrl(conversationId, messageId)
     : undefined;
+  const directUrl = attachment.url ?? undefined;
+  const encryptedReference =
+    /\.enc$/i.test(attachment.fileName ?? '') ||
+    (directUrl ? /\.enc(?:$|[?#])/i.test(directUrl) : false);
+  const initialSourceUrl =
+    proxyUrl && (!directUrl || encryptedReference) ? proxyUrl : directUrl;
+  const [sourceUrl, setSourceUrl] = useState(initialSourceUrl);
+  const [contentUnavailable, setContentUnavailable] = useState(false);
 
-  if (!contentUrl || contentUnavailable) {
+  function handleContentError() {
+    if (proxyUrl && sourceUrl !== proxyUrl) {
+      setSourceUrl(proxyUrl);
+      return;
+    }
+    setContentUnavailable(true);
+  }
+
+  if (!proxyUrl || !sourceUrl || contentUnavailable) {
     return (
       <UnavailableAttachment
         label={label}
         details={details}
-        contentUrl={contentUrl}
+        contentUrl={proxyUrl}
       />
     );
   }
@@ -226,7 +239,7 @@ function MessageAttachmentPreview({
     return (
       <div className="overflow-hidden rounded-xl border bg-background/70">
         <a
-          href={contentUrl}
+          href={sourceUrl}
           target="_blank"
           rel="noreferrer"
           className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -234,10 +247,10 @@ function MessageAttachmentPreview({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={contentUrl}
+            src={sourceUrl}
             alt={kind === 'sticker' ? 'Figurinha recebida' : label}
             loading="lazy"
-            onError={() => setContentUnavailable(true)}
+            onError={handleContentError}
             className={
               kind === 'sticker'
                 ? 'mx-auto max-h-48 w-auto max-w-full object-contain p-2'
@@ -247,7 +260,11 @@ function MessageAttachmentPreview({
         </a>
         <div className="flex min-w-0 items-center justify-between gap-2 border-t px-2 py-1 text-[11px] text-muted-foreground">
           <span className="min-w-0 truncate">{details}</span>
-          <AttachmentActions contentUrl={contentUrl} label={label} showOpen={false} />
+          <AttachmentActions
+            openUrl={sourceUrl}
+            downloadUrl={proxyUrl}
+            showOpen={false}
+          />
         </div>
       </div>
     );
@@ -257,16 +274,20 @@ function MessageAttachmentPreview({
     return (
       <div className="overflow-hidden rounded-xl border bg-background/70">
         <video
-          src={contentUrl}
+          src={sourceUrl}
           controls
           preload="metadata"
-          onError={() => setContentUnavailable(true)}
+          onError={handleContentError}
           className="max-h-[28rem] w-full max-w-full bg-black"
           aria-label={label}
         />
         <div className="flex min-w-0 items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted-foreground">
           <span className="min-w-0 truncate">{details}</span>
-          <AttachmentActions contentUrl={contentUrl} label={label} />
+          <AttachmentActions
+            openUrl={sourceUrl}
+            downloadUrl={proxyUrl}
+            showOpen={false}
+          />
         </div>
       </div>
     );
@@ -276,16 +297,20 @@ function MessageAttachmentPreview({
     return (
       <div className="min-w-0 rounded-xl border bg-background/70 p-2">
         <audio
-          src={contentUrl}
+          src={sourceUrl}
           controls
           preload="metadata"
-          onError={() => setContentUnavailable(true)}
+          onError={handleContentError}
           className="h-10 w-full min-w-0"
           aria-label={label}
         />
         <div className="mt-1 flex min-w-0 items-center justify-between gap-2 text-[11px] text-muted-foreground">
           <span className="min-w-0 truncate">{details}</span>
-          <AttachmentActions contentUrl={contentUrl} label={label} />
+          <AttachmentActions
+            openUrl={sourceUrl}
+            downloadUrl={proxyUrl}
+            showOpen={false}
+          />
         </div>
       </div>
     );
@@ -298,7 +323,7 @@ function MessageAttachmentPreview({
         <strong className="block truncate text-xs">{label}</strong>
         <small className="block truncate text-muted-foreground">{details}</small>
       </span>
-      <AttachmentActions contentUrl={contentUrl} label={label} />
+      <AttachmentActions openUrl={sourceUrl} downloadUrl={proxyUrl} />
     </div>
   );
 }
