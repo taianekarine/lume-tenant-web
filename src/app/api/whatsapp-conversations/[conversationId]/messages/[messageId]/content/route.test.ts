@@ -3,6 +3,7 @@
 import {
   AUTHENTICATED_SESSION_VERSION,
   type AuthenticatedSession,
+  type Permission,
 } from '@/features/auth/domain';
 import { getCurrentAuthenticatedSession } from '@/features/auth/server';
 import { downloadWhatsAppMessageMediaForDashboard } from '@/features/whatsapp-conversations/server';
@@ -22,7 +23,7 @@ const mockedSession = jest.mocked(getCurrentAuthenticatedSession);
 const mockedDownload = jest.mocked(downloadWhatsAppMessageMediaForDashboard);
 
 function session(
-  permissions: readonly string[] = ['whatsapp-conversations:manage'],
+  permissions: readonly Permission[] = ['whatsapp-conversations:manage'],
 ): AuthenticatedSession {
   return {
     version: AUTHENTICATED_SESSION_VERSION,
