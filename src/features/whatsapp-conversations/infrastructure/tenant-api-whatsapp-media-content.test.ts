@@ -1,6 +1,5 @@
 /** @jest-environment node */
 
-import { WhatsAppConversationRepositoryError } from '../application';
 import { LumeApiWhatsAppMediaContentGateway } from './tenant-api-whatsapp-media-content';
 
 const conversationId = '00000000-0000-4000-8000-000000000101';
@@ -55,9 +54,7 @@ describe('LumeApiWhatsAppMediaContentGateway', () => {
       fetcher,
     );
 
-    await expect(gateway.download(conversationId, messageId)).rejects.toMatchObject<
-      WhatsAppConversationRepositoryError
-    >({
+    await expect(gateway.download(conversationId, messageId)).rejects.toMatchObject({
       code: 'not-found',
       message: 'Conteúdo da mídia não encontrado.',
     });
@@ -79,8 +76,8 @@ describe('LumeApiWhatsAppMediaContentGateway', () => {
       fetcher,
     );
 
-    await expect(gateway.download(conversationId, messageId)).rejects.toMatchObject<
-      WhatsAppConversationRepositoryError
-    >({ code: 'invalid-response' });
+    await expect(gateway.download(conversationId, messageId)).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
   });
 });
