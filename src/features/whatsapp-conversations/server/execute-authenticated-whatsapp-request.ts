@@ -18,28 +18,36 @@ import {
 } from '../application';
 import { createWhatsAppConversationRepository } from '../infrastructure';
 
-async function executeAuthenticatedWhatsAppOperation<T>(
-  operation: (repository: WhatsAppConversationRepository) => Promise<T>,
+async function executeAuthenticatedWhatsAppTokenOperation<T>(
+  operation: (accessToken: string) => Promise<T>,
   canRefreshCookies: boolean,
 ): Promise<T> {
   const [sessionStorage, tokenStorage] = await Promise.all([
     createCookieSessionStorage(),
     createCookieApiTokenStorage(),
   ]);
-  const [session, storedTokens] = await Promise.all([sessionStorage.get(), tokenStorage.get()]);
+  const [session, storedTokens] = await Promise.all([
+    sessionStorage.get(),
+    tokenStorage.get(),
+  ]);
 
   if (session === null || !isSessionValid(session) || storedTokens === null) {
     if (canRefreshCookies) {
       await Promise.allSettled([sessionStorage.remove(), tokenStorage.remove()]);
     }
-    throw new WhatsAppConversationRepositoryError('unauthorized', 'Sua sessão local expirou.');
+    throw new WhatsAppConversationRepositoryError(
+      'unauthorized',
+      'Sua sessão local expirou.',
+    );
   }
 
   let tokens = storedTokens;
 
   async function refreshAuthentication(): Promise<ApiAuthentication> {
     try {
-      const refreshed = await createTenantApiAuthenticationGateway().refresh(tokens.refreshToken);
+      const refreshed = await createTenantApiAuthenticationGateway().refresh(
+        tokens.refreshToken,
+      );
       await Promise.all([
         sessionStorage.save(refreshed.session),
         tokenStorage.save(refreshed.tokens),
@@ -51,7 +59,9 @@ async function executeAuthenticatedWhatsAppOperation<T>(
 
       if (error instanceof AuthenticationGatewayError) {
         throw new WhatsAppConversationRepositoryError(
-          error.code === 'invalid-response' ? 'invalid-response' : 'unauthorized',
+          error.code === 'invalid-response'
+            ? 'invalid-response'
+            : 'unauthorized',
           'Sua sessão expirou. Entre novamente.',
         );
       }
@@ -74,7 +84,7 @@ async function executeAuthenticatedWhatsAppOperation<T>(
   }
 
   try {
-    return await operation(await createWhatsAppConversationRepository(tokens.accessToken));
+    return await operation(tokens.accessToken);
   } catch (error) {
     if (
       !(error instanceof WhatsAppConversationRepositoryError) ||
@@ -86,17 +96,31 @@ async function executeAuthenticatedWhatsAppOperation<T>(
   }
 
   await refreshAuthentication();
-  return operation(await createWhatsAppConversationRepository(tokens.accessToken));
+  return operation(tokens.accessToken);
 }
 
 export function executeAuthenticatedWhatsAppRequest<T>(
   operation: (repository: WhatsAppConversationRepository) => Promise<T>,
 ): Promise<T> {
-  return executeAuthenticatedWhatsAppOperation(operation, false);
+  return executeAuthenticatedWhatsAppTokenOperation(
+    async (accessToken) =>
+      operation(await createWhatsAppConversationRepository(accessToken)),
+    false,
+  );
 }
 
 export function executeAuthenticatedWhatsAppMutation<T>(
   operation: (repository: WhatsAppConversationRepository) => Promise<T>,
 ): Promise<T> {
-  return executeAuthenticatedWhatsAppOperation(operation, true);
+  return executeAuthenticatedWhatsAppTokenOperation(
+    async (accessToken) =>
+      operation(await createWhatsAppConversationRepository(accessToken)),
+    true,
+  );
+}
+
+export function executeAuthenticatedWhatsAppTokenRequest<T>(
+  operation: (accessToken: string) => Promise<T>,
+): Promise<T> {
+  return executeAuthenticatedWhatsAppTokenOperation(operation, false);
 }
