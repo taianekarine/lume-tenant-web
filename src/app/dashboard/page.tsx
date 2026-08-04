@@ -36,7 +36,7 @@ export default async function Page() {
   }
 
   if (!hasPermission(session.user, 'dashboard:view')) {
-    redirect('/');
+    redirect(session.user.documentAccessMode === 'document-portal' ? '/documents' : '/');
   }
 
   let conversations: readonly WhatsAppConversation[] = [];

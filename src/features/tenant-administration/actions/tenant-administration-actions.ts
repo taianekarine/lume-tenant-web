@@ -11,6 +11,7 @@ const userAssignmentFields = {
   name: z.string().trim().min(3).max(120),
   email: z.string().trim().email().max(254),
   isAdministrator: z.boolean(),
+  documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
   departments: z.array(z.string().min(1)),
   permissionCodes: z.array(z.string().min(1)),
 } as const;
@@ -72,6 +73,7 @@ function withoutAdministratorMutation(input: z.infer<typeof userBaseSchema>) {
   return {
     name: input.name,
     email: input.email,
+    documentAccessMode: input.documentAccessMode,
     departments: input.departments,
     permissionCodes: input.permissionCodes,
   };
@@ -111,6 +113,10 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
     email: formString(formData, 'email'),
     password: formString(formData, 'password'),
     isAdministrator: formBoolean(formData, 'isAdministrator'),
+    documentAccessMode:
+      formString(formData, 'documentAccessMode') === 'document-portal'
+        ? 'document-portal'
+        : 'standard',
     departments: formStrings(formData, 'departments'),
     permissionCodes: formStrings(formData, 'permissionCodes'),
   });
@@ -136,6 +142,10 @@ export async function updateTenantUserAction(userId: string, formData: FormData)
     name: formString(formData, 'name'),
     email: formString(formData, 'email'),
     isAdministrator: formBoolean(formData, 'isAdministrator'),
+    documentAccessMode:
+      formString(formData, 'documentAccessMode') === 'document-portal'
+        ? 'document-portal'
+        : 'standard',
     departments: formStrings(formData, 'departments'),
     permissionCodes: formStrings(formData, 'permissionCodes'),
   });

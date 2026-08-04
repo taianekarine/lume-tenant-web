@@ -12,7 +12,7 @@ export default async function Page({
   const params = await searchParams;
 
   if (session !== null) {
-    redirect('/dashboard');
+    redirect(session.user.documentAccessMode === 'document-portal' ? '/documents' : '/dashboard');
   }
 
   return <LoginPage passwordChanged={params?.passwordChanged === '1'} />;

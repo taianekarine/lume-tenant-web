@@ -7,7 +7,7 @@ import type {
 } from '@/features/tenant-administration/domain';
 import {
   executeAuthenticatedTenantRequest,
-  requireManagementTenantSession,
+  requirePeopleOperationsTenantSession,
   rethrowTenantPageError,
 } from '@/features/tenant-administration/server';
 
@@ -24,7 +24,7 @@ export default async function UsersRoute({
     page?: string;
   }>;
 }) {
-  const session = await requireManagementTenantSession([
+  const session = await requirePeopleOperationsTenantSession([
     'users:view',
     'users:create',
     'users:update',

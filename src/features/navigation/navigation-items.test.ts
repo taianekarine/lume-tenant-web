@@ -29,7 +29,7 @@ describe('getAuthorizedNavigationItems', () => {
     const items = getAuthorizedNavigationItems(createEmployee(['dashboard:view']));
 
     expect(items.map((item) => item.label)).toEqual(['Dashboard']);
-    expect(INTERNAL_NAVIGATION_ITEMS).toHaveLength(7);
+    expect(INTERNAL_NAVIGATION_ITEMS).toHaveLength(9);
   });
 
   it('shows License only with its explicit permission inside Management', () => {
@@ -112,5 +112,16 @@ describe('getAuthorizedNavigationItems', () => {
     const items = getAuthorizedNavigationItems(createEmployee(['dashboard:view'], false));
 
     expect(items).toEqual([]);
+  });
+
+  it('restricts document portal users to their own document route', () => {
+    const user = {
+      ...createEmployee(['dashboard:view', 'documents:view', 'documents:manage'], true, [
+        'personnel-department',
+      ]),
+      documentAccessMode: 'document-portal' as const,
+    };
+
+    expect(getAuthorizedNavigationItems(user).map((item) => item.href)).toEqual(['/documents']);
   });
 });

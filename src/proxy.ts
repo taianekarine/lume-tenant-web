@@ -57,5 +57,7 @@ export const config = {
     '/quote-proposals/:path*',
     '/profile/:path*',
     '/support/:path*',
+    '/documents/:path*',
+    '/document-management/:path*',
   ],
 };

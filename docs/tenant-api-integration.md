@@ -1,5 +1,10 @@
 # Integração com a Lume Tenant API
 
+Gestão documental usa `/document-management/*` via gateway server-only. Uploads
+são multipart, mutações recebem `commandId`, arquivos passam por Route Handler
+autenticada e respostas são validadas com Zod. Consulte
+[`document-management.md`](document-management.md).
+
 O frontend acessa apenas a URL server-side configurada em
 `LUME_TENANT_API_URL`. Tokens da API ficam em cookie `httpOnly` criptografado e
 não são expostos a componentes client-side.

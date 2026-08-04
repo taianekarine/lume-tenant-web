@@ -6,7 +6,7 @@ import type { PermissionCatalog, TenantUser } from '@/features/tenant-administra
 import { UserEditorForm } from '@/features/tenant-administration/users';
 import {
   executeAuthenticatedTenantRequest,
-  requireManagementTenantSession,
+  requirePeopleOperationsTenantSession,
   rethrowTenantPageError,
 } from '@/features/tenant-administration/server';
 import { AuthenticatedShell } from '@/features/navigation';
@@ -19,7 +19,7 @@ export default async function UserEditorRoute({
   readonly params: Promise<{ userId: string }>;
   readonly searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const session = await requireManagementTenantSession(['users:update']);
+  const session = await requirePeopleOperationsTenantSession(['users:update']);
   const [{ userId }, query] = await Promise.all([params, searchParams]);
   let user: TenantUser;
   let permissionCatalog: PermissionCatalog;

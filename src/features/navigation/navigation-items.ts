@@ -1,7 +1,9 @@
 import {
   BadgeCheck,
   Bot,
+  ClipboardCheck,
   FileClock,
+  Files,
   LayoutDashboard,
   LifeBuoy,
   MessageCircle,
@@ -18,7 +20,7 @@ import {
   type User,
 } from '@/features/auth/domain';
 
-export type NavigationGroup = 'general' | 'commercial' | 'administration';
+export type NavigationGroup = 'general' | 'commercial' | 'people-operations' | 'administration';
 
 export interface InternalNavigationItem {
   readonly label: string;
@@ -65,7 +67,7 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
     permission: 'users:view',
     alternativePermissions: ['users:manage'],
     icon: Users,
-    group: 'administration',
+    group: 'people-operations',
   },
   {
     label: 'Licença',
@@ -81,10 +83,32 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
     icon: LifeBuoy,
     group: 'general',
   },
+  {
+    label: 'Meus documentos',
+    href: '/documents',
+    permission: 'documents:view',
+    icon: Files,
+    group: 'general',
+  },
+  {
+    label: 'Gestão documental',
+    href: '/document-management',
+    permission: 'documents:manage',
+    icon: ClipboardCheck,
+    group: 'people-operations',
+  },
 ];
 
 function hasOrganizationalScope(user: User, item: InternalNavigationItem): boolean {
   if (item.group === 'commercial') return hasCommercialScope(user);
+  if (item.group === 'people-operations') {
+    return (
+      user.type === 'employee' &&
+      user.departments.some((department) =>
+        ['management', 'personnel-department', 'human-resources'].includes(department),
+      )
+    );
+  }
   if (item.group === 'administration') return hasManagementLeadershipScope(user);
   return true;
 }
@@ -100,6 +124,11 @@ export function getAuthorizedNavigationItems(
   user: User,
   items: readonly InternalNavigationItem[] = INTERNAL_NAVIGATION_ITEMS,
 ): InternalNavigationItem[] {
+  if (user.documentAccessMode === 'document-portal') {
+    return items.filter(
+      (item) => item.href === '/documents' && hasNavigationPermission(user, item),
+    );
+  }
   return items.filter(
     (item) =>
       hasNavigationPermission(user, item) &&

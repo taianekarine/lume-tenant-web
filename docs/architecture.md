@@ -1,5 +1,9 @@
 # Arquitetura do Lume Tenant Web
 
+Gestão documental usa o shell existente e um gateway server-only. O modo
+`document-portal` reduz a navegação a **Meus documentos**; a Tenant API continua
+autoritativa para isolamento, revisão e download.
+
 ```text
 Navegador
   -> Next.js / Server Actions

@@ -178,6 +178,7 @@ export function UserEditorForm({
       name: user.name,
       email: user.email,
       isAdministrator: user.isAdministrator,
+      documentAccessMode: user.documentAccessMode ?? 'standard',
       departments: [...user.departments],
       permissionCodes: [...user.permissionCodes],
     },

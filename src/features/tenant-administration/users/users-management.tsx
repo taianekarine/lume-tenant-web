@@ -242,6 +242,7 @@ function CreateUserDialog({
       email: '',
       password: '',
       isAdministrator: false,
+      documentAccessMode: 'standard',
       departments: [],
       permissionCodes: [],
     },
@@ -381,6 +382,20 @@ function CreateUserDialog({
                   Mínimo de 12 caracteres, com maiúscula, minúscula, número e símbolo.
                 </FieldDescription>
                 <FieldError errors={[form.formState.errors.password]} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="new-user-document-access">Modo de acesso</FieldLabel>
+                <select
+                  id="new-user-document-access"
+                  className="h-11 rounded-lg border bg-background px-3"
+                  {...form.register('documentAccessMode')}
+                >
+                  <option value="standard">Colaborador — painel autorizado</option>
+                  <option value="document-portal">Candidato — somente documentos</option>
+                </select>
+                <FieldDescription>
+                  Candidatos permanecem restritos ao portal documental após o primeiro acesso.
+                </FieldDescription>
               </Field>
             </div>
           ) : null}

@@ -1,5 +1,8 @@
 # Lume Tenant Web
 
+O fluxo de checklists, upload, revisão humana e candidatos restritos está em
+[`docs/document-management.md`](docs/document-management.md).
+
 Aplicação operacional instalada por cliente. Ela se comunica somente com o
 `lume-tenant-api` da mesma instalação e continua funcional sem acesso ao
 `lume-control`.

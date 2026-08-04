@@ -40,6 +40,7 @@ const apiUserSchema = z.object({
   permissions: z.array(permissionSchema),
   clientCategory: z.null(),
   isActive: z.boolean(),
+  documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
 });
 
 const apiAuthenticationSchema = z.object({
@@ -152,6 +153,9 @@ function mapApiUser(user: z.infer<typeof apiUserSchema>): User {
     permissions: user.permissions as Permission[],
     clientCategory: null,
     isActive: user.isActive,
+    ...(user.documentAccessMode === undefined
+      ? {}
+      : { documentAccessMode: user.documentAccessMode }),
   };
 }
 

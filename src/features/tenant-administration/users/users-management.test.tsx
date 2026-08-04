@@ -433,6 +433,7 @@ describe('user editor form', () => {
       name: 'Taiane Karine Atualizada',
       email: tenantUser.email,
       isAdministrator: false,
+      documentAccessMode: 'standard',
       departments: ['commercial'],
       permissionCodes: ['commercial:view'],
     });

@@ -32,7 +32,6 @@ export type LoginActionFailure = AuthFailureFeedback & {
 
 export type LoginActionResult = LoginActionFailure;
 
-const LOGIN_DESTINATION = '/dashboard';
 const INVALID_CREDENTIALS_MESSAGE =
   'Usuário ou senha inválidos. Se o problema persistir, contate o administrador.';
 const API_UNAVAILABLE_MESSAGE =
@@ -173,7 +172,7 @@ export async function loginAction(input: unknown): Promise<LoginActionResult> {
     };
   }
 
-  redirect(LOGIN_DESTINATION);
+  redirect(session.user.documentAccessMode === 'document-portal' ? '/documents' : '/dashboard');
 }
 
 export async function completePasswordChangeAction(input: {

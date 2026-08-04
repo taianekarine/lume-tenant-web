@@ -20,6 +20,7 @@ const userSchema = z
     type: z.literal('employee'),
     departments: z.array(z.string()),
     isAdministrator: z.boolean(),
+    documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
     permissionCodes: z.array(z.string()).optional(),
     permissions: z.array(z.string()),
     clientCategory: z.null(),

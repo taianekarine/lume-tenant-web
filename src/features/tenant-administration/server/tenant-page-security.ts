@@ -32,6 +32,23 @@ export async function requireManagementTenantSession(
   return session;
 }
 
+export async function requirePeopleOperationsTenantSession(
+  anyPermission: readonly Permission[],
+): Promise<AuthenticatedSession> {
+  const session = await requireTenantSession(anyPermission);
+
+  if (
+    session.user.type !== 'employee' ||
+    !session.user.departments.some((department) =>
+      ['management', 'personnel-department', 'human-resources'].includes(department),
+    )
+  ) {
+    redirect('/dashboard');
+  }
+
+  return session;
+}
+
 export function rethrowTenantPageError(error: unknown): never {
   if (error instanceof TenantAdministrationError && error.code === 'unauthorized') {
     redirect('/auth/session-expired');

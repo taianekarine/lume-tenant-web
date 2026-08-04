@@ -6,6 +6,7 @@ export interface TenantUser {
   readonly cpf: string | null;
   readonly departments: readonly string[];
   readonly isAdministrator: boolean;
+  readonly documentAccessMode?: 'standard' | 'document-portal';
   readonly permissionCodes: readonly string[];
   readonly permissions: readonly string[];
   readonly isActive: boolean;
@@ -90,6 +91,7 @@ export interface CreateTenantUserInput {
   readonly email: string;
   readonly password: string;
   readonly isAdministrator: boolean;
+  readonly documentAccessMode?: 'standard' | 'document-portal';
   readonly departments: readonly string[];
   readonly permissionCodes: readonly string[];
 }
@@ -99,6 +101,7 @@ export interface UpdateTenantUserInput {
   readonly email?: string;
   readonly cpf?: string | null;
   readonly isAdministrator?: boolean;
+  readonly documentAccessMode?: 'standard' | 'document-portal';
   readonly departments?: readonly string[];
   readonly permissionCodes?: readonly string[];
 }

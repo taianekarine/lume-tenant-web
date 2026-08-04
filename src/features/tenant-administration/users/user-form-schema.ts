@@ -4,6 +4,7 @@ const userAssignmentFields = {
   name: z.string().trim().min(3, 'Informe o nome completo.').max(120),
   email: z.string().trim().email('Informe um e-mail válido.').max(254),
   isAdministrator: z.boolean(),
+  documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
   departments: z.array(z.string()),
   permissionCodes: z.array(z.string()),
 } as const;
