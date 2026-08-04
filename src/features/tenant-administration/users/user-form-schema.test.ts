@@ -83,6 +83,7 @@ describe('userFormSchema', () => {
         password: 'SenhaInicial@2026',
         isAdministrator: false,
         documentAccessMode: 'document-portal',
+        initialDocumentChecklistCode: 'admission-general',
         departments: [],
         permissionCodes: [],
       }).success,

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { createDocumentRequestAction } from '@/features/document-management/actions';
@@ -31,31 +30,43 @@ export default async function DocumentManagementPage({
   let requests: DocumentRequestListType;
   let checklists: readonly DocumentChecklistSummary[];
   let users: TenantUserList;
-  try {
-    [requests, checklists, users] = await Promise.all([
+  const serviceErrors: string[] = [];
+  const [requestsResult, checklistsResult, usersResult] = await Promise.allSettled([
       executeAuthenticatedDocumentRequest((gateway) => gateway.listRequests({ pageSize: 50 })),
       executeAuthenticatedDocumentRequest((gateway) => gateway.listChecklists()),
       executeAuthenticatedTenantRequest((gateway) => gateway.listUsers({ pageSize: 100 })),
-    ]);
-  } catch (error) {
-    if (error instanceof DocumentManagementError && error.code === 'unauthorized') {
+  ]);
+  for (const result of [requestsResult, checklistsResult]) {
+    if (result.status === 'rejected' && result.reason instanceof DocumentManagementError && result.reason.code === 'unauthorized') {
       redirect('/auth/session-expired');
     }
+  }
+  if (requestsResult.status === 'fulfilled') requests = requestsResult.value;
+  else {
     requests = {
       data: [],
       meta: { page: 1, pageSize: 50, total: 0, totalPages: 0 },
     };
+    serviceErrors.push('Não foi possível carregar as solicitações em acompanhamento.');
+  }
+  if (checklistsResult.status === 'fulfilled') checklists = checklistsResult.value;
+  else {
     checklists = [];
+    serviceErrors.push('Não foi possível carregar as listas de documentos.');
+  }
+  if (usersResult.status === 'fulfilled') users = usersResult.value;
+  else {
     users = {
       data: [],
       meta: { page: 1, pageSize: 100, total: 0, totalPages: 0 },
     };
+    serviceErrors.push('Não foi possível carregar os titulares.');
   }
 
   return (
     <AuthenticatedShell user={session.user}>
       <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <header>
           <div>
             <p className="text-sm font-medium text-primary">RH e Departamento Pessoal</p>
             <h1 className="text-2xl font-bold tracking-tight">Gestão documental</h1>
@@ -63,14 +74,17 @@ export default async function DocumentManagementPage({
               Solicite, acompanhe, revise e renove documentos sem aprovação automática.
             </p>
           </div>
-          <Button
-            render={<Link href="/document-management/export.xlsx" />}
-            nativeButton={false}
-            variant="outline"
-          >
-            Exportar XLSX
-          </Button>
         </header>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Card><CardHeader><CardTitle>1. Cadastro</CardTitle><CardDescription>RH/DP escolhe a lista Geral, Administrativo ou Motorista ao criar o usuário.</CardDescription></CardHeader></Card>
+          <Card><CardHeader><CardTitle>2. Acompanhamento</CardTitle><CardDescription>Esta tela mostra pendências, envios, revisões, reenvios e vencimentos.</CardDescription></CardHeader></Card>
+          <Card><CardHeader><CardTitle>3. Extração e download</CardTitle><CardDescription>Abra uma solicitação para confirmar os dados e baixar XLSX e arquivos daquele usuário.</CardDescription></CardHeader></Card>
+        </div>
+        {serviceErrors.length ? (
+          <div role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+            {serviceErrors.map((message) => <p key={message}>{message}</p>)}
+          </div>
+        ) : null}
         {query.error || query.success ? (
           <p
             role={query.error ? 'alert' : 'status'}
@@ -85,12 +99,11 @@ export default async function DocumentManagementPage({
         ) : null}
 
         <Card>
-          <CardHeader>
-            <CardTitle>Nova solicitação</CardTitle>
-            <CardDescription>
-              O checklist é copiado e versionado no momento da criação.
-            </CardDescription>
-          </CardHeader>
+          <details>
+          <summary className="cursor-pointer list-none p-6">
+            <p className="font-semibold">Criar solicitação avulsa</p>
+            <p className="text-sm text-muted-foreground">Use somente para complemento, atualização ou regularização fora do cadastro inicial.</p>
+          </summary>
           <CardContent>
             <form
               action={createDocumentRequestAction}
@@ -155,6 +168,7 @@ export default async function DocumentManagementPage({
               </div>
             </form>
           </CardContent>
+          </details>
         </Card>
 
         <section className="space-y-3">

@@ -100,6 +100,23 @@ export async function reviewDocumentSubmissionAction(
     redirect(`${returnPath}?error=Decisão inválida.`);
   }
   try {
+    const proposedFields: Record<string, unknown> = {};
+    const confirmedFields: Record<string, unknown> = {};
+    const confidences: Record<string, number> = {};
+    for (const [name, entry] of formData.entries()) {
+      if (typeof entry !== 'string') continue;
+      if (name.startsWith('proposed.')) proposedFields[name.slice(9)] = entry.trim();
+      if (name.startsWith('confirmed.')) confirmedFields[name.slice(10)] = entry.trim();
+      if (name.startsWith('confidence.')) {
+        const numeric = Number(entry);
+        if (Number.isFinite(numeric)) confidences[name.slice(11)] = numeric / 100;
+      }
+    }
+    if (Object.keys(proposedFields).length) {
+      await executeAuthenticatedDocumentMutation((gateway) =>
+        gateway.updateExtractedData(submissionId, { fields: proposedFields, confidences }),
+      );
+    }
     await executeAuthenticatedDocumentMutation((gateway) =>
       gateway.review(submissionId, {
         commandId: randomUUID(),
@@ -111,6 +128,7 @@ export async function reviewDocumentSubmissionAction(
           (value(formData, 'originalCheckStatus') as
             'not-required' | 'pending' | 'confirmed' | 'divergent') || undefined,
         originalObservation: value(formData, 'originalObservation') || undefined,
+        confirmedFields,
       }),
     );
   } catch (error) {

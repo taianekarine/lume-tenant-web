@@ -94,6 +94,11 @@ export interface CreateTenantUserInput {
   readonly documentAccessMode?: 'standard' | 'document-portal';
   readonly departments: readonly string[];
   readonly permissionCodes: readonly string[];
+  readonly initialDocumentChecklistCode?:
+    | 'admission-general'
+    | 'admission-administrative'
+    | 'admission-driver';
+  readonly initialDocumentRequestCommandId?: string;
 }
 
 export interface UpdateTenantUserInput {

@@ -115,6 +115,24 @@ const SUSPENSION_MODE_LABELS = {
   date: 'Até uma data',
 } as const;
 
+const ADMISSION_CHECKLISTS = [
+  {
+    code: 'admission-general',
+    label: 'Registro geral',
+    summary: '2 fotos 3x4, documentos pessoais, familiares, trabalhistas e certidões.',
+  },
+  {
+    code: 'admission-administrative',
+    label: 'Registro administrativo',
+    summary: '2 fotos 3x4, documentos pessoais, familiares, trabalhistas e certidões administrativas.',
+  },
+  {
+    code: 'admission-driver',
+    label: 'Registro de motorista',
+    summary: '4 fotos 3x4, CNH D com EAR, curso de passageiros, prontuário e certidões.',
+  },
+] as const;
+
 type SuspensionMode = keyof typeof SUSPENSION_MODE_LABELS;
 
 export interface UserListFilters {
@@ -247,9 +265,15 @@ function CreateUserDialog({
       documentAccessMode: canManageAccess ? 'standard' : 'document-portal',
       departments: [],
       permissionCodes: [],
+      initialDocumentChecklistCode: canManageAccess ? undefined : 'admission-general',
     },
   });
   const departments = useWatch({ control: form.control, name: 'departments' });
+  const documentAccessMode = useWatch({ control: form.control, name: 'documentAccessMode' });
+  const initialDocumentChecklistCode = useWatch({
+    control: form.control,
+    name: 'initialDocumentChecklistCode',
+  });
   const standardPermissions = useMemo(
     () => (canManageAccess ? compatiblePermissionCodes(permissionCatalog, departments) : []),
     [canManageAccess, departments, permissionCatalog],
@@ -281,7 +305,13 @@ function CreateUserDialog({
     startTransition(async () => {
       const result = await createTenantUserFormAction(
         canManageAccess
-          ? values
+          ? {
+              ...values,
+              initialDocumentChecklistCode:
+                values.documentAccessMode === 'document-portal'
+                  ? values.initialDocumentChecklistCode
+                  : undefined,
+            }
           : {
               ...values,
               isAdministrator: false,
@@ -421,6 +451,40 @@ function CreateUserDialog({
                   </p>
                 </div>
               )}
+              {documentAccessMode === 'document-portal' ? (
+                <Field
+                  className="sm:col-span-2"
+                  data-invalid={Boolean(form.formState.errors.initialDocumentChecklistCode)}
+                >
+                  <FieldLabel htmlFor="new-user-document-checklist">
+                    Lista de documentos da admissão
+                  </FieldLabel>
+                  <select
+                    id="new-user-document-checklist"
+                    className="h-11 rounded-lg border bg-background px-3"
+                    {...form.register('initialDocumentChecklistCode')}
+                  >
+                    <option value="">Selecione o tipo de registro</option>
+                    {ADMISSION_CHECKLISTS.map((checklist) => (
+                      <option key={checklist.code} value={checklist.code}>
+                        {checklist.label}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldDescription>
+                    Ao concluir o cadastro, o sistema cria automaticamente a solicitação e mostra
+                    essa lista no portal do novo usuário.
+                  </FieldDescription>
+                  <FieldError errors={[form.formState.errors.initialDocumentChecklistCode]} />
+                  {ADMISSION_CHECKLISTS.map((checklist) =>
+                    checklist.code === initialDocumentChecklistCode ? (
+                      <p key={checklist.code} className="rounded-lg bg-muted px-3 py-2 text-sm">
+                        {checklist.summary}
+                      </p>
+                    ) : null,
+                  )}
+                </Field>
+              ) : null}
             </div>
           ) : null}
 

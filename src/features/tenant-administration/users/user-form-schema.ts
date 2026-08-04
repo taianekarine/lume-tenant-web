@@ -14,6 +14,7 @@ function requireDepartmentForStandardUser(
     readonly isAdministrator: boolean;
     readonly documentAccessMode?: 'standard' | 'document-portal';
     readonly departments: readonly string[];
+    readonly initialDocumentChecklistCode?: string;
   },
   context: z.RefinementCtx,
 ) {
@@ -26,6 +27,17 @@ function requireDepartmentForStandardUser(
       code: 'custom',
       message: 'Selecione ao menos um departamento.',
       path: ['departments'],
+    });
+  }
+  if (
+    !input.isAdministrator &&
+    input.documentAccessMode === 'document-portal' &&
+    !input.initialDocumentChecklistCode
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Selecione a lista de documentos da admissão.',
+      path: ['initialDocumentChecklistCode'],
     });
   }
 }
@@ -52,6 +64,9 @@ export const userFormSchema = z
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/,
         'Inclua maiúscula, minúscula, número e símbolo.',
       ),
+    initialDocumentChecklistCode: z
+      .enum(['admission-general', 'admission-administrative', 'admission-driver'])
+      .optional(),
   })
   .strict()
   .superRefine(requireDepartmentForStandardUser);

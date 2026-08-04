@@ -1,5 +1,7 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
+
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
@@ -21,6 +23,7 @@ function requireDepartmentForStandardUser(
     readonly isAdministrator: boolean;
     readonly documentAccessMode?: 'standard' | 'document-portal';
     readonly departments: readonly string[];
+    readonly initialDocumentChecklistCode?: string;
   },
   context: z.RefinementCtx,
 ) {
@@ -33,6 +36,17 @@ function requireDepartmentForStandardUser(
       code: 'custom',
       message: 'Selecione ao menos um departamento.',
       path: ['departments'],
+    });
+  }
+  if (
+    !input.isAdministrator &&
+    input.documentAccessMode === 'document-portal' &&
+    !input.initialDocumentChecklistCode
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Selecione a lista de documentos da admissão.',
+      path: ['initialDocumentChecklistCode'],
     });
   }
 }
@@ -57,6 +71,9 @@ const createUserSchema = z
       .min(12)
       .max(72)
       .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/),
+    initialDocumentChecklistCode: z
+      .enum(['admission-general', 'admission-administrative', 'admission-driver'])
+      .optional(),
   })
   .superRefine(requireDepartmentForStandardUser);
 
@@ -127,6 +144,11 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
         : 'standard',
     departments: formStrings(formData, 'departments'),
     permissionCodes: formStrings(formData, 'permissionCodes'),
+    initialDocumentChecklistCode:
+      (formString(formData, 'initialDocumentChecklistCode') as
+        | 'admission-general'
+        | 'admission-administrative'
+        | 'admission-driver') || undefined,
   });
 
   if (!parsed.success) {
@@ -135,7 +157,12 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
 
   try {
     await executeAuthenticatedTenantMutation((gateway) =>
-      gateway.createUser(normalizeAdministratorAssignments(parsed.data)),
+      gateway.createUser({
+        ...normalizeAdministratorAssignments(parsed.data),
+        initialDocumentRequestCommandId: parsed.data.initialDocumentChecklistCode
+          ? randomUUID()
+          : undefined,
+      }),
     );
   } catch (error) {
     actionFailureDestination('/users', error);
@@ -219,7 +246,12 @@ export async function createTenantUserFormAction(input: unknown): Promise<Tenant
 
   try {
     await executeAuthenticatedTenantMutation((gateway) =>
-      gateway.createUser(normalizeAdministratorAssignments(parsed.data)),
+      gateway.createUser({
+        ...normalizeAdministratorAssignments(parsed.data),
+        initialDocumentRequestCommandId: parsed.data.initialDocumentChecklistCode
+          ? randomUUID()
+          : undefined,
+      }),
     );
   } catch (error) {
     return tenantUserActionResult(error, 'Não foi possível criar o usuário.');

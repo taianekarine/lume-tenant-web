@@ -272,6 +272,17 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
     return this.parse(z.object({ request: requestDetailSchema }), body).request;
   }
 
+  async updateExtractedData(
+    submissionId: string,
+    input: Parameters<DocumentManagementGateway['updateExtractedData']>[1],
+  ) {
+    const body = await this.requestJson(
+      `/document-management/submissions/${encodeURIComponent(submissionId)}/extracted-data`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return this.parse(z.object({ request: requestDetailSchema }), body).request;
+  }
+
   async review(submissionId: string, input: Parameters<DocumentManagementGateway['review']>[1]) {
     const body = await this.requestJson(
       `/document-management/submissions/${encodeURIComponent(submissionId)}/reviews`,
@@ -302,6 +313,28 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
         signal: AbortSignal.timeout(this.timeoutMs),
       },
     );
+    if (!response.ok) await this.throwApiError(response);
+    return response;
+  }
+
+  async downloadUserExport(subjectUserId: string): Promise<Response> {
+    return this.download(
+      `/document-management/users/${encodeURIComponent(subjectUserId)}/export.xlsx`,
+    );
+  }
+
+  async downloadUserFiles(subjectUserId: string): Promise<Response> {
+    return this.download(
+      `/document-management/users/${encodeURIComponent(subjectUserId)}/files.zip`,
+    );
+  }
+
+  private async download(path: string): Promise<Response> {
+    const response = await this.fetcher(`${normalizeBaseUrl(this.baseUrl)}${path}`, {
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
     if (!response.ok) await this.throwApiError(response);
     return response;
   }

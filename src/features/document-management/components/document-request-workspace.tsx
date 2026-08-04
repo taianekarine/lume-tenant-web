@@ -12,6 +12,50 @@ function latestReason(item: DocumentRequestDetail['items'][number]): string | nu
   return item.submissions[0]?.reviews[0]?.reason ?? null;
 }
 
+interface ExtractionFieldDefinition {
+  readonly key: string;
+  readonly label: string;
+  readonly type?: string;
+}
+
+function extractionFields(
+  config: Readonly<Record<string, unknown>>,
+): readonly ExtractionFieldDefinition[] {
+  const schema = config.extractionSchema;
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return [];
+  const definitions = (schema as Record<string, unknown>).fields;
+  if (!Array.isArray(definitions)) return [];
+  return definitions.flatMap((definition) => {
+    if (!definition || typeof definition !== 'object' || Array.isArray(definition)) return [];
+    const record = definition as Record<string, unknown>;
+    return typeof record.key === 'string' && typeof record.label === 'string'
+      ? [
+          {
+            key: record.key,
+            label: record.label,
+            type: typeof record.type === 'string' ? record.type : undefined,
+          },
+        ]
+      : [];
+  });
+}
+
+function fieldRecordValue(data: Readonly<Record<string, unknown>>, key: string): string {
+  const entry = data[key];
+  if (entry && typeof entry === 'object' && !Array.isArray(entry) && 'value' in entry) {
+    const value = (entry as Record<string, unknown>).value;
+    return typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
+  }
+  return typeof entry === 'string' ? entry : entry == null ? '' : JSON.stringify(entry);
+}
+
+function fieldConfidence(data: Readonly<Record<string, unknown>>, key: string): string {
+  const entry = data[key];
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return '';
+  const confidence = (entry as Record<string, unknown>).confidence;
+  return typeof confidence === 'number' ? String(Math.round(confidence * 100)) : '';
+}
+
 export function DocumentRequestWorkspace({
   request,
   canReview,
@@ -37,9 +81,33 @@ export function DocumentRequestWorkspace({
               Titular: {request.subject.name} · {DOCUMENT_STATUS_LABELS[request.status]}
             </p>
           </div>
-          <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
-            {progress}% concluído
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {canReview ? (
+              <>
+                <Button
+                  render={
+                    <Link href={`/document-management/users/${request.subject.id}/export.xlsx`} />
+                  }
+                  nativeButton={false}
+                  variant="outline"
+                >
+                  Baixar dados XLSX
+                </Button>
+                <Button
+                  render={
+                    <Link href={`/document-management/users/${request.subject.id}/files.zip`} />
+                  }
+                  nativeButton={false}
+                  variant="outline"
+                >
+                  Baixar todos os arquivos
+                </Button>
+              </>
+            ) : null}
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+              {progress}% concluído
+            </span>
+          </div>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-muted">
           <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
@@ -68,6 +136,7 @@ export function DocumentRequestWorkspace({
             item.id,
             returnPath,
           );
+          const configuredExtractionFields = extractionFields(item.config);
 
           return (
             <Card key={item.id}>
@@ -165,6 +234,50 @@ export function DocumentRequestWorkspace({
                     )}
                     className="grid gap-3 rounded-lg border p-4 md:grid-cols-2"
                   >
+                    {configuredExtractionFields.length ? (
+                      <fieldset className="space-y-3 rounded-lg bg-muted/40 p-3 md:col-span-2">
+                        <legend className="px-1 text-sm font-semibold">
+                          Dados extraídos/propostos e confirmação
+                        </legend>
+                        <p className="text-xs text-muted-foreground">
+                          Confira o documento. O valor confirmado só integra o cadastro após esta
+                          revisão humana.
+                        </p>
+                        {configuredExtractionFields.map((field) => (
+                          <div key={field.key} className="grid gap-2 md:grid-cols-[1fr_8rem_1fr]">
+                            <label className="space-y-1 text-xs font-medium">
+                              <span>{field.label} — valor proposto</span>
+                              <Input
+                                name={`proposed.${field.key}`}
+                                type={field.type === 'date' ? 'date' : 'text'}
+                                defaultValue={fieldRecordValue(latest.extractedData, field.key)}
+                              />
+                            </label>
+                            <label className="space-y-1 text-xs font-medium">
+                              <span>Confiança %</span>
+                              <Input
+                                name={`confidence.${field.key}`}
+                                type="number"
+                                min="0"
+                                max="100"
+                                defaultValue={fieldConfidence(latest.extractedData, field.key)}
+                              />
+                            </label>
+                            <label className="space-y-1 text-xs font-medium">
+                              <span>{field.label} — valor confirmado</span>
+                              <Input
+                                name={`confirmed.${field.key}`}
+                                type={field.type === 'date' ? 'date' : 'text'}
+                                defaultValue={
+                                  fieldRecordValue(latest.confirmedData, field.key) ||
+                                  fieldRecordValue(latest.extractedData, field.key)
+                                }
+                              />
+                            </label>
+                          </div>
+                        ))}
+                      </fieldset>
+                    ) : null}
                     <label className="space-y-1 text-sm font-medium">
                       <span>Decisão</span>
                       <select

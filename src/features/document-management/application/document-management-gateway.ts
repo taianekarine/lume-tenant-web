@@ -46,6 +46,13 @@ export interface DocumentManagementGateway {
   }): Promise<DocumentRequestDetail>;
   upload(requestItemId: string, formData: FormData): Promise<DocumentRequestDetail>;
   completeSubmission(submissionId: string): Promise<DocumentRequestDetail>;
+  updateExtractedData(
+    submissionId: string,
+    input: {
+      fields: Readonly<Record<string, unknown>>;
+      confidences?: Readonly<Record<string, number>>;
+    },
+  ): Promise<DocumentRequestDetail>;
   review(
     submissionId: string,
     input: {
@@ -56,8 +63,12 @@ export interface DocumentManagementGateway {
       validUntil?: string;
       originalCheckStatus?: 'not-required' | 'pending' | 'confirmed' | 'divergent';
       originalObservation?: string;
+      correctedFields?: Readonly<Record<string, unknown>>;
+      confirmedFields?: Readonly<Record<string, unknown>>;
     },
   ): Promise<DocumentRequestDetail>;
   getFile(fileId: string): Promise<Response>;
   downloadExport(): Promise<Response>;
+  downloadUserExport(subjectUserId: string): Promise<Response>;
+  downloadUserFiles(subjectUserId: string): Promise<Response>;
 }
