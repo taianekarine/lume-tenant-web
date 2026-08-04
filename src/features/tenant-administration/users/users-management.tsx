@@ -228,8 +228,10 @@ function PermissionFields({
 
 function CreateUserDialog({
   permissionCatalog,
+  canManageAccess,
 }: {
   readonly permissionCatalog: PermissionCatalog;
+  readonly canManageAccess: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -242,15 +244,15 @@ function CreateUserDialog({
       email: '',
       password: '',
       isAdministrator: false,
-      documentAccessMode: 'standard',
+      documentAccessMode: canManageAccess ? 'standard' : 'document-portal',
       departments: [],
       permissionCodes: [],
     },
   });
   const departments = useWatch({ control: form.control, name: 'departments' });
   const standardPermissions = useMemo(
-    () => compatiblePermissionCodes(permissionCatalog, departments),
-    [departments, permissionCatalog],
+    () => (canManageAccess ? compatiblePermissionCodes(permissionCatalog, departments) : []),
+    [canManageAccess, departments, permissionCatalog],
   );
 
   const reset = () => {
@@ -277,7 +279,17 @@ function CreateUserDialog({
 
   const createUser = form.handleSubmit((values) => {
     startTransition(async () => {
-      const result = await createTenantUserFormAction(values);
+      const result = await createTenantUserFormAction(
+        canManageAccess
+          ? values
+          : {
+              ...values,
+              isAdministrator: false,
+              documentAccessMode: 'document-portal',
+              departments: [],
+              permissionCodes: [],
+            },
+      );
       toast.add({
         title: result.success ? 'Usuário cadastrado' : 'Cadastro não concluído',
         description: formatActionResultDescription(result),
@@ -290,7 +302,9 @@ function CreateUserDialog({
     });
   });
 
-  const stepLabels = ['Dados básicos', 'Departamentos', 'Permissões'];
+  const stepLabels = canManageAccess
+    ? ['Dados básicos', 'Departamentos', 'Permissões']
+    : ['Dados e acesso documental'];
 
   return (
     <Dialog
@@ -383,20 +397,30 @@ function CreateUserDialog({
                 </FieldDescription>
                 <FieldError errors={[form.formState.errors.password]} />
               </Field>
-              <Field>
-                <FieldLabel htmlFor="new-user-document-access">Modo de acesso</FieldLabel>
-                <select
-                  id="new-user-document-access"
-                  className="h-11 rounded-lg border bg-background px-3"
-                  {...form.register('documentAccessMode')}
-                >
-                  <option value="standard">Colaborador — painel autorizado</option>
-                  <option value="document-portal">Candidato — somente documentos</option>
-                </select>
-                <FieldDescription>
-                  Candidatos permanecem restritos ao portal documental após o primeiro acesso.
-                </FieldDescription>
-              </Field>
+              {canManageAccess ? (
+                <Field>
+                  <FieldLabel htmlFor="new-user-document-access">Modo de acesso</FieldLabel>
+                  <select
+                    id="new-user-document-access"
+                    className="h-11 rounded-lg border bg-background px-3"
+                    {...form.register('documentAccessMode')}
+                  >
+                    <option value="standard">Colaborador — painel autorizado</option>
+                    <option value="document-portal">Candidato — somente documentos</option>
+                  </select>
+                  <FieldDescription>
+                    Candidatos permanecem restritos ao portal documental após o primeiro acesso.
+                  </FieldDescription>
+                </Field>
+              ) : (
+                <div className="rounded-lg border bg-muted/40 p-4 text-sm sm:col-span-2">
+                  <p className="font-medium">Acesso inicial somente para documentos</p>
+                  <p className="mt-1 text-muted-foreground">
+                    RH e Departamento Pessoal podem criar este acesso inicial. Departamentos e
+                    demais permissões serão definidos posteriormente por um administrador.
+                  </p>
+                </div>
+              )}
             </div>
           ) : null}
 
@@ -435,12 +459,12 @@ function CreateUserDialog({
 
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
-            {step > 1 ? (
+            {canManageAccess && step > 1 ? (
               <Button type="button" variant="outline" onClick={() => setStep((step - 1) as 1 | 2)}>
                 Voltar
               </Button>
             ) : null}
-            {step < 3 ? (
+            {canManageAccess && step < 3 ? (
               <Button type="button" onClick={next}>
                 Continuar
               </Button>
@@ -995,7 +1019,12 @@ export function UsersManagement({
             {users.meta.total} conta(s) encontrada(s) neste tenant.
           </p>
         </div>
-        {canCreate ? <CreateUserDialog permissionCatalog={permissionCatalog} /> : null}
+        {canCreate ? (
+          <CreateUserDialog
+            permissionCatalog={permissionCatalog}
+            canManageAccess={canManageAccess}
+          />
+        ) : null}
       </div>
 
       <UsersFilters filters={filters} permissionCatalog={permissionCatalog} />

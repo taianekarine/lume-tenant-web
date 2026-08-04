@@ -17,10 +17,18 @@ const userAssignmentFields = {
 } as const;
 
 function requireDepartmentForStandardUser(
-  input: { readonly isAdministrator: boolean; readonly departments: readonly string[] },
+  input: {
+    readonly isAdministrator: boolean;
+    readonly documentAccessMode?: 'standard' | 'document-portal';
+    readonly departments: readonly string[];
+  },
   context: z.RefinementCtx,
 ) {
-  if (!input.isAdministrator && input.departments.length === 0) {
+  if (
+    !input.isAdministrator &&
+    input.documentAccessMode !== 'document-portal' &&
+    input.departments.length === 0
+  ) {
     context.addIssue({
       code: 'custom',
       message: 'Selecione ao menos um departamento.',

@@ -25,6 +25,7 @@ export async function requireManagementTenantSession(
 ): Promise<AuthenticatedSession> {
   const session = await requireTenantSession(anyPermission);
 
+  if (session.user.isAdministrator === true) return session;
   if (session.user.type !== 'employee' || !session.user.departments.includes('management')) {
     redirect('/dashboard');
   }
@@ -37,6 +38,7 @@ export async function requirePeopleOperationsTenantSession(
 ): Promise<AuthenticatedSession> {
   const session = await requireTenantSession(anyPermission);
 
+  if (session.user.isAdministrator === true) return session;
   if (
     session.user.type !== 'employee' ||
     !session.user.departments.some((department) =>

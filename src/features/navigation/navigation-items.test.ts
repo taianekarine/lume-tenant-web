@@ -51,6 +51,17 @@ describe('getAuthorizedNavigationItems', () => {
     },
   );
 
+  it('shows Users to an explicit administrator even without department data', () => {
+    const administrator = {
+      ...createEmployee(['users:view'], true, []),
+      isAdministrator: true,
+    };
+
+    expect(getAuthorizedNavigationItems(administrator).map((item) => item.label)).toContain(
+      'Usuários',
+    );
+  });
+
   it('requires the explicit license permission inside Management', () => {
     const items = getAuthorizedNavigationItems(
       createEmployee(['dashboard:view'], true, ['management']),

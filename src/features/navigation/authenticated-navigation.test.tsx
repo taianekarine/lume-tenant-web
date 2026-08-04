@@ -25,15 +25,21 @@ function renderNavigation(user: EmployeeUser) {
   );
 }
 
-function createEmployee(permissions: EmployeeUser['permissions'], isActive = true): EmployeeUser {
+function createEmployee(
+  permissions: EmployeeUser['permissions'],
+  isActive = true,
+  departments: readonly string[] = ['commercial'],
+  isAdministrator = false,
+): EmployeeUser {
   return {
     id: 'employee-001',
     name: 'Maria Silva',
     type: 'employee',
-    departments: ['commercial'],
+    departments,
     permissions,
     clientCategory: null,
     isActive,
+    isAdministrator,
   };
 }
 
@@ -141,6 +147,19 @@ describe('AuthenticatedNavigation', () => {
     expect(screen.getByRole('link', { name: 'Orçamentos' })).toBeInTheDocument();
     expect(screen.queryByText('Operação')).not.toBeInTheDocument();
     await waitFor(() => expect(mockedPendingCount).toHaveBeenCalledTimes(1));
+  });
+
+  it('renders Users and document management in the People group', () => {
+    renderNavigation(
+      createEmployee(['users:view', 'documents:manage'], true, ['management'], true),
+    );
+
+    expect(screen.getByText('Pessoas')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Usuários' })).toHaveAttribute('href', '/users');
+    expect(screen.getByRole('link', { name: 'Gestão documental' })).toHaveAttribute(
+      'href',
+      '/document-management',
+    );
   });
 
   it('does not render navigation for an inactive user', () => {

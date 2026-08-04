@@ -100,6 +100,7 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
 ];
 
 function hasOrganizationalScope(user: User, item: InternalNavigationItem): boolean {
+  if (user.isAdministrator === true) return true;
   if (item.group === 'commercial') return hasCommercialScope(user);
   if (item.group === 'people-operations') {
     return (

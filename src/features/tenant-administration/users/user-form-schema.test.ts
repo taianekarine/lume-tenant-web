@@ -74,6 +74,21 @@ describe('userFormSchema', () => {
     ).toBe(true);
   });
 
+  it('allows an initial document portal access without departments', () => {
+    expect(
+      userFormSchema.safeParse({
+        name: 'Novo Candidato',
+        username: 'novo.candidato',
+        email: 'candidato@example.com',
+        password: 'SenhaInicial@2026',
+        isAdministrator: false,
+        documentAccessMode: 'document-portal',
+        departments: [],
+        permissionCodes: [],
+      }).success,
+    ).toBe(true);
+  });
+
   it('does not allow creating an administrator through the Tenant Web', () => {
     const parsed = userFormSchema.safeParse({
       name: 'Taiane Karine',

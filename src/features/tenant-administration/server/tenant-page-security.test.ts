@@ -5,7 +5,10 @@ import { redirect } from 'next/navigation';
 import { AUTHENTICATED_SESSION_VERSION, type AuthenticatedSession } from '@/features/auth/domain';
 import { getCurrentAuthenticatedSession } from '@/features/auth/server';
 
-import { requireManagementTenantSession } from './tenant-page-security';
+import {
+  requireManagementTenantSession,
+  requirePeopleOperationsTenantSession,
+} from './tenant-page-security';
 
 jest.mock('next/navigation', () => ({
   redirect: jest.fn(),
@@ -18,7 +21,11 @@ jest.mock('@/features/auth/server', () => ({
 const mockedRedirect = jest.mocked(redirect);
 const mockedSession = jest.mocked(getCurrentAuthenticatedSession);
 
-function session(departments: readonly string[], permissions: readonly `${string}:${string}`[]) {
+function session(
+  departments: readonly string[],
+  permissions: readonly `${string}:${string}`[],
+  isAdministrator = false,
+) {
   return {
     version: AUTHENTICATED_SESSION_VERSION,
     id: 'session-001',
@@ -30,6 +37,7 @@ function session(departments: readonly string[], permissions: readonly `${string
       permissions,
       clientCategory: null,
       isActive: true,
+      isAdministrator,
     },
     issuedAt: '2026-07-28T12:00:00.000Z',
     expiresAt: '2026-07-28T13:00:00.000Z',
@@ -62,5 +70,14 @@ describe('management tenant page security', () => {
 
     mockedSession.mockResolvedValue(session(['management'], ['dashboard:view']));
     await expect(requireManagementTenantSession(['users:manage'])).rejects.toThrow('NEXT_REDIRECT');
+  });
+
+  it('allows an explicit administrator even when department data is empty', async () => {
+    const administrator = session([], ['users:manage'], true);
+    mockedSession.mockResolvedValue(administrator);
+
+    await expect(requirePeopleOperationsTenantSession(['users:manage'])).resolves.toBe(
+      administrator,
+    );
   });
 });

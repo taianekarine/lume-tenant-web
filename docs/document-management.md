@@ -13,6 +13,12 @@ Usuários com `documentAccessMode=document-portal` são direcionados a
 `/documents` após o login e veem somente a navegação documental. A API também
 limita suas permissões; a proteção não depende do menu.
 
+O menu **Pessoas** exibe **Usuários** e **Gestão documental** conforme as
+permissões. Administradores mantêm edição integral de departamentos,
+permissões e estado das contas. RH e Departamento Pessoal veem a listagem e
+podem criar somente o acesso inicial “somente documentos”; o formulário não
+oferece departamentos nem permissões adicionais nesse perfil.
+
 Depois do upload, a Server Action conclui a pré-validação e a tela indica revisão
 humana pendente. Aprovação, recusa ou reenvio registram motivo, validade e
 conferência do original quando aplicável.

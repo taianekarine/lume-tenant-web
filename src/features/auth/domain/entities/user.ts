@@ -72,6 +72,7 @@ interface BaseUser {
   readonly type: UserType;
   readonly permissions: readonly Permission[];
   readonly isActive: boolean;
+  readonly isAdministrator?: boolean;
   readonly documentAccessMode?: 'standard' | 'document-portal';
 }
 

@@ -439,6 +439,40 @@ describe('user editor form', () => {
     });
   });
 
+  it('limits HR and Personnel Department creation to initial document access', async () => {
+    const interaction = userEvent.setup();
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit={false}
+        canManageAccess={false}
+      />,
+    );
+
+    await interaction.click(screen.getByRole('button', { name: 'Novo usuário' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Acesso inicial somente para documentos')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Modo de acesso')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Departamentos')).not.toBeInTheDocument();
+
+    await interaction.type(within(dialog).getByLabelText('Nome'), 'Novo Candidato');
+    await interaction.type(within(dialog).getByLabelText('Usuário'), 'novo.candidato');
+    await interaction.type(within(dialog).getByLabelText('E-mail'), 'candidato@example.com');
+    await interaction.type(within(dialog).getByLabelText('Senha inicial'), 'SenhaForte@2026');
+    await interaction.click(within(dialog).getByRole('button', { name: 'Cadastrar usuário' }));
+
+    await waitFor(() => expect(createTenantUserFormAction).toHaveBeenCalledTimes(1));
+    expect(jest.mocked(createTenantUserFormAction).mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        documentAccessMode: 'document-portal',
+        departments: [],
+        permissionCodes: [],
+      }),
+    );
+  });
+
   it('uses the three-step creation flow and only shows compatible permissions', async () => {
     const interaction = userEvent.setup();
     render(
