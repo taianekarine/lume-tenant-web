@@ -119,17 +119,17 @@ const ADMISSION_CHECKLISTS = [
   {
     code: 'admission-general',
     label: 'Registro geral',
-    summary: '2 fotos 3x4, documentos pessoais, familiares, trabalhistas e certidões.',
+    summary: '1 arquivo digital de foto 3x4, documentos pessoais, familiares, trabalhistas e certidões.',
   },
   {
     code: 'admission-administrative',
     label: 'Registro administrativo',
-    summary: '2 fotos 3x4, documentos pessoais, familiares, trabalhistas e certidões administrativas.',
+    summary: '1 arquivo digital de foto 3x4, documentos pessoais, familiares, trabalhistas e certidões administrativas.',
   },
   {
     code: 'admission-driver',
     label: 'Registro de motorista',
-    summary: '4 fotos 3x4, CNH D com EAR, curso de passageiros, prontuário e certidões.',
+    summary: '1 arquivo digital de foto 3x4, CNH D com EAR, curso de passageiros, prontuário e certidões.',
   },
 ] as const;
 
