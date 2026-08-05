@@ -32,7 +32,14 @@ export default async function UsersRoute({
   ]);
   const query = await searchParams;
   let users: TenantUserList;
-  let permissionCatalog: PermissionCatalog;
+  let permissionCatalog: PermissionCatalog = {
+    resources: [],
+    actions: [],
+    actionsByResource: {},
+    permissions: [],
+    permissionsByDepartment: {},
+    implicitPermissions: [],
+  };
   const status = ['active', 'inactive', 'suspended'].includes(query.status ?? '')
     ? (query.status as TenantUserStatus)
     : undefined;
@@ -45,12 +52,18 @@ export default async function UsersRoute({
   const page = Math.max(1, Number.parseInt(query.page ?? '1', 10) || 1);
 
   try {
-    [users, permissionCatalog] = await executeAuthenticatedTenantRequest((gateway) =>
-      Promise.all([
+    if (session.user.isAdministrator) {
+      [users, permissionCatalog] = await executeAuthenticatedTenantRequest((gateway) =>
+        Promise.all([
+          gateway.listUsers({ ...filters, page, pageSize: 20 }),
+          gateway.listPermissions(),
+        ]),
+      );
+    } else {
+      users = await executeAuthenticatedTenantRequest((gateway) =>
         gateway.listUsers({ ...filters, page, pageSize: 20 }),
-        gateway.listPermissions(),
-      ]),
-    );
+      );
+    }
   } catch (error) {
     rethrowTenantPageError(error);
   }
