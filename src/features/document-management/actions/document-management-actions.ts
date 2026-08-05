@@ -159,3 +159,53 @@ export async function reviewDocumentSubmissionAction(
   revalidatePath(`/document-management/${requestId}`);
   redirect(`${returnPath}?success=Revisão registrada.`);
 }
+
+export async function addDocumentRequestItemAction(
+  requestId: string,
+  returnPath: string,
+  formData: FormData,
+): Promise<void> {
+  const requirement = value(formData, 'requirement');
+  if (!['required', 'optional'].includes(requirement)) {
+    redirect(`${returnPath}?error=Exigência inválida.`);
+  }
+  try {
+    await executeAuthenticatedDocumentMutation((gateway) =>
+      gateway.addRequestItem(requestId, {
+        documentTypeId: value(formData, 'documentTypeId'),
+        requirement: requirement as 'required' | 'optional',
+        instructions: value(formData, 'instructions') || undefined,
+        dueAt: value(formData, 'dueAt') || undefined,
+        reason: value(formData, 'reason'),
+      }),
+    );
+  } catch (error) {
+    failure(returnPath, error);
+  }
+  revalidatePath(returnPath);
+  redirect(`${returnPath}?success=Documento incluído na solicitação.`);
+}
+
+export async function setDocumentRequestItemPolicyAction(
+  requestId: string,
+  requestItemId: string,
+  returnPath: string,
+  formData: FormData,
+): Promise<void> {
+  const policy = value(formData, 'policy');
+  if (!['required', 'optional', 'waived'].includes(policy)) {
+    redirect(`${returnPath}?error=Política documental inválida.`);
+  }
+  try {
+    await executeAuthenticatedDocumentMutation((gateway) =>
+      gateway.setRequestItemPolicy(requestItemId, {
+        policy: policy as 'required' | 'optional' | 'waived',
+        reason: value(formData, 'reason'),
+      }),
+    );
+  } catch (error) {
+    failure(returnPath, error);
+  }
+  revalidatePath(`/document-management/${requestId}`);
+  redirect(`${returnPath}?success=Exigência documental atualizada.`);
+}

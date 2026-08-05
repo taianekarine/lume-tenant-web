@@ -11,6 +11,12 @@ import {
 type Fetcher = typeof fetch;
 
 const isoDate = z.string().refine((value) => Number.isFinite(Date.parse(value)));
+const documentTypeSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+  active: z.boolean(),
+});
 const nullableIsoDate = isoDate.nullable();
 const contextSchema = z.enum([
   'admission',
@@ -42,6 +48,7 @@ const itemStatusSchema = z.enum([
   'approved',
   'rejected',
   'expired',
+  'waived',
   'cancelled',
 ]);
 const subjectSchema = z.object({
@@ -248,11 +255,38 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
     return this.parse(z.object({ data: z.array(checklistSchema) }), body).data;
   }
 
+  async listDocumentTypes() {
+    const body = await this.requestJson('/document-management/document-types');
+    return this.parse(z.object({ data: z.array(documentTypeSchema) }), body).data;
+  }
+
   async createRequest(input: Parameters<DocumentManagementGateway['createRequest']>[0]) {
     const body = await this.requestJson('/document-management/requests', {
       method: 'POST',
       body: JSON.stringify(input),
     });
+    return this.parse(z.object({ request: requestDetailSchema }), body).request;
+  }
+
+  async addRequestItem(
+    requestId: string,
+    input: Parameters<DocumentManagementGateway['addRequestItem']>[1],
+  ) {
+    const body = await this.requestJson(
+      `/document-management/requests/${encodeURIComponent(requestId)}/items`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
+    return this.parse(z.object({ request: requestDetailSchema }), body).request;
+  }
+
+  async setRequestItemPolicy(
+    requestItemId: string,
+    input: Parameters<DocumentManagementGateway['setRequestItemPolicy']>[1],
+  ) {
+    const body = await this.requestJson(
+      `/document-management/items/${encodeURIComponent(requestItemId)}/policy`,
+      { method: 'POST', body: JSON.stringify(input) },
+    );
     return this.parse(z.object({ request: requestDetailSchema }), body).request;
   }
 

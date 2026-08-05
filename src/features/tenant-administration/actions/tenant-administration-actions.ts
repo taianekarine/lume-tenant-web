@@ -16,6 +16,27 @@ const userAssignmentFields = {
   documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
   departments: z.array(z.string().min(1)),
   permissionCodes: z.array(z.string().min(1)),
+  jobTitle: z.string().trim().max(120).optional(),
+  maritalStatus: z.enum([
+    'single',
+    'married',
+    'stable-union',
+    'divorced',
+    'widowed',
+    'not-informed',
+  ]).optional(),
+  militaryDocumentStatus: z.enum([
+    'applicable',
+    'not-applicable',
+    'pending-confirmation',
+  ]).optional(),
+  dependents: z.array(
+    z.object({
+      name: z.string().trim().min(2).max(120),
+      birthDate: z.string().date(),
+      relationship: z.string().trim().max(60).optional(),
+    }),
+  ).optional(),
 } as const;
 
 function requireDepartmentForStandardUser(
@@ -23,7 +44,6 @@ function requireDepartmentForStandardUser(
     readonly isAdministrator: boolean;
     readonly documentAccessMode?: 'standard' | 'document-portal';
     readonly departments: readonly string[];
-    readonly initialDocumentChecklistCode?: string;
   },
   context: z.RefinementCtx,
 ) {
@@ -36,17 +56,6 @@ function requireDepartmentForStandardUser(
       code: 'custom',
       message: 'Selecione ao menos um departamento.',
       path: ['departments'],
-    });
-  }
-  if (
-    !input.isAdministrator &&
-    input.documentAccessMode === 'document-portal' &&
-    !input.initialDocumentChecklistCode
-  ) {
-    context.addIssue({
-      code: 'custom',
-      message: 'Selecione a lista de documentos da admissão.',
-      path: ['initialDocumentChecklistCode'],
     });
   }
 }
@@ -71,9 +80,6 @@ const createUserSchema = z
       .min(12)
       .max(72)
       .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/),
-    initialDocumentChecklistCode: z
-      .enum(['admission-general', 'admission-administrative', 'admission-driver'])
-      .optional(),
   })
   .superRefine(requireDepartmentForStandardUser);
 
@@ -88,10 +94,19 @@ function normalizeAdministratorAssignments<
 }
 
 function withoutAdministratorMutation(input: z.infer<typeof userBaseSchema>) {
+  const employeeProfile = {
+    ...(input.jobTitle === undefined ? {} : { jobTitle: input.jobTitle }),
+    ...(input.maritalStatus === undefined ? {} : { maritalStatus: input.maritalStatus }),
+    ...(input.militaryDocumentStatus === undefined
+      ? {}
+      : { militaryDocumentStatus: input.militaryDocumentStatus }),
+    ...(input.dependents === undefined ? {} : { dependents: input.dependents }),
+  };
   if (input.isAdministrator) {
     return {
       name: input.name,
       email: input.email,
+      ...employeeProfile,
     };
   }
 
@@ -101,6 +116,7 @@ function withoutAdministratorMutation(input: z.infer<typeof userBaseSchema>) {
     documentAccessMode: input.documentAccessMode,
     departments: input.departments,
     permissionCodes: input.permissionCodes,
+    ...employeeProfile,
   };
 }
 function formString(formData: FormData, name: string): string {
@@ -144,11 +160,11 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
         : 'standard',
     departments: formStrings(formData, 'departments'),
     permissionCodes: formStrings(formData, 'permissionCodes'),
-    initialDocumentChecklistCode:
-      (formString(formData, 'initialDocumentChecklistCode') as
-        | 'admission-general'
-        | 'admission-administrative'
-        | 'admission-driver') || undefined,
+    jobTitle: formString(formData, 'jobTitle') || undefined,
+    maritalStatus: formString(formData, 'maritalStatus') || 'not-informed',
+    militaryDocumentStatus:
+      formString(formData, 'militaryDocumentStatus') || 'pending-confirmation',
+    dependents: [],
   });
 
   if (!parsed.success) {
@@ -159,9 +175,7 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
     await executeAuthenticatedTenantMutation((gateway) =>
       gateway.createUser({
         ...normalizeAdministratorAssignments(parsed.data),
-        initialDocumentRequestCommandId: parsed.data.initialDocumentChecklistCode
-          ? randomUUID()
-          : undefined,
+        initialDocumentRequestCommandId: randomUUID(),
       }),
     );
   } catch (error) {
@@ -183,6 +197,11 @@ export async function updateTenantUserAction(userId: string, formData: FormData)
         : 'standard',
     departments: formStrings(formData, 'departments'),
     permissionCodes: formStrings(formData, 'permissionCodes'),
+    jobTitle: formString(formData, 'jobTitle') || undefined,
+    maritalStatus: formString(formData, 'maritalStatus') || 'not-informed',
+    militaryDocumentStatus:
+      formString(formData, 'militaryDocumentStatus') || 'pending-confirmation',
+    dependents: [],
   });
 
   if (!parsed.success) {
@@ -248,9 +267,7 @@ export async function createTenantUserFormAction(input: unknown): Promise<Tenant
     await executeAuthenticatedTenantMutation((gateway) =>
       gateway.createUser({
         ...normalizeAdministratorAssignments(parsed.data),
-        initialDocumentRequestCommandId: parsed.data.initialDocumentChecklistCode
-          ? randomUUID()
-          : undefined,
+        initialDocumentRequestCommandId: randomUUID(),
       }),
     );
   } catch (error) {

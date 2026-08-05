@@ -1,10 +1,10 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { LoaderCircle, ShieldCheck } from 'lucide-react';
+import { LoaderCircle, Plus, ShieldCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useTransition } from 'react';
-import { useController, useForm, useWatch, type Control } from 'react-hook-form';
+import { useController, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form';
 
 import { updateTenantUserFormAction } from '@/features/tenant-administration/actions';
 import {
@@ -181,8 +181,13 @@ export function UserEditorForm({
       documentAccessMode: user.documentAccessMode ?? 'standard',
       departments: [...user.departments],
       permissionCodes: [...user.permissionCodes],
+      jobTitle: user.jobTitle ?? '',
+      maritalStatus: user.maritalStatus ?? 'not-informed',
+      militaryDocumentStatus: user.militaryDocumentStatus ?? 'pending-confirmation',
+      dependents: (user.dependents ?? []).map((dependent) => ({ ...dependent })),
     },
   });
+  const dependents = useFieldArray({ control: form.control, name: 'dependents' });
   const isAdministrator = user.isAdministrator;
   const departments = useWatch({ control: form.control, name: 'departments' });
   const standardPermissions = useMemo(
@@ -220,7 +225,24 @@ export function UserEditorForm({
 
   const submit = form.handleSubmit((values) => {
     startTransition(async () => {
-      const result = await updateTenantUserFormAction(user.id, values);
+      const supportsEmployeeProfile =
+        user.jobTitle !== undefined ||
+        user.maritalStatus !== undefined ||
+        user.militaryDocumentStatus !== undefined ||
+        user.dependents !== undefined;
+      const result = await updateTenantUserFormAction(
+        user.id,
+        supportsEmployeeProfile
+          ? values
+          : Object.fromEntries(
+              Object.entries(values).filter(
+                ([key]) =>
+                  !['jobTitle', 'maritalStatus', 'militaryDocumentStatus', 'dependents'].includes(
+                    key,
+                  ),
+              ),
+            ),
+      );
       toast.add({
         title: result.success ? 'Usuário atualizado' : 'Alteração não concluída',
         description: formatActionResultDescription(result),
@@ -269,6 +291,93 @@ export function UserEditorForm({
               <FieldDescription>O identificador de acesso não é alterado.</FieldDescription>
             </Field>
           </div>
+
+          <FieldSet>
+            <FieldLegend>Perfil para documentação</FieldLegend>
+            <FieldDescription>
+              Estes dados determinam as exigências aplicáveis. Alterações não apagam arquivos já
+              enviados.
+            </FieldDescription>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field>
+                <FieldLabel htmlFor="edit-user-job-title">Cargo ou função</FieldLabel>
+                <Input id="edit-user-job-title" {...form.register('jobTitle')} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="edit-user-marital-status">Situação civil</FieldLabel>
+                <select
+                  id="edit-user-marital-status"
+                  className="h-9 rounded-lg border bg-background px-3"
+                  {...form.register('maritalStatus')}
+                >
+                  <option value="not-informed">Não informada</option>
+                  <option value="single">Solteiro(a)</option>
+                  <option value="married">Casado(a)</option>
+                  <option value="stable-union">União estável</option>
+                  <option value="divorced">Divorciado(a)</option>
+                  <option value="widowed">Viúvo(a)</option>
+                </select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="edit-user-military-status">Documentação militar</FieldLabel>
+                <select
+                  id="edit-user-military-status"
+                  className="h-9 rounded-lg border bg-background px-3"
+                  {...form.register('militaryDocumentStatus')}
+                >
+                  <option value="pending-confirmation">Pendente de confirmação</option>
+                  <option value="applicable">Aplicável</option>
+                  <option value="not-applicable">Não aplicável</option>
+                </select>
+              </Field>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium">Filhos e dependentes</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  dependents.append({ name: '', birthDate: '', relationship: 'filho(a)' })
+                }
+              >
+                <Plus className="size-4" /> Adicionar dependente
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {dependents.fields.map((dependent, index) => (
+                <div
+                  key={dependent.id}
+                  className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_11rem_10rem_auto]"
+                >
+                  <Input
+                    aria-label={`Nome do dependente ${index + 1}`}
+                    placeholder="Nome completo"
+                    {...form.register(`dependents.${index}.name`)}
+                  />
+                  <Input
+                    aria-label={`Nascimento do dependente ${index + 1}`}
+                    type="date"
+                    {...form.register(`dependents.${index}.birthDate`)}
+                  />
+                  <Input
+                    aria-label={`Vínculo do dependente ${index + 1}`}
+                    placeholder="Vínculo"
+                    {...form.register(`dependents.${index}.relationship`)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remover dependente ${index + 1}`}
+                    onClick={() => dependents.remove(index)}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </FieldSet>
 
           {isAdministrator ? (
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">

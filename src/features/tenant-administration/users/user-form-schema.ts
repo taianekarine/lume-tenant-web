@@ -7,6 +7,23 @@ const userAssignmentFields = {
   documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
   departments: z.array(z.string()),
   permissionCodes: z.array(z.string()),
+  jobTitle: z.string().trim().max(120).optional(),
+  maritalStatus: z
+    .enum(['single', 'married', 'stable-union', 'divorced', 'widowed', 'not-informed'])
+    .default('not-informed'),
+  militaryDocumentStatus: z
+    .enum(['applicable', 'not-applicable', 'pending-confirmation'])
+    .default('pending-confirmation'),
+  dependents: z
+    .array(
+      z.object({
+        name: z.string().trim().min(2, 'Informe o nome do dependente.').max(120),
+        birthDate: z.string().date('Informe a data de nascimento.'),
+        relationship: z.string().trim().max(60).optional(),
+      }),
+    )
+    .max(30)
+    .default([]),
 } as const;
 
 function requireDepartmentForStandardUser(
@@ -14,7 +31,6 @@ function requireDepartmentForStandardUser(
     readonly isAdministrator: boolean;
     readonly documentAccessMode?: 'standard' | 'document-portal';
     readonly departments: readonly string[];
-    readonly initialDocumentChecklistCode?: string;
   },
   context: z.RefinementCtx,
 ) {
@@ -27,17 +43,6 @@ function requireDepartmentForStandardUser(
       code: 'custom',
       message: 'Selecione ao menos um departamento.',
       path: ['departments'],
-    });
-  }
-  if (
-    !input.isAdministrator &&
-    input.documentAccessMode === 'document-portal' &&
-    !input.initialDocumentChecklistCode
-  ) {
-    context.addIssue({
-      code: 'custom',
-      message: 'Selecione a lista de documentos da admissão.',
-      path: ['initialDocumentChecklistCode'],
     });
   }
 }
@@ -64,6 +69,7 @@ export const userFormSchema = z
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/,
         'Inclua maiúscula, minúscula, número e símbolo.',
       ),
+    // Compatibilidade de entrada com clientes anteriores; a seleção fixa não é mais usada.
     initialDocumentChecklistCode: z
       .enum(['admission-general', 'admission-administrative', 'admission-driver'])
       .optional(),
@@ -76,5 +82,5 @@ export const userEditorFormSchema = z
   .strict()
   .superRefine(requireDepartmentForStandardUser);
 
-export type UserFormValues = z.infer<typeof userFormSchema>;
-export type UserEditorFormValues = z.infer<typeof userEditorFormSchema>;
+export type UserFormValues = z.input<typeof userFormSchema>;
+export type UserEditorFormValues = z.input<typeof userEditorFormSchema>;

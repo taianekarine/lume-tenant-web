@@ -14,6 +14,13 @@ export type DocumentRequestStatus =
   | 'expired'
   | 'cancelled';
 
+export interface DocumentTypeSummary {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly active: boolean;
+}
+
 export interface DocumentRequestSummary {
   readonly id: string;
   readonly context: DocumentRequestContext;
@@ -74,7 +81,9 @@ export interface DocumentRequestDetail extends Omit<DocumentRequestSummary, 'pro
 export interface DocumentRequestItem {
   readonly id: string;
   readonly requirement: 'required' | 'optional' | 'conditional';
-  readonly status: Exclude<DocumentRequestStatus, 'draft' | 'partially-submitted'>;
+  readonly status:
+    | Exclude<DocumentRequestStatus, 'draft' | 'partially-submitted'>
+    | 'waived';
   readonly position: number;
   readonly instructions: string | null;
   readonly dueAt: string | null;
@@ -150,5 +159,6 @@ export const DOCUMENT_STATUS_LABELS: Readonly<Record<string, string>> = {
   approved: 'Aprovado',
   rejected: 'Recusado',
   expired: 'Vencido',
+  waived: 'Dispensado',
   cancelled: 'Cancelado',
 };

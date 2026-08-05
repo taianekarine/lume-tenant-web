@@ -1,7 +1,12 @@
 import Link from 'next/link';
 
-import { reviewDocumentSubmissionAction, uploadDocumentSubmissionAction } from '../actions';
-import type { DocumentRequestDetail } from '../domain';
+import {
+  addDocumentRequestItemAction,
+  reviewDocumentSubmissionAction,
+  setDocumentRequestItemPolicyAction,
+  uploadDocumentSubmissionAction,
+} from '../actions';
+import type { DocumentRequestDetail, DocumentTypeSummary } from '../domain';
 import { DOCUMENT_CONTEXT_LABELS, DOCUMENT_STATUS_LABELS } from '../domain';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
@@ -64,12 +69,16 @@ export function DocumentRequestWorkspace({
   request,
   canReview,
   returnPath,
+  documentTypes = [],
 }: {
   readonly request: DocumentRequestDetail;
   readonly canReview: boolean;
   readonly returnPath: string;
+  readonly documentTypes?: readonly DocumentTypeSummary[];
 }) {
-  const approved = request.items.filter((item) => item.status === 'approved').length;
+  const approved = request.items.filter((item) =>
+    ['approved', 'waived'].includes(item.status),
+  ).length;
   const progress = request.items.length ? Math.round((approved / request.items.length) * 100) : 0;
 
   return (
@@ -118,6 +127,62 @@ export function DocumentRequestWorkspace({
         </div>
       </header>
 
+      {canReview ? (
+        <details className="rounded-xl border bg-card p-4">
+          <summary className="cursor-pointer font-semibold">
+            Incluir documento manualmente
+          </summary>
+          <form
+            action={addDocumentRequestItemAction.bind(null, request.id, returnPath)}
+            className="mt-4 grid gap-3 md:grid-cols-2"
+          >
+            <label className="space-y-1 text-sm font-medium">
+              <span>Tipo de documento</span>
+              <select
+                name="documentTypeId"
+                className="h-9 w-full rounded-lg border bg-background px-3"
+                required
+              >
+                <option value="">Selecione</option>
+                {documentTypes
+                  .filter((type) => type.active)
+                  .map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Exigência</span>
+              <select
+                name="requirement"
+                className="h-9 w-full rounded-lg border bg-background px-3"
+                defaultValue="required"
+              >
+                <option value="required">Obrigatório</option>
+                <option value="optional">Opcional</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Prazo</span>
+              <Input name="dueAt" type="date" />
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              <span>Motivo da inclusão</span>
+              <Input name="reason" minLength={3} maxLength={1000} required />
+            </label>
+            <label className="space-y-1 text-sm font-medium md:col-span-2">
+              <span>Instruções</span>
+              <Textarea name="instructions" maxLength={2000} />
+            </label>
+            <div className="md:col-span-2">
+              <Button type="submit">Incluir documento</Button>
+            </div>
+          </form>
+        </details>
+      ) : null}
+
       <div className="space-y-4">
         {request.items.map((item) => {
           const latest = item.submissions[0];
@@ -164,6 +229,37 @@ export function DocumentRequestWorkspace({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {canReview ? (
+                  <form
+                    action={setDocumentRequestItemPolicyAction.bind(
+                      null,
+                      request.id,
+                      item.id,
+                      returnPath,
+                    )}
+                    className="grid gap-2 rounded-lg border bg-muted/30 p-3 md:grid-cols-[12rem_1fr_auto]"
+                  >
+                    <select
+                      name="policy"
+                      className="h-9 rounded-lg border bg-background px-3 text-sm"
+                      defaultValue={item.status === 'waived' ? 'waived' : item.requirement}
+                    >
+                      <option value="required">Obrigatório</option>
+                      <option value="optional">Opcional</option>
+                      <option value="waived">Dispensado</option>
+                    </select>
+                    <Input
+                      name="reason"
+                      placeholder="Motivo da alteração"
+                      minLength={3}
+                      maxLength={1000}
+                      required
+                    />
+                    <Button type="submit" variant="outline">
+                      Atualizar exigência
+                    </Button>
+                  </form>
+                ) : null}
                 {latestReason(item) ? (
                   <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                     Motivo: {latestReason(item)}

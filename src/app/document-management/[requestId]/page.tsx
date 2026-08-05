@@ -19,8 +19,12 @@ export default async function ManagedDocumentRequestPage({
   const { requestId } = await params;
   const query = await searchParams;
   let request;
+  let documentTypes;
   try {
-    request = await executeAuthenticatedDocumentRequest((gateway) => gateway.getRequest(requestId));
+    [request, documentTypes] = await Promise.all([
+      executeAuthenticatedDocumentRequest((gateway) => gateway.getRequest(requestId)),
+      executeAuthenticatedDocumentRequest((gateway) => gateway.listDocumentTypes()),
+    ]);
   } catch (error) {
     if (error instanceof DocumentManagementError && error.code === 'unauthorized') {
       redirect('/auth/session-expired');
@@ -44,7 +48,12 @@ export default async function ManagedDocumentRequestPage({
             {query.error ?? query.success}
           </p>
         ) : null}
-        <DocumentRequestWorkspace request={request} canReview returnPath={returnPath} />
+        <DocumentRequestWorkspace
+          request={request}
+          canReview
+          returnPath={returnPath}
+          documentTypes={documentTypes}
+        />
       </main>
     </AuthenticatedShell>
   );

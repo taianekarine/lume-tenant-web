@@ -21,6 +21,23 @@ const userSchema = z
     departments: z.array(z.string()),
     isAdministrator: z.boolean(),
     documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
+    jobTitle: z.string().nullable().default(null),
+    maritalStatus: z
+      .enum(['single', 'married', 'stable-union', 'divorced', 'widowed', 'not-informed'])
+      .nullable()
+      .default(null),
+    militaryDocumentStatus: z
+      .enum(['applicable', 'not-applicable', 'pending-confirmation'])
+      .default('pending-confirmation'),
+    dependents: z
+      .array(
+        z.object({
+          name: z.string(),
+          birthDate: z.string(),
+          relationship: z.string().optional(),
+        }),
+      )
+      .default([]),
     permissionCodes: z.array(z.string()).optional(),
     permissions: z.array(z.string()),
     clientCategory: z.null(),

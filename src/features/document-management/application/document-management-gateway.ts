@@ -4,6 +4,7 @@ import type {
   DocumentRequestDetail,
   DocumentRequestList,
   DocumentRequestStatus,
+  DocumentTypeSummary,
 } from '../domain';
 
 export type DocumentManagementErrorCode =
@@ -36,6 +37,7 @@ export interface DocumentManagementGateway {
   }): Promise<DocumentRequestList>;
   getRequest(requestId: string): Promise<DocumentRequestDetail>;
   listChecklists(): Promise<readonly DocumentChecklistSummary[]>;
+  listDocumentTypes(): Promise<readonly DocumentTypeSummary[]>;
   createRequest(input: {
     commandId: string;
     subjectUserId: string;
@@ -44,6 +46,20 @@ export interface DocumentManagementGateway {
     deadline?: string;
     notes?: string;
   }): Promise<DocumentRequestDetail>;
+  addRequestItem(
+    requestId: string,
+    input: {
+      documentTypeId: string;
+      requirement: 'required' | 'optional';
+      instructions?: string;
+      dueAt?: string;
+      reason: string;
+    },
+  ): Promise<DocumentRequestDetail>;
+  setRequestItemPolicy(
+    requestItemId: string,
+    input: { policy: 'required' | 'optional' | 'waived'; reason: string },
+  ): Promise<DocumentRequestDetail>;
   upload(requestItemId: string, formData: FormData): Promise<DocumentRequestDetail>;
   completeSubmission(submissionId: string): Promise<DocumentRequestDetail>;
   updateExtractedData(

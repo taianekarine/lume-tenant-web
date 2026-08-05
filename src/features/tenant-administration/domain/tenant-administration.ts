@@ -7,6 +7,20 @@ export interface TenantUser {
   readonly departments: readonly string[];
   readonly isAdministrator: boolean;
   readonly documentAccessMode?: 'standard' | 'document-portal';
+  readonly jobTitle: string | null;
+  readonly maritalStatus:
+    | 'single'
+    | 'married'
+    | 'stable-union'
+    | 'divorced'
+    | 'widowed'
+    | 'not-informed'
+    | null;
+  readonly militaryDocumentStatus:
+    | 'applicable'
+    | 'not-applicable'
+    | 'pending-confirmation';
+  readonly dependents: readonly TenantUserDependent[];
   readonly permissionCodes: readonly string[];
   readonly permissions: readonly string[];
   readonly isActive: boolean;
@@ -17,6 +31,12 @@ export interface TenantUser {
   readonly hasProfilePicture: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface TenantUserDependent {
+  readonly name: string;
+  readonly birthDate: string;
+  readonly relationship?: string;
 }
 
 export interface TenantUserList {
@@ -92,12 +112,12 @@ export interface CreateTenantUserInput {
   readonly password: string;
   readonly isAdministrator: boolean;
   readonly documentAccessMode?: 'standard' | 'document-portal';
+  readonly jobTitle?: string;
+  readonly maritalStatus?: NonNullable<TenantUser['maritalStatus']>;
+  readonly militaryDocumentStatus?: TenantUser['militaryDocumentStatus'];
+  readonly dependents?: readonly TenantUserDependent[];
   readonly departments: readonly string[];
   readonly permissionCodes: readonly string[];
-  readonly initialDocumentChecklistCode?:
-    | 'admission-general'
-    | 'admission-administrative'
-    | 'admission-driver';
   readonly initialDocumentRequestCommandId?: string;
 }
 
@@ -107,6 +127,10 @@ export interface UpdateTenantUserInput {
   readonly cpf?: string | null;
   readonly isAdministrator?: boolean;
   readonly documentAccessMode?: 'standard' | 'document-portal';
+  readonly jobTitle?: string | null;
+  readonly maritalStatus?: TenantUser['maritalStatus'];
+  readonly militaryDocumentStatus?: TenantUser['militaryDocumentStatus'];
+  readonly dependents?: readonly TenantUserDependent[];
   readonly departments?: readonly string[];
   readonly permissionCodes?: readonly string[];
 }

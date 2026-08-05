@@ -28,7 +28,13 @@ import {
   useTransition,
   type KeyboardEvent,
 } from 'react';
-import { useController, useForm, useWatch, type Control } from 'react-hook-form';
+import {
+  useController,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+} from 'react-hook-form';
 
 import {
   createTenantUserFormAction,
@@ -115,23 +121,49 @@ const SUSPENSION_MODE_LABELS = {
   date: 'Até uma data',
 } as const;
 
-const ADMISSION_CHECKLISTS = [
-  {
-    code: 'admission-general',
-    label: 'Registro geral',
-    summary: '1 arquivo digital de foto 3x4, documentos pessoais, familiares, trabalhistas e certidões.',
-  },
-  {
-    code: 'admission-administrative',
-    label: 'Registro administrativo',
-    summary: '1 arquivo digital de foto 3x4, documentos pessoais, familiares, trabalhistas e certidões administrativas.',
-  },
-  {
-    code: 'admission-driver',
-    label: 'Registro de motorista',
-    summary: '1 arquivo digital de foto 3x4, CNH D com EAR, curso de passageiros, prontuário e certidões.',
-  },
+const GENERAL_DOCUMENTS = [
+  'Foto 3x4 digital',
+  'CPF',
+  'RG',
+  'CTPS',
+  'CNH',
+  'Comprovante de residência com CEP',
+  'Cartão do PIS',
+  'Título de eleitor',
+  'Certidão criminal estadual',
+  'Certidão criminal civil/federal',
 ] as const;
+
+function documentPreview(values: UserFormValues): string[] {
+  const result: string[] = [...GENERAL_DOCUMENTS];
+  if (['married', 'stable-union'].includes(values.maritalStatus ?? '')) {
+    result.push('Certidão de casamento/união estável', 'RG e CPF do(a) cônjuge');
+  }
+  const dependents = values.dependents ?? [];
+  if (dependents.length > 0) result.push('Certidão de nascimento de cada dependente');
+  const ages = dependents.map((dependent) => {
+    const birth = new Date(`${dependent.birthDate}T00:00:00`);
+    return Math.floor((Date.now() - birth.getTime()) / 31_556_952_000);
+  });
+  if (ages.some((age) => age >= 0 && age < 7)) result.push('Carteira de vacinação dos dependentes menores de 7 anos');
+  if (ages.some((age) => age > 7 && age <= 16)) {
+    result.push('Atestado escolar dos dependentes acima de 7 anos até 16 anos');
+  }
+  if (values.militaryDocumentStatus === 'applicable') result.push('Documento militar');
+  if (values.militaryDocumentStatus === 'pending-confirmation') {
+    result.push('Pendência do DP: confirmar documentação militar');
+  }
+  if (values.jobTitle?.toLocaleLowerCase('pt-BR').includes('motorista')) {
+    result.push(
+      'CNH com categoria D, EAR e validade (sem duplicar a CNH)',
+      'Curso de Transporte Coletivo de Passageiros',
+      'Prontuário de habilitação — nada consta',
+      'Certidão negativa de débitos municipais',
+      'Cartão de vacina atualizado',
+    );
+  }
+  return result;
+}
 
 type SuspensionMode = keyof typeof SUSPENSION_MODE_LABELS;
 
@@ -265,15 +297,16 @@ function CreateUserDialog({
       documentAccessMode: canManageAccess ? 'standard' : 'document-portal',
       departments: [],
       permissionCodes: [],
-      initialDocumentChecklistCode: canManageAccess ? undefined : 'admission-general',
+      jobTitle: '',
+      maritalStatus: 'not-informed',
+      militaryDocumentStatus: 'pending-confirmation',
+      dependents: [],
     },
   });
+  const dependents = useFieldArray({ control: form.control, name: 'dependents' });
   const departments = useWatch({ control: form.control, name: 'departments' });
-  const documentAccessMode = useWatch({ control: form.control, name: 'documentAccessMode' });
-  const initialDocumentChecklistCode = useWatch({
-    control: form.control,
-    name: 'initialDocumentChecklistCode',
-  });
+  useWatch({ control: form.control });
+  const preview = documentPreview(form.getValues());
   const standardPermissions = useMemo(
     () => (canManageAccess ? compatiblePermissionCodes(permissionCatalog, departments) : []),
     [canManageAccess, departments, permissionCatalog],
@@ -286,7 +319,16 @@ function CreateUserDialog({
 
   const next = async () => {
     if (step === 1) {
-      const valid = await form.trigger(['name', 'username', 'email', 'password']);
+      const valid = await form.trigger([
+        'name',
+        'username',
+        'email',
+        'password',
+        'jobTitle',
+        'maritalStatus',
+        'militaryDocumentStatus',
+        'dependents',
+      ]);
       if (valid) setStep(2);
       return;
     }
@@ -305,13 +347,7 @@ function CreateUserDialog({
     startTransition(async () => {
       const result = await createTenantUserFormAction(
         canManageAccess
-          ? {
-              ...values,
-              initialDocumentChecklistCode:
-                values.documentAccessMode === 'document-portal'
-                  ? values.initialDocumentChecklistCode
-                  : undefined,
-            }
+          ? values
           : {
               ...values,
               isAdministrator: false,
@@ -451,40 +487,100 @@ function CreateUserDialog({
                   </p>
                 </div>
               )}
-              {documentAccessMode === 'document-portal' ? (
-                <Field
-                  className="sm:col-span-2"
-                  data-invalid={Boolean(form.formState.errors.initialDocumentChecklistCode)}
+              <Field data-invalid={Boolean(form.formState.errors.jobTitle)}>
+                <FieldLabel htmlFor="new-user-job-title">Cargo ou função</FieldLabel>
+                <Input id="new-user-job-title" className="h-11" {...form.register('jobTitle')} />
+                <FieldError errors={[form.formState.errors.jobTitle]} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="new-user-marital-status">Situação civil</FieldLabel>
+                <select
+                  id="new-user-marital-status"
+                  className="h-11 rounded-lg border bg-background px-3"
+                  {...form.register('maritalStatus')}
                 >
-                  <FieldLabel htmlFor="new-user-document-checklist">
-                    Lista de documentos da admissão
-                  </FieldLabel>
-                  <select
-                    id="new-user-document-checklist"
-                    className="h-11 rounded-lg border bg-background px-3"
-                    {...form.register('initialDocumentChecklistCode')}
+                  <option value="not-informed">Não informada</option>
+                  <option value="single">Solteiro(a)</option>
+                  <option value="married">Casado(a)</option>
+                  <option value="stable-union">União estável</option>
+                  <option value="divorced">Divorciado(a)</option>
+                  <option value="widowed">Viúvo(a)</option>
+                </select>
+              </Field>
+              <Field className="sm:col-span-2">
+                <FieldLabel htmlFor="new-user-military-status">
+                  Situação da documentação militar
+                </FieldLabel>
+                <select
+                  id="new-user-military-status"
+                  className="h-11 rounded-lg border bg-background px-3"
+                  {...form.register('militaryDocumentStatus')}
+                >
+                  <option value="pending-confirmation">Pendente de confirmação pelo DP</option>
+                  <option value="applicable">Aplicável</option>
+                  <option value="not-applicable">Não aplicável</option>
+                </select>
+                <FieldDescription>A regra não utiliza gênero e pode ser decidida manualmente.</FieldDescription>
+              </Field>
+              <FieldSet className="sm:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <FieldLegend>Filhos e dependentes</FieldLegend>
+                    <FieldDescription>Adicione cada dependente com sua data de nascimento.</FieldDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      dependents.append({ name: '', birthDate: '', relationship: 'filho(a)' })
+                    }
                   >
-                    <option value="">Selecione o tipo de registro</option>
-                    {ADMISSION_CHECKLISTS.map((checklist) => (
-                      <option key={checklist.code} value={checklist.code}>
-                        {checklist.label}
-                      </option>
-                    ))}
-                  </select>
-                  <FieldDescription>
-                    Ao concluir o cadastro, o sistema cria automaticamente a solicitação e mostra
-                    essa lista no portal do novo usuário.
-                  </FieldDescription>
-                  <FieldError errors={[form.formState.errors.initialDocumentChecklistCode]} />
-                  {ADMISSION_CHECKLISTS.map((checklist) =>
-                    checklist.code === initialDocumentChecklistCode ? (
-                      <p key={checklist.code} className="rounded-lg bg-muted px-3 py-2 text-sm">
-                        {checklist.summary}
-                      </p>
-                    ) : null,
-                  )}
-                </Field>
-              ) : null}
+                    <Plus className="size-4" /> Adicionar dependente
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {dependents.fields.map((dependent, index) => (
+                    <div key={dependent.id} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_11rem_10rem_auto]">
+                      <Input
+                        aria-label={`Nome do dependente ${index + 1}`}
+                        placeholder="Nome completo"
+                        {...form.register(`dependents.${index}.name`)}
+                      />
+                      <Input
+                        aria-label={`Nascimento do dependente ${index + 1}`}
+                        type="date"
+                        {...form.register(`dependents.${index}.birthDate`)}
+                      />
+                      <Input
+                        aria-label={`Vínculo do dependente ${index + 1}`}
+                        placeholder="Vínculo"
+                        {...form.register(`dependents.${index}.relationship`)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remover dependente ${index + 1}`}
+                        onClick={() => dependents.remove(index)}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </FieldSet>
+              <section className="rounded-xl border bg-muted/30 p-4 sm:col-span-2">
+                <h3 className="font-semibold">Prévia da documentação personalizada</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A lista é recalculada automaticamente; nenhum documento aparece duplicado.
+                </p>
+                <ul className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+                  {preview.map((document) => (
+                    <li key={document}>• {document}</li>
+                  ))}
+                </ul>
+              </section>
             </div>
           ) : null}
 
