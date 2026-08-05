@@ -41,6 +41,58 @@ const createRequestSchema = z.object({
   notes: z.string().max(2000).optional(),
 });
 
+const createBatchRequestsSchema = z.object({
+  subjectUserIds: z.array(z.string().uuid()).min(1).max(100),
+  documentTypeIds: z.array(z.string().uuid()).min(1).max(100),
+  context: z.enum([
+    'admission',
+    'document-update',
+    'document-renewal',
+    'regularization',
+    'offboarding',
+    'other',
+  ]),
+  deadline: z.string().optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+export async function createBatchDocumentRequestsAction(formData: FormData): Promise<void> {
+  const parsed = createBatchRequestsSchema.safeParse({
+    subjectUserIds: formData
+      .getAll('subjectUserIds')
+      .filter((entry): entry is string => typeof entry === 'string'),
+    documentTypeIds: formData
+      .getAll('documentTypeIds')
+      .filter((entry): entry is string => typeof entry === 'string'),
+    context: value(formData, 'context'),
+    deadline: value(formData, 'deadline') || undefined,
+    notes: value(formData, 'notes') || undefined,
+  });
+  if (!parsed.success) {
+    redirect('/document-management?error=Selecione ao menos um usuário e um documento.');
+  }
+
+  let result: {
+    readonly createdCount: number;
+    readonly skippedDocuments: readonly unknown[];
+  };
+  try {
+    result = await executeAuthenticatedDocumentMutation((gateway) =>
+      gateway.createBatchRequests({ ...parsed.data, commandId: randomUUID() }),
+    );
+  } catch (error) {
+    failure('/document-management', error);
+  }
+  revalidatePath('/document-management');
+  revalidatePath('/documents');
+  const skipped = result.skippedDocuments.length
+    ? ` ${result.skippedDocuments.length} combinação(ões) não aplicável(is) foram ignoradas.`
+    : '';
+  redirect(
+    `/document-management?success=${encodeURIComponent(`${result.createdCount} solicitação(ões) criada(s).${skipped}`)}`,
+  );
+}
+
 export async function createDocumentRequestAction(formData: FormData): Promise<void> {
   const parsed = createRequestSchema.safeParse({
     subjectUserId: value(formData, 'subjectUserId'),

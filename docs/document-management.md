@@ -18,6 +18,9 @@ permissões. Administradores mantêm edição integral de departamentos,
 permissões e estado das contas. RH e Departamento Pessoal veem a listagem e
 podem criar somente o acesso inicial “somente documentos”; o formulário não
 oferece departamentos nem permissões adicionais nesse perfil.
+Eles também podem editar os dados pessoais e o perfil documental do usuário,
+sem visualizar o catálogo administrativo nem alterar departamentos, permissões,
+senha ou estado da conta.
 
 O cadastro agora coleta cargo, estado civil, decisão explícita sobre documento
 militar e qualquer quantidade de dependentes. Antes da confirmação, a etapa de
@@ -33,6 +36,19 @@ item para obrigatório, opcional ou dispensado, sempre informando motivo. Arquiv
 e versões anteriores são preservados. A mesma tela oferece XLSX individual em
 quatro abas e ZIP com todos os arquivos daquele funcionário.
 
+**Criar solicitação avulsa** aceita vários usuários e vários tipos documentais.
+O formulário identifica pessoas com nome, username e e-mail, oferece seleção de
+todos os documentos e envia um único comando à API. O resultado continua sendo
+uma solicitação separada por usuário, preservando extração e downloads
+individuais. Documentos de cônjuge, filhos e situação militar são ignorados para
+os usuários cujo perfil não se aplica; a tela informa quantas combinações foram
+ignoradas.
+
+Para filhos, cada tipo documental aparece uma vez na solicitação e aceita vários
+arquivos. O snapshot registra quais dependentes se aplicam: vacinação para
+menores de 7 anos, atestado escolar para maiores de 7 até 16 anos e os demais
+documentos de filhos para todos os dependentes cadastrados.
+
 ## Teste manual
 
 1. execute migration e bootstrap da Tenant API;
@@ -43,5 +59,7 @@ quatro abas e ZIP com todos os arquivos daquele funcionário.
 5. conclua o primeiro acesso e confirme o redirecionamento;
 6. envie arquivos em **Meus documentos**;
 7. retorne com o revisor e registre uma decisão humana;
-8. altere uma exigência para opcional/dispensada e confirme o motivo no histórico;
-9. confirme versões, conteúdo privado, XLSX individual e ZIP do funcionário.
+8. crie uma solicitação avulsa para dois usuários, selecione vários documentos e
+   confira que foram geradas duas solicitações independentes;
+9. altere uma exigência para opcional/dispensada e confirme o motivo no histórico;
+10. confirme versões, conteúdo privado, XLSX individual e ZIP do funcionário.

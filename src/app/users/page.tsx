@@ -87,7 +87,11 @@ export default async function UsersRoute({
           users={users}
           permissionCatalog={permissionCatalog}
           canCreate={session.user.permissions.includes('users:create')}
-          canEdit={session.user.isAdministrator === true}
+          canEdit={
+            session.user.isAdministrator === true ||
+            session.user.permissions.includes('users:create') ||
+            session.user.permissions.includes('users:update')
+          }
           canManageAccess={session.user.isAdministrator === true}
           filters={filters}
         />

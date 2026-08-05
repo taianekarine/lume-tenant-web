@@ -19,15 +19,26 @@ export default async function UserEditorRoute({
   readonly params: Promise<{ userId: string }>;
   readonly searchParams: Promise<{ error?: string; success?: string }>;
 }) {
-  const session = await requirePeopleOperationsTenantSession(['users:update']);
+  const session = await requirePeopleOperationsTenantSession(['users:update', 'users:create']);
   const [{ userId }, query] = await Promise.all([params, searchParams]);
   let user: TenantUser;
-  let permissionCatalog: PermissionCatalog;
+  let permissionCatalog: PermissionCatalog = {
+    resources: [],
+    actions: [],
+    actionsByResource: {},
+    permissions: [],
+    permissionsByDepartment: {},
+    implicitPermissions: [],
+  };
 
   try {
-    [user, permissionCatalog] = await executeAuthenticatedTenantRequest((gateway) =>
-      Promise.all([gateway.getUser(userId), gateway.listPermissions()]),
-    );
+    if (session.user.isAdministrator) {
+      [user, permissionCatalog] = await executeAuthenticatedTenantRequest((gateway) =>
+        Promise.all([gateway.getUser(userId), gateway.listPermissions()]),
+      );
+    } else {
+      user = await executeAuthenticatedTenantRequest((gateway) => gateway.getUser(userId));
+    }
   } catch (error) {
     if (error instanceof TenantAdministrationError && error.code === 'not-found') notFound();
     rethrowTenantPageError(error);
@@ -43,7 +54,9 @@ export default async function UserEditorRoute({
           <p className="text-sm font-medium text-emerald-600">Administração local</p>
           <h1 className="text-3xl font-bold tracking-tight">Editar {user.name}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Revise os dados, departamentos e permissões individuais.
+            {session.user.isAdministrator
+              ? 'Revise os dados, departamentos e permissões individuais.'
+              : 'Revise os dados pessoais e o perfil usado nas exigências documentais.'}
           </p>
         </header>
         {query.error || query.success ? (
@@ -58,7 +71,11 @@ export default async function UserEditorRoute({
             {query.error ?? query.success}
           </p>
         ) : null}
-        <UserEditorForm user={user} permissionCatalog={permissionCatalog} />
+        <UserEditorForm
+          user={user}
+          permissionCatalog={permissionCatalog}
+          canManageAccess={session.user.isAdministrator === true}
+        />
       </main>
     </AuthenticatedShell>
   );

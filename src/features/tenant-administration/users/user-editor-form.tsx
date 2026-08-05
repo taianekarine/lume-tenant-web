@@ -167,9 +167,11 @@ function PermissionCheckboxes({
 export function UserEditorForm({
   user,
   permissionCatalog,
+  canManageAccess,
 }: {
   readonly user: TenantUser;
   readonly permissionCatalog: PermissionCatalog;
+  readonly canManageAccess: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<UserEditorFormValues>({
@@ -197,6 +199,7 @@ export function UserEditorForm({
   const visiblePermissions = isAdministrator ? permissionCatalog.permissions : standardPermissions;
 
   useEffect(() => {
+    if (!canManageAccess) return;
     if (isAdministrator) {
       const currentDepartments = form.getValues('departments');
       const currentPermissions = form.getValues('permissionCodes');
@@ -221,7 +224,7 @@ export function UserEditorForm({
     if (current.length !== filtered.length) {
       form.setValue('permissionCodes', filtered, { shouldValidate: true });
     }
-  }, [form, isAdministrator, permissionCatalog.permissions, standardPermissions]);
+  }, [canManageAccess, form, isAdministrator, permissionCatalog.permissions, standardPermissions]);
 
   const submit = form.handleSubmit((values) => {
     startTransition(async () => {
@@ -254,9 +257,13 @@ export function UserEditorForm({
   return (
     <Card>
       <CardHeader className="border-b">
-        <CardTitle>Dados e acessos do usuário</CardTitle>
+        <CardTitle>
+          {canManageAccess ? 'Dados e acessos do usuário' : 'Dados documentais do usuário'}
+        </CardTitle>
         <CardDescription>
-          Os departamentos definem quais permissões individuais podem ser concedidas.
+          {canManageAccess
+            ? 'Os departamentos definem quais permissões individuais podem ser concedidas.'
+            : 'As permissões de acesso continuam sob gestão exclusiva dos administradores.'}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -379,7 +386,7 @@ export function UserEditorForm({
             </div>
           </FieldSet>
 
-          {isAdministrator ? (
+          {canManageAccess && isAdministrator ? (
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
               <p className="font-medium">Conta administradora</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -389,37 +396,41 @@ export function UserEditorForm({
             </div>
           ) : null}
 
-          <FieldSet>
-            <FieldLegend>Departamentos</FieldLegend>
-            <FieldDescription>
-              {isAdministrator
-                ? 'Todos os departamentos estão incluídos automaticamente.'
-                : 'O usuário deve permanecer vinculado a ao menos um departamento.'}
-            </FieldDescription>
-            <DepartmentCheckboxes control={form.control} disabled={isAdministrator} />
-            <FieldError errors={[form.formState.errors.departments]} />
-          </FieldSet>
+          {canManageAccess ? (
+            <FieldSet>
+              <FieldLegend>Departamentos</FieldLegend>
+              <FieldDescription>
+                {isAdministrator
+                  ? 'Todos os departamentos estão incluídos automaticamente.'
+                  : 'O usuário deve permanecer vinculado a ao menos um departamento.'}
+              </FieldDescription>
+              <DepartmentCheckboxes control={form.control} disabled={isAdministrator} />
+              <FieldError errors={[form.formState.errors.departments]} />
+            </FieldSet>
+          ) : null}
 
-          <FieldSet>
-            <FieldLegend>Permissões individuais</FieldLegend>
-            <FieldDescription>
-              {isAdministrator
-                ? 'Todas as permissões atuais e futuras são concedidas automaticamente.'
-                : 'Ao remover um departamento, permissões fora do novo limite também são removidas.'}
-            </FieldDescription>
-            {!isAdministrator ? (
-              <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
-                Dashboard, Agentes de IA, Perfil e Suporte são acessos comuns automáticos e não
-                fazem parte da seleção individual.
-              </p>
-            ) : null}
-            <PermissionCheckboxes
-              control={form.control}
-              permissions={visiblePermissions}
-              disabled={isAdministrator}
-            />
-            <FieldError errors={[form.formState.errors.permissionCodes]} />
-          </FieldSet>
+          {canManageAccess ? (
+            <FieldSet>
+              <FieldLegend>Permissões individuais</FieldLegend>
+              <FieldDescription>
+                {isAdministrator
+                  ? 'Todas as permissões atuais e futuras são concedidas automaticamente.'
+                  : 'Ao remover um departamento, permissões fora do novo limite também são removidas.'}
+              </FieldDescription>
+              {!isAdministrator ? (
+                <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  Dashboard, Agentes de IA, Perfil e Suporte são acessos comuns automáticos e não
+                  fazem parte da seleção individual.
+                </p>
+              ) : null}
+              <PermissionCheckboxes
+                control={form.control}
+                permissions={visiblePermissions}
+                disabled={isAdministrator}
+              />
+              <FieldError errors={[form.formState.errors.permissionCodes]} />
+            </FieldSet>
+          ) : null}
 
           <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-5">
             <Button

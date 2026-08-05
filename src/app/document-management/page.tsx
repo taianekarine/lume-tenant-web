@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation';
 
-import { createDocumentRequestAction } from '@/features/document-management/actions';
 import { DocumentManagementError } from '@/features/document-management/application';
-import { DocumentRequestList } from '@/features/document-management/components';
 import {
-  DOCUMENT_CONTEXT_LABELS,
-  type DocumentChecklistSummary,
+  BatchDocumentRequestForm,
+  DocumentRequestList,
+} from '@/features/document-management/components';
+import {
   type DocumentRequestList as DocumentRequestListType,
+  type DocumentTypeSummary,
 } from '@/features/document-management/domain';
 import {
   executeAuthenticatedDocumentRequest,
@@ -15,10 +16,7 @@ import {
 import { AuthenticatedShell } from '@/features/navigation';
 import type { TenantUserList } from '@/features/tenant-administration/domain';
 import { executeAuthenticatedTenantRequest } from '@/features/tenant-administration/server';
-import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
-import { Input } from '@/shared/ui/input';
-import { Textarea } from '@/shared/ui/textarea';
 
 export default async function DocumentManagementPage({
   searchParams,
@@ -28,16 +26,20 @@ export default async function DocumentManagementPage({
   const session = await requireDocumentSession(true);
   const query = await searchParams;
   let requests: DocumentRequestListType;
-  let checklists: readonly DocumentChecklistSummary[];
+  let documentTypes: readonly DocumentTypeSummary[];
   let users: TenantUserList;
   const serviceErrors: string[] = [];
-  const [requestsResult, checklistsResult, usersResult] = await Promise.allSettled([
-      executeAuthenticatedDocumentRequest((gateway) => gateway.listRequests({ pageSize: 50 })),
-      executeAuthenticatedDocumentRequest((gateway) => gateway.listChecklists()),
-      executeAuthenticatedTenantRequest((gateway) => gateway.listUsers({ pageSize: 100 })),
+  const [requestsResult, documentTypesResult, usersResult] = await Promise.allSettled([
+    executeAuthenticatedDocumentRequest((gateway) => gateway.listRequests({ pageSize: 50 })),
+    executeAuthenticatedDocumentRequest((gateway) => gateway.listDocumentTypes()),
+    executeAuthenticatedTenantRequest((gateway) => gateway.listUsers({ pageSize: 100 })),
   ]);
-  for (const result of [requestsResult, checklistsResult]) {
-    if (result.status === 'rejected' && result.reason instanceof DocumentManagementError && result.reason.code === 'unauthorized') {
+  for (const result of [requestsResult, documentTypesResult]) {
+    if (
+      result.status === 'rejected' &&
+      result.reason instanceof DocumentManagementError &&
+      result.reason.code === 'unauthorized'
+    ) {
       redirect('/auth/session-expired');
     }
   }
@@ -49,10 +51,10 @@ export default async function DocumentManagementPage({
     };
     serviceErrors.push('Não foi possível carregar as solicitações em acompanhamento.');
   }
-  if (checklistsResult.status === 'fulfilled') checklists = checklistsResult.value;
+  if (documentTypesResult.status === 'fulfilled') documentTypes = documentTypesResult.value;
   else {
-    checklists = [];
-    serviceErrors.push('Não foi possível carregar as listas de documentos.');
+    documentTypes = [];
+    serviceErrors.push('Não foi possível carregar os tipos de documentos.');
   }
   if (usersResult.status === 'fulfilled') users = usersResult.value;
   else {
@@ -76,13 +78,38 @@ export default async function DocumentManagementPage({
           </div>
         </header>
         <div className="grid gap-3 md:grid-cols-3">
-          <Card><CardHeader><CardTitle>1. Cadastro</CardTitle><CardDescription>RH/DP escolhe a lista Geral, Administrativo ou Motorista ao criar o usuário.</CardDescription></CardHeader></Card>
-          <Card><CardHeader><CardTitle>2. Acompanhamento</CardTitle><CardDescription>Esta tela mostra pendências, envios, revisões, reenvios e vencimentos.</CardDescription></CardHeader></Card>
-          <Card><CardHeader><CardTitle>3. Extração e download</CardTitle><CardDescription>Abra uma solicitação para confirmar os dados e baixar XLSX e arquivos daquele usuário.</CardDescription></CardHeader></Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>1. Cadastro</CardTitle>
+              <CardDescription>
+                RH/DP informa o perfil; a lista documental é calculada automaticamente sem duplicar
+                documentos.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>2. Acompanhamento</CardTitle>
+              <CardDescription>
+                Esta tela mostra pendências, envios, revisões, reenvios e vencimentos.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>3. Extração e download</CardTitle>
+              <CardDescription>
+                Abra uma solicitação para confirmar os dados e baixar XLSX e arquivos daquele
+                usuário.
+              </CardDescription>
+            </CardHeader>
+          </Card>
         </div>
         {serviceErrors.length ? (
           <div role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-            {serviceErrors.map((message) => <p key={message}>{message}</p>)}
+            {serviceErrors.map((message) => (
+              <p key={message}>{message}</p>
+            ))}
           </div>
         ) : null}
         {query.error || query.success ? (
@@ -100,74 +127,16 @@ export default async function DocumentManagementPage({
 
         <Card>
           <details>
-          <summary className="cursor-pointer list-none p-6">
-            <p className="font-semibold">Criar solicitação avulsa</p>
-            <p className="text-sm text-muted-foreground">Use somente para complemento, atualização ou regularização fora do cadastro inicial.</p>
-          </summary>
-          <CardContent>
-            <form
-              action={createDocumentRequestAction}
-              className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
-            >
-              <label className="space-y-1 text-sm font-medium">
-                <span>Titular</span>
-                <select
-                  name="subjectUserId"
-                  required
-                  className="h-9 w-full rounded-lg border bg-background px-3"
-                >
-                  <option value="">Selecione</option>
-                  {users.data.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} · {user.email}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-sm font-medium">
-                <span>Checklist</span>
-                <select
-                  name="checklistId"
-                  required
-                  className="h-9 w-full rounded-lg border bg-background px-3"
-                >
-                  <option value="">Selecione</option>
-                  {checklists
-                    .filter((item) => item.active)
-                    .map((checklist) => (
-                      <option key={checklist.id} value={checklist.id}>
-                        {checklist.name} · v{checklist.version}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-sm font-medium">
-                <span>Contexto</span>
-                <select
-                  name="context"
-                  required
-                  className="h-9 w-full rounded-lg border bg-background px-3"
-                >
-                  {Object.entries(DOCUMENT_CONTEXT_LABELS).map(([context, label]) => (
-                    <option key={context} value={context}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1 text-sm font-medium">
-                <span>Prazo</span>
-                <Input name="deadline" type="datetime-local" />
-              </label>
-              <label className="space-y-1 text-sm font-medium md:col-span-2 xl:col-span-3">
-                <span>Observações</span>
-                <Textarea name="notes" maxLength={2000} />
-              </label>
-              <div className="flex items-end">
-                <Button type="submit">Criar solicitação</Button>
-              </div>
-            </form>
-          </CardContent>
+            <summary className="cursor-pointer list-none p-6">
+              <p className="font-semibold">Criar solicitação avulsa</p>
+              <p className="text-sm text-muted-foreground">
+                Escolha os documentos uma vez e envie solicitações individuais para um ou mais
+                usuários.
+              </p>
+            </summary>
+            <CardContent>
+              <BatchDocumentRequestForm users={users.data} documentTypes={documentTypes} />
+            </CardContent>
           </details>
         </Card>
 

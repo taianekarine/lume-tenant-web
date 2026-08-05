@@ -15,6 +15,7 @@ não são expostos a componentes client-side.
 | ------------- | -------------------------------------------------------------------------------------------------------- |
 | Autenticação  | `POST /auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password/forgot`, `/auth/password/change`    |
 | Usuários      | `GET/POST /users`, `GET/PATCH /users/:id`, `PATCH /users/:id/status`, `POST /users/:id/password-reset`   |
+| Documentos    | `GET /document-management/document-types`, `GET/POST /document-management/requests`, `POST /document-management/requests/batch` |
 | Perfil        | `GET /users/me/profile`, `PUT /users/me/profile-picture`, `PATCH /users/me/password`                     |
 | Permissões    | `GET /permissions`                                                                                       |
 | Notificações  | `GET /notifications`, `POST /notifications/:notificationId/read`                                         |

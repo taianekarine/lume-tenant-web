@@ -17,6 +17,25 @@ const documentTypeSchema = z.object({
   name: z.string(),
   active: z.boolean(),
 });
+const batchRequestResultSchema = z.object({
+  createdCount: z.number().int().nonnegative(),
+  idempotentCount: z.number().int().nonnegative(),
+  requests: z.array(
+    z.object({
+      id: z.string().uuid(),
+      subjectUserId: z.string().uuid(),
+      itemCount: z.number().int().nonnegative(),
+      idempotent: z.boolean(),
+    }),
+  ),
+  skippedDocuments: z.array(
+    z.object({
+      subjectUserId: z.string().uuid(),
+      documentTypeId: z.string().uuid(),
+      reason: z.string(),
+    }),
+  ),
+});
 const nullableIsoDate = isoDate.nullable();
 const contextSchema = z.enum([
   'admission',
@@ -266,6 +285,16 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
       body: JSON.stringify(input),
     });
     return this.parse(z.object({ request: requestDetailSchema }), body).request;
+  }
+
+  async createBatchRequests(
+    input: Parameters<DocumentManagementGateway['createBatchRequests']>[0],
+  ) {
+    const body = await this.requestJson('/document-management/requests/batch', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return this.parse(batchRequestResultSchema, body);
   }
 
   async addRequestItem(

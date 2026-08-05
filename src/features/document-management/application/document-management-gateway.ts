@@ -46,6 +46,28 @@ export interface DocumentManagementGateway {
     deadline?: string;
     notes?: string;
   }): Promise<DocumentRequestDetail>;
+  createBatchRequests(input: {
+    commandId: string;
+    subjectUserIds: readonly string[];
+    documentTypeIds: readonly string[];
+    context: DocumentRequestContext;
+    deadline?: string;
+    notes?: string;
+  }): Promise<{
+    readonly createdCount: number;
+    readonly idempotentCount: number;
+    readonly requests: readonly {
+      readonly id: string;
+      readonly subjectUserId: string;
+      readonly itemCount: number;
+      readonly idempotent: boolean;
+    }[];
+    readonly skippedDocuments: readonly {
+      readonly subjectUserId: string;
+      readonly documentTypeId: string;
+      readonly reason: string;
+    }[];
+  }>;
   addRequestItem(
     requestId: string,
     input: {

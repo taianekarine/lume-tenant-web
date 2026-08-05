@@ -28,13 +28,7 @@ import {
   useTransition,
   type KeyboardEvent,
 } from 'react';
-import {
-  useController,
-  useFieldArray,
-  useForm,
-  useWatch,
-  type Control,
-} from 'react-hook-form';
+import { useController, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form';
 
 import {
   createTenantUserFormAction,
@@ -145,7 +139,8 @@ function documentPreview(values: UserFormValues): string[] {
     const birth = new Date(`${dependent.birthDate}T00:00:00`);
     return Math.floor((Date.now() - birth.getTime()) / 31_556_952_000);
   });
-  if (ages.some((age) => age >= 0 && age < 7)) result.push('Carteira de vacinação dos dependentes menores de 7 anos');
+  if (ages.some((age) => age >= 0 && age < 7))
+    result.push('Carteira de vacinação dos dependentes menores de 7 anos');
   if (ages.some((age) => age > 7 && age <= 16)) {
     result.push('Atestado escolar dos dependentes acima de 7 anos até 16 anos');
   }
@@ -520,13 +515,17 @@ function CreateUserDialog({
                   <option value="applicable">Aplicável</option>
                   <option value="not-applicable">Não aplicável</option>
                 </select>
-                <FieldDescription>A regra não utiliza gênero e pode ser decidida manualmente.</FieldDescription>
+                <FieldDescription>
+                  A regra não utiliza gênero e pode ser decidida manualmente.
+                </FieldDescription>
               </Field>
               <FieldSet className="sm:col-span-2">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <FieldLegend>Filhos e dependentes</FieldLegend>
-                    <FieldDescription>Adicione cada dependente com sua data de nascimento.</FieldDescription>
+                    <FieldDescription>
+                      Adicione cada dependente com sua data de nascimento.
+                    </FieldDescription>
                   </div>
                   <Button
                     type="button"
@@ -541,7 +540,10 @@ function CreateUserDialog({
                 </div>
                 <div className="space-y-3">
                   {dependents.fields.map((dependent, index) => (
-                    <div key={dependent.id} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_11rem_10rem_auto]">
+                    <div
+                      key={dependent.id}
+                      className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_11rem_10rem_auto]"
+                    >
                       <Input
                         aria-label={`Nome do dependente ${index + 1}`}
                         placeholder="Nome completo"
@@ -1286,9 +1288,11 @@ export function UsersManagement({
                               size="sm"
                               variant="outline"
                             >
-                              Editar acessos
+                              {canManageAccess
+                                ? 'Editar dados e acessos'
+                                : 'Editar dados documentais'}
                             </Button>
-                            <PasswordResetButton userId={user.id} />
+                            {canManageAccess ? <PasswordResetButton userId={user.id} /> : null}
                           </>
                         ) : null}
                         {canManageAccess ? <UserStatusActions user={user} /> : null}

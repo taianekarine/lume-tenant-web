@@ -85,6 +85,10 @@ const tenantUser: TenantUser = {
   cpf: null,
   departments: ['commercial'],
   isAdministrator: false,
+  jobTitle: null,
+  maritalStatus: null,
+  militaryDocumentStatus: 'pending-confirmation',
+  dependents: [],
   permissionCodes: ['commercial:view'],
   permissions: ['dashboard:view', 'commercial:view'],
   isActive: true,
@@ -143,7 +147,7 @@ describe('users management permissions', () => {
     expect(screen.queryByRole('button', { name: 'Recuperar senha' })).not.toBeInTheDocument();
   });
 
-  it('limits users:update to editing access and password recovery', () => {
+  it('limits people operations to editing documentary data', () => {
     render(
       <UsersManagement
         users={users}
@@ -154,8 +158,8 @@ describe('users management permissions', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Editar acessos' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Recuperar senha' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar dados documentais' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Recuperar senha' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Desativar' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Suspender' })).not.toBeInTheDocument();
   });
@@ -179,7 +183,7 @@ describe('users management permissions', () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Estado')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Novo usuário' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Editar acessos' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Editar dados e acessos' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Desativar' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Suspender' })).toBeInTheDocument();
   });
@@ -418,7 +422,9 @@ describe('users management permissions', () => {
 describe('user editor form', () => {
   it('updates departments and direct permissions without exposing CPF', async () => {
     const interaction = userEvent.setup();
-    render(<UserEditorForm user={tenantUser} permissionCatalog={permissionCatalog} />);
+    render(
+      <UserEditorForm user={tenantUser} permissionCatalog={permissionCatalog} canManageAccess />,
+    );
 
     expect(screen.queryByLabelText('CPF (opcional)')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Usuário')).toBeDisabled();
@@ -556,7 +562,9 @@ describe('user editor form', () => {
 
   it('supports an accessible indeterminate select-all checkbox per permission block', async () => {
     const interaction = userEvent.setup();
-    render(<UserEditorForm user={tenantUser} permissionCatalog={permissionCatalog} />);
+    render(
+      <UserEditorForm user={tenantUser} permissionCatalog={permissionCatalog} canManageAccess />,
+    );
 
     const selectAll = screen.getByRole('checkbox', { name: 'Selecionar todas em Comercial' });
     expect(selectAll).toHaveAttribute('aria-checked', 'mixed');
