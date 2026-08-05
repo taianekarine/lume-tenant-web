@@ -1,5 +1,8 @@
 import { DocumentManagementError } from '@/features/document-management/application';
-import { executeAuthenticatedDocumentRequest, requireDocumentSession } from '@/features/document-management/server';
+import {
+  executeAuthenticatedDocumentRequest,
+  requireDocumentSession,
+} from '@/features/document-management/server';
 
 export async function GET(
   _request: Request,
@@ -12,12 +15,24 @@ export async function GET(
       gateway.downloadUserExport(subjectUserId),
     );
     const headers = new Headers();
-    headers.set('Content-Type', upstream.headers.get('content-type') ?? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    headers.set('Content-Disposition', upstream.headers.get('content-disposition') ?? `attachment; filename="dados-documentais-${subjectUserId}.xlsx"`);
+    headers.set(
+      'Content-Type',
+      upstream.headers.get('content-type') ??
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    headers.set(
+      'Content-Disposition',
+      upstream.headers.get('content-disposition') ??
+        `attachment; filename="dados-documentais-${subjectUserId}.xlsx"`,
+    );
     headers.set('Cache-Control', 'private, no-store');
     return new Response(upstream.body, { status: 200, headers });
   } catch (error) {
-    const status = error instanceof DocumentManagementError && error.code === 'forbidden' ? 403 : 502;
-    return Response.json({ error: 'Não foi possível gerar os dados estruturados deste usuário.' }, { status });
+    const status =
+      error instanceof DocumentManagementError && error.code === 'forbidden' ? 403 : 502;
+    return Response.json(
+      { error: 'Não foi possível gerar os dados estruturados deste usuário.' },
+      { status },
+    );
   }
 }

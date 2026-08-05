@@ -11,33 +11,33 @@ não são expostos a componentes client-side.
 
 ## Endpoints integrados
 
-| Recurso       | Endpoints                                                                                                |
-| ------------- | -------------------------------------------------------------------------------------------------------- |
-| Autenticação  | `POST /auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password/forgot`, `/auth/password/change`    |
-| Usuários      | `GET/POST /users`, `GET/PATCH /users/:id`, `PATCH /users/:id/status`, `POST /users/:id/password-reset`   |
+| Recurso       | Endpoints                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Autenticação  | `POST /auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password/forgot`, `/auth/password/change`                           |
+| Usuários      | `GET/POST /users`, `GET/PATCH /users/:id`, `PATCH /users/:id/status`, `POST /users/:id/password-reset`                          |
 | Documentos    | `GET /document-management/document-types`, `GET/POST /document-management/requests`, `POST /document-management/requests/batch` |
-| Perfil        | `GET /users/me/profile`, `PUT /users/me/profile-picture`, `PATCH /users/me/password`                     |
-| Permissões    | `GET /permissions`                                                                                       |
-| Notificações  | `GET /notifications`, `POST /notifications/:notificationId/read`                                         |
-| Licença local | `GET /license/status`                                                                                    |
-| WhatsApp      | `GET /whatsapp/conversations`                                                                            |
-| WhatsApp      | `GET /whatsapp/conversations/dashboard`                                                                  |
-| WhatsApp      | `GET /whatsapp/conversations/:id`                                                                        |
-| WhatsApp      | `GET /whatsapp/conversations/:id/messages`                                                               |
-| WhatsApp      | `GET /whatsapp/conversations/:id/transitions`                                                            |
-| WhatsApp      | `POST /whatsapp/conversations/:id/actions/take-over`                                                     |
-| WhatsApp      | `POST /whatsapp/conversations/:id/actions/return-to-bot`                                                 |
-| WhatsApp      | `POST /whatsapp/conversations/:id/actions/forward`                                                       |
-| WhatsApp      | `POST /whatsapp/conversations/:id/actions/mark-read`                                                     |
-| WhatsApp      | `POST /whatsapp/conversations/:id/actions/close`                                                         |
-| WhatsApp      | `POST /whatsapp/conversations/:id/messages`                                                              |
-| Propostas     | `GET /whatsapp/quote-proposals?stage=pending\|sent\|approved\|cancelled&search=&createdFrom=&createdTo=` |
-| Propostas     | `GET /whatsapp/quote-proposals/:id`                                                                      |
-| Propostas     | `POST /whatsapp/quote-proposals/:id/documents`                                                           |
-| Propostas     | `POST /whatsapp/quote-proposals/:id/send`                                                                |
-| Propostas     | `POST /whatsapp/quote-proposals`                                                                         |
-| Propostas     | `PATCH /whatsapp/quote-proposals/:id/decision`                                                           |
-| Propostas     | `PATCH /whatsapp/quote-proposals/:id/status`                                                             |
+| Perfil        | `GET /users/me/profile`, `PUT /users/me/profile-picture`, `PATCH /users/me/password`                                            |
+| Permissões    | `GET /permissions`                                                                                                              |
+| Notificações  | `GET /notifications`, `POST /notifications/:notificationId/read`                                                                |
+| Licença local | `GET /license/status`                                                                                                           |
+| WhatsApp      | `GET /whatsapp/conversations`                                                                                                   |
+| WhatsApp      | `GET /whatsapp/conversations/dashboard`                                                                                         |
+| WhatsApp      | `GET /whatsapp/conversations/:id`                                                                                               |
+| WhatsApp      | `GET /whatsapp/conversations/:id/messages`                                                                                      |
+| WhatsApp      | `GET /whatsapp/conversations/:id/transitions`                                                                                   |
+| WhatsApp      | `POST /whatsapp/conversations/:id/actions/take-over`                                                                            |
+| WhatsApp      | `POST /whatsapp/conversations/:id/actions/return-to-bot`                                                                        |
+| WhatsApp      | `POST /whatsapp/conversations/:id/actions/forward`                                                                              |
+| WhatsApp      | `POST /whatsapp/conversations/:id/actions/mark-read`                                                                            |
+| WhatsApp      | `POST /whatsapp/conversations/:id/actions/close`                                                                                |
+| WhatsApp      | `POST /whatsapp/conversations/:id/messages`                                                                                     |
+| Propostas     | `GET /whatsapp/quote-proposals?stage=pending\|sent\|approved\|cancelled&search=&createdFrom=&createdTo=`                        |
+| Propostas     | `GET /whatsapp/quote-proposals/:id`                                                                                             |
+| Propostas     | `POST /whatsapp/quote-proposals/:id/documents`                                                                                  |
+| Propostas     | `POST /whatsapp/quote-proposals/:id/send`                                                                                       |
+| Propostas     | `POST /whatsapp/quote-proposals`                                                                                                |
+| Propostas     | `PATCH /whatsapp/quote-proposals/:id/decision`                                                                                  |
+| Propostas     | `PATCH /whatsapp/quote-proposals/:id/status`                                                                                    |
 
 As rotas acima são relativas ao prefixo configurado, normalmente
 `http://localhost:3333/api/v1` no desenvolvimento.
@@ -194,6 +194,7 @@ da conversa.
 ```dotenv
 LUME_TENANT_API_URL=http://localhost:3333/api/v1
 LUME_TENANT_API_TIMEOUT_MS=5000
+LUME_TENANT_API_DOCUMENT_REVIEW_TIMEOUT_MS=300000
 SESSION_SECRET=replace-with-at-least-32-random-characters
 AUTH_SIMULATION_ENABLED=false
 LUME_TENANT_WHATSAPP_DATA_SOURCE=api

@@ -17,26 +17,21 @@ const userAssignmentFields = {
   departments: z.array(z.string().min(1)),
   permissionCodes: z.array(z.string().min(1)),
   jobTitle: z.string().trim().max(120).optional(),
-  maritalStatus: z.enum([
-    'single',
-    'married',
-    'stable-union',
-    'divorced',
-    'widowed',
-    'not-informed',
-  ]).optional(),
-  militaryDocumentStatus: z.enum([
-    'applicable',
-    'not-applicable',
-    'pending-confirmation',
-  ]).optional(),
-  dependents: z.array(
-    z.object({
-      name: z.string().trim().min(2).max(120),
-      birthDate: z.string().date(),
-      relationship: z.string().trim().max(60).optional(),
-    }),
-  ).optional(),
+  maritalStatus: z
+    .enum(['single', 'married', 'stable-union', 'divorced', 'widowed', 'not-informed'])
+    .optional(),
+  militaryDocumentStatus: z
+    .enum(['applicable', 'not-applicable', 'pending-confirmation'])
+    .optional(),
+  dependents: z
+    .array(
+      z.object({
+        name: z.string().trim().min(2).max(120),
+        birthDate: z.string().date(),
+        relationship: z.string().trim().max(60).optional(),
+      }),
+    )
+    .optional(),
 } as const;
 
 function requireDepartmentForStandardUser(

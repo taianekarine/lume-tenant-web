@@ -9,6 +9,11 @@ Server Components, Server Actions e `/documents/files/:fileId` usam gateway
 server-only. O proxy repassa somente cabeçalhos seguros e força
 `Cache-Control: private, no-store`.
 
+A conclusão que chama o agente documental usa o timeout dedicado
+`LUME_TENANT_API_DOCUMENT_REVIEW_TIMEOUT_MS` (300 segundos por padrão), pois a
+extração pode executar até três tentativas na API. As demais chamadas mantêm o
+timeout curto do gateway.
+
 Usuários com `documentAccessMode=document-portal` são direcionados a
 `/documents` após o login e veem somente a navegação documental. A API também
 limita suas permissões; a proteção não depende do menu.
@@ -31,6 +36,11 @@ Depois do upload, a Server Action conclui a pré-validação e a tela indica rev
 humana pendente. Aprovação, recusa ou reenvio registram motivo, validade e
 conferência do original quando aplicável.
 
+Enquanto o documento aguarda revisão, o titular pode substituir o arquivo ou
+remover o envio para tentar novamente. Depois da aprovação, a exclusão aparece
+somente para quem gerencia documentos e exige motivo. Arquivos são visualizados
+em modal, sem abrir outra aba do navegador.
+
 Na solicitação individual, RH/DP pode incluir um tipo documental e alterar cada
 item para obrigatório, opcional ou dispensado, sempre informando motivo. Arquivos
 e versões anteriores são preservados. A mesma tela oferece XLSX individual em
@@ -38,11 +48,18 @@ quatro abas e ZIP com todos os arquivos daquele funcionário.
 
 **Criar solicitação avulsa** aceita vários usuários e vários tipos documentais.
 O formulário identifica pessoas com nome, username e e-mail, oferece seleção de
-todos os documentos e envia um único comando à API. O resultado continua sendo
-uma solicitação separada por usuário, preservando extração e downloads
-individuais. Documentos de cônjuge, filhos e situação militar são ignorados para
+todos os documentos e envia um único comando à API. O resultado atualiza o
+dossiê documental existente de cada usuário; um registro novo só é criado quando
+ainda não existe dossiê. Extração, histórico e downloads continuam individuais.
+Documentos de cônjuge, filhos e situação militar são ignorados para
 os usuários cujo perfil não se aplica; a tela informa quantas combinações foram
 ignoradas.
+
+A gestão mostra o nome do funcionário como título, pesquisa por nome/e-mail,
+filtra por status e contexto e separa, em abas, funcionários com pendências,
+completos e todos. A revisão abre em um diálogo. Em **Meus documentos**, a ordem
+prioriza aguardando envio, aguardando revisão e aprovados; os aprovados ficam
+recolhidos em um Accordion.
 
 Para filhos, cada tipo documental aparece uma vez na solicitação e aceita vários
 arquivos. O snapshot registra quais dependentes se aplicam: vacinação para
@@ -60,6 +77,6 @@ documentos de filhos para todos os dependentes cadastrados.
 6. envie arquivos em **Meus documentos**;
 7. retorne com o revisor e registre uma decisão humana;
 8. crie uma solicitação avulsa para dois usuários, selecione vários documentos e
-   confira que foram geradas duas solicitações independentes;
+   confira que os dois dossiês individuais foram atualizados sem duplicidade;
 9. altere uma exigência para opcional/dispensada e confirme o motivo no histórico;
 10. confirme versões, conteúdo privado, XLSX individual e ZIP do funcionário.

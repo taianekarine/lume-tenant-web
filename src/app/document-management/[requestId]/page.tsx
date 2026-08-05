@@ -13,7 +13,7 @@ export default async function ManagedDocumentRequestPage({
   searchParams,
 }: {
   readonly params: Promise<{ requestId: string }>;
-  readonly searchParams: Promise<{ error?: string; success?: string }>;
+  readonly searchParams: Promise<{ error?: string; success?: string; embedded?: string }>;
 }) {
   const session = await requireDocumentSession(true);
   const { requestId } = await params;
@@ -31,30 +31,33 @@ export default async function ManagedDocumentRequestPage({
     }
     redirect('/document-management?error=Não foi possível abrir a solicitação.');
   }
-  const returnPath = `/document-management/${requestId}`;
+  const returnPath = `/document-management/${requestId}${query.embedded === '1' ? '?embedded=1' : ''}`;
 
-  return (
-    <AuthenticatedShell user={session.user}>
-      <main className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-6">
-        {query.error || query.success ? (
-          <p
-            role={query.error ? 'alert' : 'status'}
-            className={
-              query.error
-                ? 'rounded-lg bg-destructive/10 p-3 text-sm text-destructive'
-                : 'rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700'
-            }
-          >
-            {query.error ?? query.success}
-          </p>
-        ) : null}
-        <DocumentRequestWorkspace
-          request={request}
-          canReview
-          returnPath={returnPath}
-          documentTypes={documentTypes}
-        />
-      </main>
-    </AuthenticatedShell>
+  const content = (
+    <main className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-6">
+      {query.error || query.success ? (
+        <p
+          role={query.error ? 'alert' : 'status'}
+          className={
+            query.error
+              ? 'rounded-lg bg-destructive/10 p-3 text-sm text-destructive'
+              : 'rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700'
+          }
+        >
+          {query.error ?? query.success}
+        </p>
+      ) : null}
+      <DocumentRequestWorkspace
+        request={request}
+        canReview
+        returnPath={returnPath}
+        documentTypes={documentTypes}
+      />
+    </main>
+  );
+  return query.embedded === '1' ? (
+    content
+  ) : (
+    <AuthenticatedShell user={session.user}>{content}</AuthenticatedShell>
   );
 }

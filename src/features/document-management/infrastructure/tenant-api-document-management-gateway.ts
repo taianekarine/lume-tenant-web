@@ -245,6 +245,7 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
     private readonly accessToken: string,
     private readonly fetcher: Fetcher = fetch,
     private readonly timeoutMs = 15_000,
+    private readonly reviewTimeoutMs = 300_000,
   ) {}
 
   async listRequests(query: Parameters<DocumentManagementGateway['listRequests']>[0] = {}) {
@@ -331,6 +332,18 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
     const body = await this.requestJson(
       `/document-management/submissions/${encodeURIComponent(submissionId)}/complete`,
       { method: 'POST' },
+      this.reviewTimeoutMs,
+    );
+    return this.parse(z.object({ request: requestDetailSchema }), body).request;
+  }
+
+  async deleteSubmission(
+    submissionId: string,
+    input: Parameters<DocumentManagementGateway['deleteSubmission']>[1],
+  ) {
+    const body = await this.requestJson(
+      `/document-management/submissions/${encodeURIComponent(submissionId)}`,
+      { method: 'DELETE', body: JSON.stringify(input) },
     );
     return this.parse(z.object({ request: requestDetailSchema }), body).request;
   }
@@ -402,7 +415,11 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
     return response;
   }
 
-  private async requestJson(path: string, init: RequestInit = {}): Promise<unknown> {
+  private async requestJson(
+    path: string,
+    init: RequestInit = {},
+    timeoutMs = this.timeoutMs,
+  ): Promise<unknown> {
     let response: Response;
     try {
       response = await this.fetcher(`${normalizeBaseUrl(this.baseUrl)}${path}`, {
@@ -414,7 +431,7 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
           ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
           ...init.headers,
         },
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
       throw new DocumentManagementError(
@@ -467,5 +484,18 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
 export function createDocumentManagementGateway(accessToken: string) {
   const baseUrl = process.env.LUME_TENANT_API_URL;
   if (!baseUrl) throw new Error('LUME_TENANT_API_URL is required.');
-  return new TenantApiDocumentManagementGateway(baseUrl, accessToken);
+  const configuredReviewTimeout = Number(
+    process.env.LUME_TENANT_API_DOCUMENT_REVIEW_TIMEOUT_MS ?? 300_000,
+  );
+  const reviewTimeoutMs =
+    Number.isInteger(configuredReviewTimeout) && configuredReviewTimeout >= 30_000
+      ? configuredReviewTimeout
+      : 300_000;
+  return new TenantApiDocumentManagementGateway(
+    baseUrl,
+    accessToken,
+    fetch,
+    15_000,
+    reviewTimeoutMs,
+  );
 }

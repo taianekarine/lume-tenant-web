@@ -1,5 +1,8 @@
 import { DocumentManagementError } from '@/features/document-management/application';
-import { executeAuthenticatedDocumentRequest, requireDocumentSession } from '@/features/document-management/server';
+import {
+  executeAuthenticatedDocumentRequest,
+  requireDocumentSession,
+} from '@/features/document-management/server';
 
 export async function GET(
   _request: Request,
@@ -13,11 +16,19 @@ export async function GET(
     );
     const headers = new Headers();
     headers.set('Content-Type', upstream.headers.get('content-type') ?? 'application/zip');
-    headers.set('Content-Disposition', upstream.headers.get('content-disposition') ?? `attachment; filename="arquivos-documentais-${subjectUserId}.zip"`);
+    headers.set(
+      'Content-Disposition',
+      upstream.headers.get('content-disposition') ??
+        `attachment; filename="arquivos-documentais-${subjectUserId}.zip"`,
+    );
     headers.set('Cache-Control', 'private, no-store');
     return new Response(upstream.body, { status: 200, headers });
   } catch (error) {
-    const status = error instanceof DocumentManagementError && error.code === 'forbidden' ? 403 : 502;
-    return Response.json({ error: 'Não foi possível gerar o pacote de arquivos deste usuário.' }, { status });
+    const status =
+      error instanceof DocumentManagementError && error.code === 'forbidden' ? 403 : 502;
+    return Response.json(
+      { error: 'Não foi possível gerar o pacote de arquivos deste usuário.' },
+      { status },
+    );
   }
 }

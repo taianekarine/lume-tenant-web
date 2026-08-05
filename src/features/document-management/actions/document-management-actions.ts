@@ -15,6 +15,11 @@ function value(formData: FormData, name: string): string {
   return typeof entry === 'string' ? entry.trim() : '';
 }
 
+function feedbackPath(path: string, kind: 'error' | 'success', message: string): string {
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}${kind}=${encodeURIComponent(message)}`;
+}
+
 function failure(path: string, error: unknown): never {
   if (error instanceof DocumentManagementError && error.code === 'unauthorized') {
     redirect('/auth/session-expired');
@@ -23,7 +28,7 @@ function failure(path: string, error: unknown): never {
     error instanceof DocumentManagementError
       ? `${error.message} Código: ${error.publicCode}`
       : 'Não foi possível concluir a operação documental.';
-  redirect(`${path}?error=${encodeURIComponent(message)}`);
+  redirect(feedbackPath(path, 'error', message));
 }
 
 const createRequestSchema = z.object({
@@ -89,7 +94,7 @@ export async function createBatchDocumentRequestsAction(formData: FormData): Pro
     ? ` ${result.skippedDocuments.length} combinação(ões) não aplicável(is) foram ignoradas.`
     : '';
   redirect(
-    `/document-management?success=${encodeURIComponent(`${result.createdCount} solicitação(ões) criada(s).${skipped}`)}`,
+    `/document-management?success=${encodeURIComponent(`${result.createdCount} dossiê(s) documental(is) atualizado(s).${skipped}`)}`,
   );
 }
 
@@ -139,7 +144,7 @@ export async function uploadDocumentSubmissionAction(
   }
   revalidatePath(`/documents/${requestId}`);
   revalidatePath(`/document-management/${requestId}`);
-  redirect(`${returnPath}?success=Documento enviado para revisão.`);
+  redirect(feedbackPath(returnPath, 'success', 'Documento enviado para revisão.'));
 }
 
 export async function reviewDocumentSubmissionAction(
@@ -150,7 +155,7 @@ export async function reviewDocumentSubmissionAction(
 ): Promise<void> {
   const decision = value(formData, 'decision');
   if (!['approved', 'rejected', 'resubmission-required'].includes(decision)) {
-    redirect(`${returnPath}?error=Decisão inválida.`);
+    redirect(feedbackPath(returnPath, 'error', 'Decisão inválida.'));
   }
   try {
     const proposedFields: Record<string, unknown> = {};
@@ -209,7 +214,31 @@ export async function reviewDocumentSubmissionAction(
   }
   revalidatePath(`/documents/${requestId}`);
   revalidatePath(`/document-management/${requestId}`);
-  redirect(`${returnPath}?success=Revisão registrada.`);
+  redirect(feedbackPath(returnPath, 'success', 'Revisão registrada.'));
+}
+
+export async function deleteDocumentSubmissionAction(
+  requestId: string,
+  submissionId: string,
+  returnPath: string,
+  formData: FormData,
+): Promise<void> {
+  try {
+    await executeAuthenticatedDocumentMutation((gateway) =>
+      gateway.deleteSubmission(submissionId, {
+        reason: value(formData, 'reason') || undefined,
+      }),
+    );
+  } catch (error) {
+    failure(returnPath, error);
+  }
+  revalidatePath(`/documents/${requestId}`);
+  revalidatePath(`/document-management/${requestId}`);
+  revalidatePath('/documents');
+  revalidatePath('/document-management');
+  redirect(
+    feedbackPath(returnPath, 'success', 'Arquivo removido. O documento voltou a aguardar envio.'),
+  );
 }
 
 export async function addDocumentRequestItemAction(
@@ -219,7 +248,7 @@ export async function addDocumentRequestItemAction(
 ): Promise<void> {
   const requirement = value(formData, 'requirement');
   if (!['required', 'optional'].includes(requirement)) {
-    redirect(`${returnPath}?error=Exigência inválida.`);
+    redirect(feedbackPath(returnPath, 'error', 'Exigência inválida.'));
   }
   try {
     await executeAuthenticatedDocumentMutation((gateway) =>
@@ -234,8 +263,8 @@ export async function addDocumentRequestItemAction(
   } catch (error) {
     failure(returnPath, error);
   }
-  revalidatePath(returnPath);
-  redirect(`${returnPath}?success=Documento incluído na solicitação.`);
+  revalidatePath(returnPath.split('?')[0]);
+  redirect(feedbackPath(returnPath, 'success', 'Documento incluído na solicitação.'));
 }
 
 export async function setDocumentRequestItemPolicyAction(
@@ -246,7 +275,7 @@ export async function setDocumentRequestItemPolicyAction(
 ): Promise<void> {
   const policy = value(formData, 'policy');
   if (!['required', 'optional', 'waived'].includes(policy)) {
-    redirect(`${returnPath}?error=Política documental inválida.`);
+    redirect(feedbackPath(returnPath, 'error', 'Política documental inválida.'));
   }
   try {
     await executeAuthenticatedDocumentMutation((gateway) =>
@@ -259,5 +288,5 @@ export async function setDocumentRequestItemPolicyAction(
     failure(returnPath, error);
   }
   revalidatePath(`/document-management/${requestId}`);
-  redirect(`${returnPath}?success=Exigência documental atualizada.`);
+  redirect(feedbackPath(returnPath, 'success', 'Exigência documental atualizada.'));
 }

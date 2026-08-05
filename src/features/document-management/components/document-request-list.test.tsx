@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import type { DocumentRequestSummary } from '../domain';
 import { DocumentRequestList } from './document-request-list';
@@ -33,9 +33,14 @@ describe('DocumentRequestList', () => {
     expect(screen.getByText('Aguardando revisão')).toBeInTheDocument();
   });
 
-  it('shows the subject and management route for people operations', () => {
+  it('shows the subject and opens document review in a modal', () => {
     render(<DocumentRequestList requests={[request]} management />);
     expect(screen.getByText(/Ana Candidata/)).toBeInTheDocument();
-    expect(screen.getByRole('link')).toHaveAttribute('href', `/document-management/${request.id}`);
+    fireEvent.click(screen.getByRole('button', { name: /Revisar documentos de Ana Candidata/ }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByTitle(/Revisão documental de Ana Candidata/)).toHaveAttribute(
+      'src',
+      `/document-management/${request.id}?embedded=1`,
+    );
   });
 });

@@ -81,9 +81,7 @@ export interface DocumentRequestDetail extends Omit<DocumentRequestSummary, 'pro
 export interface DocumentRequestItem {
   readonly id: string;
   readonly requirement: 'required' | 'optional' | 'conditional';
-  readonly status:
-    | Exclude<DocumentRequestStatus, 'draft' | 'partially-submitted'>
-    | 'waived';
+  readonly status: Exclude<DocumentRequestStatus, 'draft' | 'partially-submitted'> | 'waived';
   readonly position: number;
   readonly instructions: string | null;
   readonly dueAt: string | null;

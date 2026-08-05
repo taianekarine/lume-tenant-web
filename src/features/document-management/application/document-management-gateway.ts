@@ -84,6 +84,10 @@ export interface DocumentManagementGateway {
   ): Promise<DocumentRequestDetail>;
   upload(requestItemId: string, formData: FormData): Promise<DocumentRequestDetail>;
   completeSubmission(submissionId: string): Promise<DocumentRequestDetail>;
+  deleteSubmission(
+    submissionId: string,
+    input: { reason?: string },
+  ): Promise<DocumentRequestDetail>;
   updateExtractedData(
     submissionId: string,
     input: {

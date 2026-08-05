@@ -440,6 +440,10 @@ describe('user editor form', () => {
       email: tenantUser.email,
       isAdministrator: false,
       documentAccessMode: 'standard',
+      jobTitle: '',
+      maritalStatus: 'not-informed',
+      militaryDocumentStatus: 'pending-confirmation',
+      dependents: [],
       departments: ['commercial'],
       permissionCodes: ['commercial:view'],
     });

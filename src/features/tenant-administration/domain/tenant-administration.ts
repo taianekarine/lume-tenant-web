@@ -9,17 +9,8 @@ export interface TenantUser {
   readonly documentAccessMode?: 'standard' | 'document-portal';
   readonly jobTitle: string | null;
   readonly maritalStatus:
-    | 'single'
-    | 'married'
-    | 'stable-union'
-    | 'divorced'
-    | 'widowed'
-    | 'not-informed'
-    | null;
-  readonly militaryDocumentStatus:
-    | 'applicable'
-    | 'not-applicable'
-    | 'pending-confirmation';
+    'single' | 'married' | 'stable-union' | 'divorced' | 'widowed' | 'not-informed' | null;
+  readonly militaryDocumentStatus: 'applicable' | 'not-applicable' | 'pending-confirmation';
   readonly dependents: readonly TenantUserDependent[];
   readonly permissionCodes: readonly string[];
   readonly permissions: readonly string[];
