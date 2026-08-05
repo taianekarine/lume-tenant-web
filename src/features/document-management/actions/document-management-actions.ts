@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { DocumentManagementError } from '../application';
 import { executeAuthenticatedDocumentMutation } from '../server';
+import { buildDocumentUploadFormData } from './document-upload-form-data';
 
 function value(formData: FormData, name: string): string {
   const entry = formData.get(name);
@@ -70,10 +71,10 @@ export async function uploadDocumentSubmissionAction(
   returnPath: string,
   formData: FormData,
 ): Promise<void> {
-  formData.set('commandId', randomUUID());
+  const uploadFormData = buildDocumentUploadFormData(formData, randomUUID());
   try {
     const request = await executeAuthenticatedDocumentMutation((gateway) =>
-      gateway.upload(requestItemId, formData),
+      gateway.upload(requestItemId, uploadFormData),
     );
     const submission = request.items.find((item) => item.id === requestItemId)?.submissions.at(0);
     if (submission) {
@@ -103,10 +104,30 @@ export async function reviewDocumentSubmissionAction(
     const proposedFields: Record<string, unknown> = {};
     const confirmedFields: Record<string, unknown> = {};
     const confidences: Record<string, number> = {};
+    const multipleFields = new Set(
+      formData
+        .getAll('multipleField')
+        .filter((entry): entry is string => typeof entry === 'string'),
+    );
+    const reviewValue = (key: string, entry: string): string | string[] => {
+      const normalized = entry.trim();
+      return multipleFields.has(key)
+        ? normalized
+            .split(/\r?\n/)
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : normalized;
+    };
     for (const [name, entry] of formData.entries()) {
       if (typeof entry !== 'string') continue;
-      if (name.startsWith('proposed.')) proposedFields[name.slice(9)] = entry.trim();
-      if (name.startsWith('confirmed.')) confirmedFields[name.slice(10)] = entry.trim();
+      if (name.startsWith('proposed.')) {
+        const key = name.slice(9);
+        proposedFields[key] = reviewValue(key, entry);
+      }
+      if (name.startsWith('confirmed.')) {
+        const key = name.slice(10);
+        confirmedFields[key] = reviewValue(key, entry);
+      }
       if (name.startsWith('confidence.')) {
         const numeric = Number(entry);
         if (Number.isFinite(numeric)) confidences[name.slice(11)] = numeric / 100;

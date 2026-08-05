@@ -16,6 +16,7 @@ interface ExtractionFieldDefinition {
   readonly key: string;
   readonly label: string;
   readonly type?: string;
+  readonly multiple: boolean;
 }
 
 function extractionFields(
@@ -34,6 +35,7 @@ function extractionFields(
             key: record.key,
             label: record.label,
             type: typeof record.type === 'string' ? record.type : undefined,
+            multiple: record.multiple === true,
           },
         ]
       : [];
@@ -44,8 +46,10 @@ function fieldRecordValue(data: Readonly<Record<string, unknown>>, key: string):
   const entry = data[key];
   if (entry && typeof entry === 'object' && !Array.isArray(entry) && 'value' in entry) {
     const value = (entry as Record<string, unknown>).value;
+    if (Array.isArray(value)) return value.map(String).join('\n');
     return typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
   }
+  if (Array.isArray(entry)) return entry.map(String).join('\n');
   return typeof entry === 'string' ? entry : entry == null ? '' : JSON.stringify(entry);
 }
 
@@ -125,6 +129,7 @@ export function DocumentRequestWorkspace({
           ].includes(item.status);
           const requiresFrontBack = item.config.requiresFrontBack === true;
           const requiresOriginal = item.config.requiresOriginal === true;
+          const repeatableByDependent = item.config.repeatableByDependent === true;
           const accepts = Array.isArray(item.config.acceptedMimeTypes)
             ? item.config.acceptedMimeTypes.filter(
                 (entry): entry is string => typeof entry === 'string',
@@ -200,9 +205,13 @@ export function DocumentRequestWorkspace({
                     className="space-y-3 rounded-lg border border-dashed p-4"
                   >
                     <label className="block text-sm font-medium" htmlFor={`files-${item.id}`}>
-                      {requiresFrontBack
-                        ? 'Selecione frente e verso, nesta ordem'
-                        : 'Selecione o arquivo ou as páginas'}
+                      {repeatableByDependent && requiresFrontBack
+                        ? 'Selecione frente e verso de cada filho, mantendo cada par em sequência'
+                        : repeatableByDependent
+                          ? 'Selecione os arquivos de todos os filhos'
+                          : requiresFrontBack
+                            ? 'Selecione frente e verso, nesta ordem'
+                            : 'Selecione o arquivo ou as páginas'}
                     </label>
                     <Input
                       id={`files-${item.id}`}
@@ -214,10 +223,13 @@ export function DocumentRequestWorkspace({
                     />
                     <input
                       type="hidden"
-                      name="sides"
-                      value={requiresFrontBack ? 'front,back' : ''}
+                      name="requiresFrontBack"
+                      value={requiresFrontBack ? 'true' : 'false'}
                     />
                     <p className="text-xs text-muted-foreground">
+                      {repeatableByDependent
+                        ? 'Você pode selecionar documentos de mais de um filho no mesmo envio. '
+                        : ''}
                       Formatos: PDF, JPEG ou PNG. Os limites configurados serão validados pela API.
                     </p>
                     <Button type="submit">Enviar documento</Button>
@@ -245,13 +257,25 @@ export function DocumentRequestWorkspace({
                         </p>
                         {configuredExtractionFields.map((field) => (
                           <div key={field.key} className="grid gap-2 md:grid-cols-[1fr_8rem_1fr]">
+                            {field.multiple ? (
+                              <input type="hidden" name="multipleField" value={field.key} />
+                            ) : null}
                             <label className="space-y-1 text-xs font-medium">
                               <span>{field.label} — valor proposto</span>
-                              <Input
-                                name={`proposed.${field.key}`}
-                                type={field.type === 'date' ? 'date' : 'text'}
-                                defaultValue={fieldRecordValue(latest.extractedData, field.key)}
-                              />
+                              {field.multiple ? (
+                                <Textarea
+                                  name={`proposed.${field.key}`}
+                                  rows={3}
+                                  placeholder="Um valor por filho"
+                                  defaultValue={fieldRecordValue(latest.extractedData, field.key)}
+                                />
+                              ) : (
+                                <Input
+                                  name={`proposed.${field.key}`}
+                                  type={field.type === 'date' ? 'date' : 'text'}
+                                  defaultValue={fieldRecordValue(latest.extractedData, field.key)}
+                                />
+                              )}
                             </label>
                             <label className="space-y-1 text-xs font-medium">
                               <span>Confiança %</span>
@@ -265,14 +289,26 @@ export function DocumentRequestWorkspace({
                             </label>
                             <label className="space-y-1 text-xs font-medium">
                               <span>{field.label} — valor confirmado</span>
-                              <Input
-                                name={`confirmed.${field.key}`}
-                                type={field.type === 'date' ? 'date' : 'text'}
-                                defaultValue={
-                                  fieldRecordValue(latest.confirmedData, field.key) ||
-                                  fieldRecordValue(latest.extractedData, field.key)
-                                }
-                              />
+                              {field.multiple ? (
+                                <Textarea
+                                  name={`confirmed.${field.key}`}
+                                  rows={3}
+                                  placeholder="Um valor por filho"
+                                  defaultValue={
+                                    fieldRecordValue(latest.confirmedData, field.key) ||
+                                    fieldRecordValue(latest.extractedData, field.key)
+                                  }
+                                />
+                              ) : (
+                                <Input
+                                  name={`confirmed.${field.key}`}
+                                  type={field.type === 'date' ? 'date' : 'text'}
+                                  defaultValue={
+                                    fieldRecordValue(latest.confirmedData, field.key) ||
+                                    fieldRecordValue(latest.extractedData, field.key)
+                                  }
+                                />
+                              )}
                             </label>
                           </div>
                         ))}
