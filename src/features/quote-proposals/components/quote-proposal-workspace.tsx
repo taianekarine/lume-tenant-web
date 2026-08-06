@@ -1036,8 +1036,8 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
           ) : null}
 
           <p className="text-xs leading-5 text-muted-foreground">
-            O atendimento mudará para “Aguardando cliente” somente quando o provedor confirmar o
-            envio, evitando indicar sucesso antes da entrega ao WhatsApp.
+            O atendimento mudará para “Aguardando cliente” somente quando o envio for confirmado,
+            evitando indicar sucesso antes da entrega.
           </p>
 
           <DialogFooter>

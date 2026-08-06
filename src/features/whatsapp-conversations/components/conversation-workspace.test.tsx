@@ -305,6 +305,7 @@ describe('ConversationWorkspace', () => {
     const conversation = createWhatsAppConversationFixture({
       conversationState: 'human-active',
       flowStep: 'human-service',
+      assignedTo: { id: 'employee-001', name: 'Usuário Comercial' },
       version: 8,
       unreadCount: 0,
     });
@@ -330,7 +331,7 @@ describe('ConversationWorkspace', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
   });
 
-  it('does not allow a second take-over and enables return when an attendant is already assigned', () => {
+  it('allows takeover to repair a stale assignment and keeps return-to-bot disabled', () => {
     const conversation = createWhatsAppConversationFixture({
       conversationState: 'sent-to-human',
       flowStep: 'human-service',
@@ -343,8 +344,8 @@ describe('ConversationWorkspace', () => {
       <ConversationWorkspace initialConversations={[conversation]} currentUserId="employee-001" />,
     );
 
-    expect(screen.getByRole('button', { name: 'Assumir' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Devolver ao bot' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Assumir' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Devolver ao bot' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /Marcar como lid[ao]/i })).not.toBeInTheDocument();
   });
 
@@ -487,8 +488,8 @@ describe('ConversationWorkspace', () => {
       'w-full',
       'overflow-x-hidden',
       'data-[side=right]:w-full',
-      'sm:data-[side=right]:w-[min(52rem,calc(100vw-3rem))]',
-      'sm:max-w-none',
+      'sm:data-[side=right]:w-[min(60rem,calc(100vw-3rem))]',
+      'sm:!max-w-none',
     );
     expect(messageSheet).not.toHaveClass('sm:max-w-2xl');
   });
@@ -498,7 +499,7 @@ describe('ConversationWorkspace', () => {
     mockFetchDetail(conversation);
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    expect(screen.getByRole('button', { name: 'Encerrar' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Encerrar atendimento' })).toBeDisabled();
     expect(mockedForward).not.toHaveBeenCalled();
     expect(mockedMarkAsRead).not.toHaveBeenCalled();
   });
@@ -525,7 +526,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Encerrar' }));
+    await user.click(screen.getByRole('button', { name: 'Encerrar atendimento' }));
     expect(screen.getByRole('dialog')).toHaveTextContent(
       'Quando o cliente enviar uma nova mensagem, o bot iniciará outro atendimento',
     );
@@ -571,7 +572,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
+    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
     expect(closeButton).toBeEnabled();
     await user.click(closeButton);
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
@@ -608,7 +609,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
+    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
     expect(closeButton).toBeEnabled();
     await user.click(closeButton);
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
@@ -645,7 +646,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
+    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
     expect(closeButton).toBeEnabled();
     await user.click(closeButton);
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
@@ -679,7 +680,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Encerrar' }));
+    await user.click(screen.getByRole('button', { name: 'Encerrar atendimento' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
 
     await waitFor(() =>
@@ -850,7 +851,7 @@ describe('ConversationWorkspace', () => {
     expect(await screen.findAllByText(message.text)).toHaveLength(2);
     expect(screen.getByText(/· Envio pendente$/)).toBeInTheDocument();
     expect(
-      screen.getAllByText('Mensagem registrada. Aguardando confirmação de envio pelo provedor.'),
+      screen.getAllByText('Mensagem salva. Aguardando confirmação de envio.'),
     ).not.toHaveLength(0);
     expect(input).toHaveValue('');
   });
@@ -951,11 +952,11 @@ describe('ConversationWorkspace', () => {
     ).toBeInTheDocument();
   });
 
-  it('allows an unassigned conversation to be taken over inside Message', async () => {
+  it('allows a stale blocked assignment to be repaired by taking over inside Message', async () => {
     const conversation = createWhatsAppConversationFixture({
       conversationState: 'sent-to-human',
       flowStep: 'human-service',
-      assignedTo: null,
+      assignedTo: { id: 'employee-legacy', name: 'Responsável anterior' },
       unreadCount: 0,
     });
     const updated = createWhatsAppConversationFixture({
@@ -964,7 +965,10 @@ describe('ConversationWorkspace', () => {
       assignedTo: { id: 'employee-001', name: 'Usuário Comercial' },
       version: conversation.version + 1,
     });
-    mockFetchDetail(conversation);
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response({ conversation }))
+      .mockResolvedValue(response({ conversation: updated }));
     mockedTakeOver.mockResolvedValue({ success: true, conversation: updated });
     const user = userEvent.setup();
     render(
@@ -974,6 +978,9 @@ describe('ConversationWorkspace', () => {
     const characterCounter = screen.getByText(/0\s*\/\s*10\.000 caracteres/);
     const takeOverButton = screen.getByRole('button', { name: 'Assumir atendimento' });
     const sendButton = screen.getByRole('button', { name: 'Enviar mensagem' });
+    const input = screen.getByRole('textbox', {
+      name: `Mensagem para ${conversation.contact.name}`,
+    });
     const actions = takeOverButton.parentElement;
 
     expect(characterCounter).toHaveClass('whitespace-nowrap');
@@ -988,6 +995,7 @@ describe('ConversationWorkspace', () => {
     );
     expect(takeOverButton).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden');
     expect(sendButton).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden');
+    expect(input).toBeDisabled();
 
     await user.click(takeOverButton);
 
@@ -997,6 +1005,7 @@ describe('ConversationWorkspace', () => {
         expectedVersion: conversation.version,
       }),
     );
+    await waitFor(() => expect(input).toBeEnabled());
   });
 
   it('preserves the draft and idempotency identifiers after a send conflict', async () => {

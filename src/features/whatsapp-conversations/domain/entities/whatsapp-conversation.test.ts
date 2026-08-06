@@ -2,6 +2,7 @@ import {
   canCloseWhatsAppConversation,
   canReturnWhatsAppConversationToBot,
   canSendHumanWhatsAppMessage,
+  canTakeOverWhatsAppConversation,
   canWhatsAppBotReply,
   isWhatsAppAwaitingProposal,
   isWhatsAppBotBlocked,
@@ -81,13 +82,13 @@ describe('WhatsApp conversation domain', () => {
     ).toBe(false);
   });
 
-  it('returns active attendant conversations and unassigned approved follow-ups to the bot', () => {
+  it('returns only conversations with an active human attendant to the bot', () => {
     const waitingForAttendant = createWhatsAppConversationFixture({
       conversationState: 'sent-to-human',
       assignedTo: null,
     });
 
-    expect(canReturnWhatsAppConversationToBot(waitingForAttendant)).toBe(true);
+    expect(canReturnWhatsAppConversationToBot(waitingForAttendant)).toBe(false);
     expect(
       canReturnWhatsAppConversationToBot({
         ...waitingForAttendant,
@@ -102,7 +103,7 @@ describe('WhatsApp conversation domain', () => {
         requestStatus: 'approved',
         hasApprovedQuoteRequest: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canReturnWhatsAppConversationToBot({
         ...waitingForAttendant,
@@ -118,6 +119,34 @@ describe('WhatsApp conversation domain', () => {
         requestStatus: 'approved',
         hasApprovedQuoteRequest: true,
         assignedTo: { id: 'employee-001', name: 'Atendente Comercial' },
+      }),
+    ).toBe(false);
+  });
+
+  it('allows an authorized user to repair a stale blocked assignment by taking over', () => {
+    const staleAssignment = createWhatsAppConversationFixture({
+      conversationState: 'sent-to-human',
+      assignedTo: { id: 'employee-legacy', name: 'Responsável anterior' },
+    });
+
+    expect(canTakeOverWhatsAppConversation(staleAssignment)).toBe(true);
+    expect(
+      canTakeOverWhatsAppConversation({
+        ...staleAssignment,
+        conversationState: 'human-active',
+        assignedTo: null,
+      }),
+    ).toBe(true);
+    expect(
+      canTakeOverWhatsAppConversation({
+        ...staleAssignment,
+        conversationState: 'human-active',
+      }),
+    ).toBe(false);
+    expect(
+      canTakeOverWhatsAppConversation({
+        ...staleAssignment,
+        conversationState: 'closed',
       }),
     ).toBe(false);
   });
@@ -139,13 +168,13 @@ describe('WhatsApp conversation domain', () => {
     ).toBe(true);
   });
 
-  it('keeps the normal assigned attendant return-to-bot action available', () => {
+  it('keeps return-to-bot unavailable until a human attendant is active', () => {
     const waitingForAttendant = createWhatsAppConversationFixture({
       conversationState: 'sent-to-human',
       assignedTo: null,
     });
 
-    expect(canReturnWhatsAppConversationToBot(waitingForAttendant)).toBe(true);
+    expect(canReturnWhatsAppConversationToBot(waitingForAttendant)).toBe(false);
     expect(
       canReturnWhatsAppConversationToBot({
         ...waitingForAttendant,

@@ -733,7 +733,7 @@ export function ConversationWorkspace({
     setTargetDepartment(getDefaultTargetDepartment(result.conversation.department));
     setMessageDraft('');
     humanMessageSubmissionRef.current = null;
-    setFeedbackMessage('Mensagem registrada. Aguardando confirmação de envio pelo provedor.');
+    setFeedbackMessage('Mensagem salva. Aguardando confirmação de envio.');
     setFeedbackTone('success');
     setLoadedConversationIds((current) => new Set([...current, result.conversation.id]));
     void loadConversationDetail(result.conversation.id);
@@ -1210,7 +1210,7 @@ export function ConversationWorkspace({
                       className={styles.actionButton({ action: 'close' })}
                     >
                       <CircleStop aria-hidden="true" />
-                      Encerrar
+                      Encerrar atendimento
                     </button>
                   </div>
                   <div className={styles.actions()}>

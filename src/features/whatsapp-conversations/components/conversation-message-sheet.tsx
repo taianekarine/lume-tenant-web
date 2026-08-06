@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 import {
   AlertCircle,
@@ -41,6 +41,7 @@ import type {
   WhatsAppMessageAttachment,
   WhatsAppMessageKind,
 } from '../domain';
+import { resolveConversationHistoryScrollTop } from './conversation-history-scroll';
 import { DELIVERY_STATUS_LABELS, MESSAGE_KIND_LABELS } from './conversation-labels';
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
@@ -84,7 +85,7 @@ function MessageAttachmentPreview({
         <span className="min-w-0 flex-1">
           <strong className="block truncate text-xs">{label}</strong>
           <small className="block text-muted-foreground">
-            {details} · conteúdo indisponível no provedor
+            {details} · arquivo indisponível para visualização
           </small>
         </span>
       </div>
@@ -211,9 +212,11 @@ export function ConversationMessageSheet({
   feedbackTone,
 }: ConversationMessageSheetProps) {
   const historyRef = useRef<HTMLDivElement>(null);
+  const initialScrollFrameRef = useRef<number | null>(null);
   const previousHistoryRef = useRef({
     open: false,
     loaded: false,
+    conversationId: '',
     firstId: '',
     lastId: '',
     scrollHeight: 0,
@@ -222,6 +225,29 @@ export function ConversationMessageSheet({
   });
   const firstMessageId = conversation.messages[0]?.id ?? '';
   const lastMessageId = conversation.messages.at(-1)?.id ?? '';
+  const bindHistoryRef = useCallback(
+    (history: HTMLDivElement | null) => {
+      historyRef.current = history;
+      if (initialScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(initialScrollFrameRef.current);
+        initialScrollFrameRef.current = null;
+      }
+      if (!history || !open || !isLoaded) return;
+
+      const scrollToLatestMessage = () => {
+        if (historyRef.current !== history) return;
+        history.scrollTop = history.scrollHeight;
+        previousHistoryRef.current.conversationId = conversation.id;
+        previousHistoryRef.current.scrollHeight = history.scrollHeight;
+        previousHistoryRef.current.scrollTop = history.scrollTop;
+        previousHistoryRef.current.clientHeight = history.clientHeight;
+      };
+
+      scrollToLatestMessage();
+      initialScrollFrameRef.current = window.requestAnimationFrame(scrollToLatestMessage);
+    },
+    [conversation.id, isLoaded, open],
+  );
 
   useEffect(() => {
     if (!open || !detailError) return;
@@ -236,37 +262,61 @@ export function ConversationMessageSheet({
     const history = historyRef.current;
     if (!history || !open || !isLoaded) return;
     const previous = previousHistoryRef.current;
-    const openingHistory = !previous.open || !previous.loaded;
+    const openingHistory =
+      !previous.open || !previous.loaded || previous.conversationId !== conversation.id;
     const prependedMessages =
       previous.firstId !== '' &&
       previous.firstId !== firstMessageId &&
       previous.lastId === lastMessageId;
     const wasNearBottom = previous.scrollHeight - previous.scrollTop - previous.clientHeight < 80;
+    const nextScrollTop = resolveConversationHistoryScrollTop({
+      openingHistory,
+      prependedMessages,
+      appendedMessages: previous.lastId !== lastMessageId,
+      wasNearBottom,
+      currentScrollHeight: history.scrollHeight,
+      previousScrollHeight: previous.scrollHeight,
+      previousScrollTop: previous.scrollTop,
+    });
 
-    if (openingHistory) {
-      history.scrollTop = history.scrollHeight;
-    } else if (prependedMessages) {
-      history.scrollTop = previous.scrollTop + history.scrollHeight - previous.scrollHeight;
-    } else if (wasNearBottom && previous.lastId !== lastMessageId) {
-      history.scrollTop = history.scrollHeight;
-    }
+    if (nextScrollTop !== null) history.scrollTop = nextScrollTop;
 
     previousHistoryRef.current = {
       open,
       loaded: isLoaded,
+      conversationId: conversation.id,
       firstId: firstMessageId,
       lastId: lastMessageId,
       scrollHeight: history.scrollHeight,
       scrollTop: history.scrollTop,
       clientHeight: history.clientHeight,
     };
-  }, [firstMessageId, isLoaded, lastMessageId, open]);
+  }, [conversation.id, firstMessageId, isLoaded, lastMessageId, open]);
+
+  useEffect(() => {
+    const history = historyRef.current;
+    if (!history || !open || !isLoaded) return;
+
+    history.scrollTop = history.scrollHeight;
+    previousHistoryRef.current.scrollHeight = history.scrollHeight;
+    previousHistoryRef.current.scrollTop = history.scrollTop;
+    previousHistoryRef.current.clientHeight = history.clientHeight;
+  }, [conversation.id, isLoaded, open]);
 
   useEffect(() => {
     if (open) return;
     previousHistoryRef.current.open = false;
     previousHistoryRef.current.loaded = false;
   }, [open]);
+
+  useEffect(
+    () => () => {
+      if (initialScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(initialScrollFrameRef.current);
+      }
+    },
+    [],
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -283,7 +333,7 @@ export function ConversationMessageSheet({
         </span>
       </SheetTrigger>
 
-      <SheetContent className="w-full gap-0 overflow-x-hidden data-[side=right]:w-full sm:max-w-none sm:data-[side=right]:w-[min(52rem,calc(100vw-3rem))]">
+      <SheetContent className="w-full gap-0 overflow-x-hidden data-[side=right]:w-full sm:!max-w-none sm:data-[side=right]:w-[min(60rem,calc(100vw-3rem))]">
         <SheetHeader className="border-b pr-12">
           <SheetTitle>Conversa com {conversation.contact.name}</SheetTitle>
           <SheetDescription>
@@ -302,7 +352,7 @@ export function ConversationMessageSheet({
         </SheetHeader>
 
         <div
-          ref={historyRef}
+          ref={bindHistoryRef}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/20 p-4 sm:p-6"
           onScroll={(event) => {
             const history = event.currentTarget;
@@ -366,11 +416,16 @@ export function ConversationMessageSheet({
                       <MessageHeader>
                         {isOutbound ? 'Atendimento' : conversation.contact.name}
                       </MessageHeader>
-                      <Bubble variant={isOutbound ? 'tinted' : 'secondary'}>
+                      <Bubble
+                        variant={isOutbound ? 'tinted' : 'secondary'}
+                        className="max-w-[88%] sm:max-w-[80%] xl:max-w-[42rem]"
+                      >
                         <BubbleContent>
                           <div className="space-y-2">
                             {message.text ? (
-                              <p className="whitespace-pre-wrap">{message.text}</p>
+                              <p className="whitespace-pre-wrap break-words leading-6 [overflow-wrap:anywhere]">
+                                {message.text}
+                              </p>
                             ) : null}
                             {message.attachment ? (
                               <MessageAttachmentPreview

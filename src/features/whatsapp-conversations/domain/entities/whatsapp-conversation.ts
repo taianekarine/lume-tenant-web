@@ -274,21 +274,12 @@ export function isWhatsAppQuoteSummaryConfirmed(conversation: WhatsAppConversati
 export function canTakeOverWhatsAppConversation(conversation: WhatsAppConversation): boolean {
   return (
     conversation.conversationState !== 'closed' &&
-    conversation.conversationState !== 'human-active' &&
-    conversation.assignedTo === null
+    !(conversation.conversationState === 'human-active' && conversation.assignedTo !== null)
   );
 }
 
 export function canReturnWhatsAppConversationToBot(conversation: WhatsAppConversation): boolean {
-  if (['human-active', 'sent-to-human'].includes(conversation.conversationState)) {
-    return true;
-  }
-
-  return (
-    conversation.conversationState === 'waiting-for-customer' &&
-    conversation.hasApprovedQuoteRequest === true &&
-    conversation.assignedTo === null
-  );
+  return conversation.conversationState === 'human-active' && conversation.assignedTo !== null;
 }
 
 export function canForwardWhatsAppConversation(conversation: WhatsAppConversation): boolean {
