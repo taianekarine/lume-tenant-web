@@ -67,7 +67,7 @@ describe('ProfilePage', () => {
     await waitFor(() =>
       expect(toastAdd).toHaveBeenCalledWith(
         expect.objectContaining({
-          description: 'Não foi possível alterar a senha.\nCódigo do erro: VALIDATION_ERROR',
+          description: 'Não foi possível alterar a senha.',
           type: 'error',
         }),
       ),

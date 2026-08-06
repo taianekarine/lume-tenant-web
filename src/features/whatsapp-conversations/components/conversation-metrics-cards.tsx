@@ -20,25 +20,25 @@ export function ConversationMetricsCards({
       label: 'Bot ativo',
       value: metrics.botActive,
       icon: Bot,
-      tone: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+      tone: 'bg-success/10 text-success-emphasis',
     },
     {
       label: 'Atendente ativo',
       value: metrics.attendantActive,
       icon: Headset,
-      tone: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+      tone: 'bg-info/10 text-info',
     },
     {
       label: 'Automação pausada',
       value: metrics.automationPaused,
       icon: PauseCircle,
-      tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+      tone: 'bg-warning/10 text-warning-emphasis',
     },
     {
       label: 'Conversas não lidas',
       value: metrics.unreadConversations,
       icon: MessageCircle,
-      tone: 'bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
+      tone: 'bg-primary/10 text-primary-emphasis',
     },
   ] as const;
 

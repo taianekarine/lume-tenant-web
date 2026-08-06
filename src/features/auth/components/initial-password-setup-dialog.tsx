@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LoaderCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '@/shared/ui/button';
@@ -17,6 +17,7 @@ import {
 } from '@/shared/ui/dialog';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
+import { toast } from '@/shared/ui/toast';
 
 import { completePasswordChangeAction } from '../actions/login-action';
 import type { PasswordSetupChallenge } from '../application';
@@ -41,6 +42,11 @@ export function InitialPasswordSetupDialog({
     resolver: zodResolver(passwordChangeSchema),
     defaultValues: { newPassword: '', confirmation: '' },
   });
+
+  useEffect(() => {
+    if (!feedback) return;
+    toast.add({ title: 'Senha não criada', description: feedback.message, type: 'error' });
+  }, [feedback]);
 
   function clearChallenge() {
     form.reset();
@@ -92,24 +98,8 @@ export function InitialPasswordSetupDialog({
             acesso; depois, entre novamente.
           </DialogDescription>
         </DialogHeader>
-        <p className="font-mono text-xs text-muted-foreground">
-          Código do erro: ACCOUNT_PASSWORD_SETUP_REQUIRED
-        </p>
-
         {challenge ? (
           <form id="initial-password-setup-form" onSubmit={submit} className="space-y-4" noValidate>
-            {feedback ? (
-              <div
-                role="alert"
-                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
-              >
-                <span className="block">{feedback.message}</span>
-                <span className="mt-1 block font-mono text-xs">
-                  Código do erro: {feedback.errorCode}
-                </span>
-              </div>
-            ) : null}
-
             <Field data-invalid={Boolean(form.formState.errors.newPassword)}>
               <FieldLabel htmlFor="initial-new-password">Nova senha</FieldLabel>
               <Input

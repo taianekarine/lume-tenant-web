@@ -27,8 +27,9 @@ Eles também podem editar os dados pessoais e o perfil documental do usuário,
 sem visualizar o catálogo administrativo nem alterar departamentos, permissões,
 senha ou estado da conta.
 
-O cadastro agora coleta cargo, estado civil, decisão explícita sobre documento
-militar e qualquer quantidade de dependentes. Antes da confirmação, a etapa de
+O cadastro agora coleta a classificação documental (Administrativo, Geral ou
+Motorista), estado civil, decisão explícita sobre documento militar e qualquer
+quantidade de dependentes. Antes da confirmação, a etapa de
 prévia mostra a lista personalizada que será criada pela API. Não se solicita o
 mesmo arquivo duas ou quatro vezes: a foto 3x4 digital é um único item.
 
@@ -56,10 +57,11 @@ os usuários cujo perfil não se aplica; a tela informa quantas combinações fo
 ignoradas.
 
 A gestão mostra o nome do funcionário como título, pesquisa por nome/e-mail,
-filtra por status e contexto e separa, em abas, funcionários com pendências,
-completos e todos. A revisão abre em um diálogo. Em **Meus documentos**, a ordem
-prioriza aguardando envio, aguardando revisão e aprovados; os aprovados ficam
-recolhidos em um Accordion.
+traduz os filtros de status e contexto e separa, em abas, funcionários com
+pendências, completos e todos. A revisão abre em um diálogo amplo. Em **Meus
+documentos**, a consulta é sempre limitada ao usuário autenticado e apresenta
+um único cartão de dossiê, priorizando aguardando envio, aguardando revisão e
+aprovado; documentos aprovados ficam recolhidos em um Accordion.
 
 Para filhos, cada tipo documental aparece uma vez na solicitação e aceita vários
 arquivos. O snapshot registra quais dependentes se aplicam: vacinação para

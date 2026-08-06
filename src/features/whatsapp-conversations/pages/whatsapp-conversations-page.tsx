@@ -18,13 +18,13 @@ export function WhatsAppConversationsPage({
 }: WhatsAppConversationsPageProps) {
   return (
     <AuthenticatedShell user={session.user}>
-      <main className={styles.content()}>
+      <div className={styles.content()}>
         <ConversationWorkspace
           initialConversations={conversations}
           initialError={initialError}
           currentUserId={session.user.id}
         />
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

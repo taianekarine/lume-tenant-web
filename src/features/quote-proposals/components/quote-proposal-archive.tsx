@@ -72,6 +72,7 @@ export interface QuoteProposalArchiveProps {
   readonly initialProposals: readonly PendingQuoteProposal[];
   readonly initialError?: string | null;
   readonly canManage?: boolean;
+  readonly showHeader?: boolean;
 }
 
 export function QuoteProposalArchive({
@@ -79,6 +80,7 @@ export function QuoteProposalArchive({
   initialProposals,
   initialError = null,
   canManage = true,
+  showHeader = true,
 }: QuoteProposalArchiveProps) {
   const [proposals, setProposals] = React.useState(initialProposals);
   const [search, setSearch] = React.useState('');
@@ -155,21 +157,21 @@ export function QuoteProposalArchive({
 
   return (
     <section className="space-y-4">
-      <header>
-        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-          Comercial · Orçamentos
-        </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">{content.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{content.description}</p>
-      </header>
+      {showHeader ? (
+        <header>
+          <p className="text-sm font-semibold text-primary-emphasis">Comercial · Orçamentos</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">{content.title}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{content.description}</p>
+        </header>
+      ) : null}
 
       {feedback ? (
         <div
           role={initialError && feedback === initialError ? 'alert' : 'status'}
           className={
             initialError && feedback === initialError
-              ? 'rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'
-              : 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200'
+              ? 'rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive-emphasis'
+              : 'rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success-emphasis'
           }
         >
           {feedback}
@@ -234,17 +236,17 @@ export function QuoteProposalArchive({
         {hasFilters ? (
           <div className="mt-3 flex flex-wrap gap-2" aria-label="Filtros ativos">
             {search.trim() ? (
-              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary-emphasis">
                 Pesquisa: {search.trim()}
               </span>
             ) : null}
             {route !== 'all' ? (
-              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary-emphasis">
                 Rota: {route}
               </span>
             ) : null}
             {period !== 'all' ? (
-              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary-emphasis">
                 Últimos {period} dias
               </span>
             ) : null}

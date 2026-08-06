@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Lume sunrise spark icon</title>
+  <desc id="desc">A rising sun with a small discovery spark.</desc>
+  <g stroke="#D97706" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M49 169h119" />
+    <path d="M78 169a30 30 0 0 1 60 0" />
+    <path d="M108 90v24" />
+    <path d="m71 105 16 20" />
+    <path d="m145 105-16 20" />
+    <path d="m48 138 24 8" />
+    <path d="m168 138-24 8" />
+    <path d="M191 64c3 17 11 25 28 28-17 3-25 11-28 28-3-17-11-25-28-28 17-3 25-11 28-28Z" />
+  </g>
+</svg>

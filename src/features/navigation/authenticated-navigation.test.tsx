@@ -96,7 +96,7 @@ describe('AuthenticatedNavigation', () => {
   });
 
   it('shows one parent notification icon and the numeric count only in Pendentes', async () => {
-    mockedUsePathname.mockReturnValue('/quote-proposals/pending');
+    mockedUsePathname.mockReturnValue('/quote-proposals');
     mockedPendingCount.mockResolvedValue({
       success: true,
       pendingTotal: 7,
@@ -104,17 +104,16 @@ describe('AuthenticatedNavigation', () => {
 
     renderNavigation(createEmployee(['whatsapp-conversations:manage']));
 
-    expect(await screen.findByLabelText('Orçamentos com notificação pendente')).toBeInTheDocument();
-    expect(screen.getByLabelText('7 orçamentos pendentes')).toHaveTextContent('7');
+    expect(await screen.findByLabelText('7 orçamentos pendentes')).toHaveTextContent('7');
     expect(screen.getByRole('link', { name: 'Orçamentos' })).toHaveAttribute(
       'href',
-      '/quote-proposals/pending',
+      '/quote-proposals',
     );
     expect(screen.queryByText('Visão geral')).not.toBeInTheDocument();
   });
 
   it('refreshes the pending count when the notification event has no count payload', async () => {
-    mockedUsePathname.mockReturnValue('/quote-proposals/pending');
+    mockedUsePathname.mockReturnValue('/quote-proposals');
     mockedPendingCount
       .mockResolvedValueOnce({ success: true, pendingTotal: 0 })
       .mockResolvedValueOnce({ success: true, pendingTotal: 4 });

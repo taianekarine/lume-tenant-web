@@ -26,7 +26,7 @@ function failure(path: string, error: unknown): never {
   }
   const message =
     error instanceof DocumentManagementError
-      ? `${error.message} Código: ${error.publicCode}`
+      ? error.message
       : 'Não foi possível concluir a operação documental.';
   redirect(feedbackPath(path, 'error', message));
 }
@@ -90,12 +90,20 @@ export async function createBatchDocumentRequestsAction(formData: FormData): Pro
   }
   revalidatePath('/document-management');
   revalidatePath('/documents');
-  const skipped = result.skippedDocuments.length
-    ? ` ${result.skippedDocuments.length} combinação(ões) não aplicável(is) foram ignoradas.`
-    : '';
-  redirect(
-    `/document-management?success=${encodeURIComponent(`${result.createdCount} dossiê(s) documental(is) atualizado(s).${skipped}`)}`,
-  );
+  const skippedCount = result.skippedDocuments.length;
+  const skipped =
+    skippedCount === 0
+      ? ''
+      : skippedCount === 1
+        ? ' Uma combinação não aplicável foi ignorada.'
+        : ` ${skippedCount} combinações não aplicáveis foram ignoradas.`;
+  const updated =
+    result.createdCount === 0
+      ? 'Nenhum cadastro documental foi atualizado.'
+      : result.createdCount === 1
+        ? 'Um cadastro documental foi atualizado.'
+        : `${result.createdCount} cadastros documentais foram atualizados.`;
+  redirect(`/document-management?success=${encodeURIComponent(`${updated}${skipped}`)}`);
 }
 
 export async function createDocumentRequestAction(formData: FormData): Promise<void> {

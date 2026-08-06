@@ -2,15 +2,16 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { tenantBranding } from '@/config/tenant-branding';
 import { ThemeToggle } from '@/features/navigation/theme-toggle';
+import { LumeBrand } from '@/shared/lume-brand';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Field, FieldError, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
+import { toast } from '@/shared/ui/toast';
 
 import {
   requestPasswordResetAction,
@@ -29,6 +30,15 @@ export function ForgotPasswordPage() {
     resolver: zodResolver(passwordRecoverySchema),
     defaultValues: { identifier: '' },
   });
+
+  useEffect(() => {
+    if (!feedback || feedback.success) return;
+    toast.add({
+      title: 'Solicitação não concluída',
+      description: feedback.message,
+      type: 'error',
+    });
+  }, [feedback]);
 
   const submit = form.handleSubmit(
     async (values) => {
@@ -51,7 +61,8 @@ export function ForgotPasswordPage() {
       </div>
       <Card className={loginPageStyles.card()}>
         <CardHeader className={loginPageStyles.cardHeader()}>
-          <p className={loginPageStyles.platformName()}>{tenantBranding.productName}</p>
+          <LumeBrand priority className={loginPageStyles.brand()} />
+          <p className={loginPageStyles.platformName()}>Portal seguro</p>
           <CardTitle>
             <h1 className={loginPageStyles.title()}>Recupere sua senha</h1>
           </CardTitle>
@@ -61,21 +72,9 @@ export function ForgotPasswordPage() {
         </CardHeader>
 
         <CardContent className={loginPageStyles.cardContent()}>
-          {feedback ? (
-            <p
-              role={feedback.success ? 'status' : 'alert'}
-              className={
-                feedback.success
-                  ? 'rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700'
-                  : 'rounded-lg bg-destructive/10 p-3 text-sm text-destructive'
-              }
-            >
-              <span className="block">{feedback.message}</span>
-              {!feedback.success ? (
-                <span className="mt-1 block font-mono text-xs">
-                  Código do erro: {feedback.errorCode}
-                </span>
-              ) : null}
+          {feedback?.success ? (
+            <p role="status" className="rounded-lg bg-success/10 p-3 text-sm text-success-emphasis">
+              {feedback.message}
             </p>
           ) : null}
 

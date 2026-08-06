@@ -4,7 +4,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { LoaderCircle, Plus, ShieldCheck, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useTransition } from 'react';
-import { useController, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form';
+import {
+  Controller,
+  useController,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+} from 'react-hook-form';
 
 import { updateTenantUserFormAction } from '@/features/tenant-administration/actions';
 import {
@@ -30,6 +37,7 @@ import {
   FieldSet,
 } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { toast } from '@/shared/ui/toast';
 
 import {
@@ -38,6 +46,40 @@ import {
   permissionResource,
 } from './permission-assignment';
 import { userEditorFormSchema, type UserEditorFormValues } from './user-form-schema';
+
+const USER_CLASSIFICATION_LABELS = {
+  Administrativo: 'Administrativo',
+  Geral: 'Geral',
+  Motorista: 'Motorista',
+} as const;
+
+const MARITAL_STATUS_LABELS = {
+  'not-informed': 'Não informado',
+  single: 'Solteiro(a)',
+  married: 'Casado(a)',
+  'stable-union': 'União estável',
+  divorced: 'Divorciado(a)',
+  widowed: 'Viúvo(a)',
+} as const;
+
+const MILITARY_STATUS_LABELS = {
+  'pending-confirmation': 'Pendente de confirmação',
+  applicable: 'Aplicável',
+  'not-applicable': 'Não aplicável',
+} as const;
+
+function classificationFromStoredValue(
+  value: string | null,
+): keyof typeof USER_CLASSIFICATION_LABELS {
+  const normalized =
+    value
+      ?.normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase() ?? '';
+  if (normalized.includes('motorista')) return 'Motorista';
+  if (normalized.includes('administrativ')) return 'Administrativo';
+  return 'Geral';
+}
 
 function DepartmentCheckboxes({
   control,
@@ -110,7 +152,7 @@ function PermissionCheckboxes({
         return (
           <section key={resource} className="rounded-xl border p-4">
             <div className="mb-3 flex items-center gap-2">
-              <ShieldCheck className="size-4 text-emerald-600" />
+              <ShieldCheck className="size-4 text-primary-emphasis" />
               <h3 className="font-semibold">{resourceLabel}</h3>
             </div>
             <Field orientation="horizontal" className="mb-3 border-b pb-3">
@@ -183,7 +225,7 @@ export function UserEditorForm({
       documentAccessMode: user.documentAccessMode ?? 'standard',
       departments: [...user.departments],
       permissionCodes: [...user.permissionCodes],
-      jobTitle: user.jobTitle ?? '',
+      jobTitle: classificationFromStoredValue(user.jobTitle),
       maritalStatus: user.maritalStatus ?? 'not-informed',
       militaryDocumentStatus: user.militaryDocumentStatus ?? 'pending-confirmation',
       dependents: (user.dependents ?? []).map((dependent) => ({ ...dependent })),
@@ -305,37 +347,74 @@ export function UserEditorForm({
               Estes dados determinam as exigências aplicáveis. Alterações não apagam arquivos já
               enviados.
             </FieldDescription>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Field>
-                <FieldLabel htmlFor="edit-user-job-title">Cargo ou função</FieldLabel>
-                <Input id="edit-user-job-title" {...form.register('jobTitle')} />
+                <FieldLabel htmlFor="edit-user-job-title">Classificação do usuário</FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="jobTitle"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange} required>
+                      <SelectTrigger id="edit-user-job-title" className="w-full">
+                        <SelectValue>{USER_CLASSIFICATION_LABELS[field.value]}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(USER_CLASSIFICATION_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor="edit-user-marital-status">Situação civil</FieldLabel>
-                <select
-                  id="edit-user-marital-status"
-                  className="h-9 rounded-lg border bg-background px-3"
-                  {...form.register('maritalStatus')}
-                >
-                  <option value="not-informed">Não informada</option>
-                  <option value="single">Solteiro(a)</option>
-                  <option value="married">Casado(a)</option>
-                  <option value="stable-union">União estável</option>
-                  <option value="divorced">Divorciado(a)</option>
-                  <option value="widowed">Viúvo(a)</option>
-                </select>
+                <Controller
+                  control={form.control}
+                  name="maritalStatus"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="edit-user-marital-status" className="w-full">
+                        <SelectValue>
+                          {MARITAL_STATUS_LABELS[field.value ?? 'not-informed']}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="not-informed">Não informado</SelectItem>
+                        <SelectItem value="single">Solteiro(a)</SelectItem>
+                        <SelectItem value="married">Casado(a)</SelectItem>
+                        <SelectItem value="stable-union">União estável</SelectItem>
+                        <SelectItem value="divorced">Divorciado(a)</SelectItem>
+                        <SelectItem value="widowed">Viúvo(a)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor="edit-user-military-status">Documentação militar</FieldLabel>
-                <select
-                  id="edit-user-military-status"
-                  className="h-9 rounded-lg border bg-background px-3"
-                  {...form.register('militaryDocumentStatus')}
-                >
-                  <option value="pending-confirmation">Pendente de confirmação</option>
-                  <option value="applicable">Aplicável</option>
-                  <option value="not-applicable">Não aplicável</option>
-                </select>
+                <Controller
+                  control={form.control}
+                  name="militaryDocumentStatus"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="edit-user-military-status" className="w-full">
+                        <SelectValue>
+                          {MILITARY_STATUS_LABELS[field.value ?? 'pending-confirmation']}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending-confirmation">
+                          Pendente de confirmação
+                        </SelectItem>
+                        <SelectItem value="applicable">Aplicável</SelectItem>
+                        <SelectItem value="not-applicable">Não aplicável</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </Field>
             </div>
             <div className="flex items-center justify-between gap-3">
@@ -355,7 +434,7 @@ export function UserEditorForm({
               {dependents.fields.map((dependent, index) => (
                 <div
                   key={dependent.id}
-                  className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_11rem_10rem_auto]"
+                  className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[1fr_11rem_10rem_auto]"
                 >
                   <Input
                     aria-label={`Nome do dependente ${index + 1}`}

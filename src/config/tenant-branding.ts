@@ -10,6 +10,4 @@ const productName = optionalPublicValue(process.env.NEXT_PUBLIC_TENANT_PRODUCT_N
 export const tenantBranding = {
   tenantName,
   productName,
-  logoUrl: optionalPublicValue(process.env.NEXT_PUBLIC_TENANT_LOGO_URL),
-  primaryColor: optionalPublicValue(process.env.NEXT_PUBLIC_TENANT_PRIMARY_COLOR) ?? '#1d4ed8',
 } as const;

@@ -1,8 +1,14 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { completePasswordChangeAction } from '../actions/login-action';
 import { PasswordChangeForm } from './password-change-form';
+
+const toastAdd = jest.fn();
+
+jest.mock('@/shared/ui/toast', () => ({
+  toast: { add: (...args: unknown[]) => toastAdd(...args) },
+}));
 
 jest.mock('../actions/login-action', () => ({
   completePasswordChangeAction: jest.fn(),
@@ -15,17 +21,24 @@ describe('PasswordChangeForm', () => {
     jest.clearAllMocks();
   });
 
-  it('shows a deterministic code for browser validation failures', async () => {
+  it('shows browser validation failures without exposing an internal code', async () => {
     const user = userEvent.setup();
     render(<PasswordChangeForm token="valid-reset-token" />);
 
     await user.click(screen.getByRole('button', { name: 'Criar nova senha' }));
 
-    expect(await screen.findByText('Código do erro: VALIDATION_ERROR')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Revise os campos destacados e tente novamente.',
+        }),
+      ),
+    );
     expect(mockedCompletePasswordChange).not.toHaveBeenCalled();
   });
 
-  it('shows the stable API code returned by the password reset action', async () => {
+  it('shows the password reset failure in a toast', async () => {
     const user = userEvent.setup();
     mockedCompletePasswordChange.mockResolvedValue({
       success: false,
@@ -38,9 +51,14 @@ describe('PasswordChangeForm', () => {
     await user.type(screen.getByLabelText('Confirmar nova senha'), 'SenhaNova@2026');
     await user.click(screen.getByRole('button', { name: 'Criar nova senha' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'O link para criar a senha é inválido ou expirou.',
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'O link para criar a senha é inválido ou expirou.',
+        }),
+      ),
     );
-    expect(screen.getByText('Código do erro: INVALID_PASSWORD_CHANGE_TOKEN')).toBeInTheDocument();
+    expect(screen.queryByText(/Código do erro/)).not.toBeInTheDocument();
   });
 });

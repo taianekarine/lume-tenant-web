@@ -2,12 +2,13 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '@/shared/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
+import { toast } from '@/shared/ui/toast';
 
 import { completePasswordChangeAction } from '../actions/login-action';
 import { AUTH_FALLBACK_ERROR_CODES } from '../lib/auth-error-feedback';
@@ -29,6 +30,11 @@ export function PasswordChangeForm({
     resolver: zodResolver(passwordChangeSchema),
     defaultValues: { newPassword: '', confirmation: '' },
   });
+
+  useEffect(() => {
+    if (!feedback || feedback.success) return;
+    toast.add({ title: 'Senha não alterada', description: feedback.message, type: 'error' });
+  }, [feedback]);
 
   const submit = form.handleSubmit(
     async (values) => {
@@ -58,21 +64,9 @@ export function PasswordChangeForm({
           uma senha inédita para continuar.
         </p>
       </div>
-      {feedback ? (
-        <p
-          role={feedback.success ? 'status' : 'alert'}
-          className={
-            feedback.success
-              ? 'rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700'
-              : 'rounded-lg bg-destructive/10 p-3 text-sm text-destructive'
-          }
-        >
-          <span className="block">{feedback.message}</span>
-          {!feedback.success && feedback.errorCode ? (
-            <span className="mt-1 block font-mono text-xs">
-              Código do erro: {feedback.errorCode}
-            </span>
-          ) : null}
+      {feedback?.success ? (
+        <p role="status" className="rounded-lg bg-success/10 p-3 text-sm text-success-emphasis">
+          {feedback.message}
         </p>
       ) : null}
       {feedback?.success ? (

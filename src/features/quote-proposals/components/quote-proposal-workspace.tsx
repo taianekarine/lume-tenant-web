@@ -19,6 +19,7 @@ import {
 import * as React from 'react';
 
 import { formatCivilDateTime } from '@/shared/lib/civil-date-time';
+import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import {
@@ -30,7 +31,9 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
+import { ScrollArea } from '@/shared/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
+import { toast } from '@/shared/ui/toast';
 
 import { refreshQuoteProposalQueueAction, sendQuoteProposalAction } from '../actions';
 import {
@@ -127,7 +130,7 @@ function EmptyQueue() {
   return (
     <Card className="border-dashed py-12 text-center">
       <CardContent className="flex flex-col items-center">
-        <span className="flex size-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+        <span className="flex size-12 items-center justify-center rounded-full bg-success/10 text-success-emphasis">
           <CheckCircle2 className="size-6" aria-hidden="true" />
         </span>
         <h2 className="mt-4 text-lg font-semibold">Nenhuma proposta aguardando envio</h2>
@@ -153,7 +156,7 @@ function QueueSummary({
       <Card className="gap-0 py-0 shadow-sm">
         <CardHeader className="flex grid-cols-none flex-row items-center justify-between gap-3 px-5 pt-5">
           <span className="flex min-w-0 items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-warning/10 text-warning-emphasis">
               <FileClock className="size-4" aria-hidden="true" />
             </span>
             <CardTitle className="truncate text-sm font-semibold text-muted-foreground">
@@ -218,6 +221,15 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
   const [route, setRoute] = React.useState('all');
   const validationSequence = React.useRef(0);
   const refreshInFlight = React.useRef(false);
+
+  React.useEffect(() => {
+    if (feedback?.tone !== 'error') return;
+    toast.add({
+      title: 'Operação não concluída',
+      description: userFacingMessage(feedback.message, 'Não foi possível atualizar os orçamentos.'),
+      type: 'error',
+    });
+  }, [feedback]);
 
   const refreshQueue = React.useCallback(async () => {
     if (refreshInFlight.current) return;
@@ -530,14 +542,10 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
           isRefreshing={isRefreshing}
           onRefresh={() => void refreshQueue()}
         />
-        {feedback ? (
+        {feedback?.tone === 'success' ? (
           <div
-            role={feedback.tone === 'error' ? 'alert' : 'status'}
-            className={
-              feedback.tone === 'error'
-                ? 'rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'
-                : 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200'
-            }
+            role="status"
+            className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success-emphasis"
           >
             {feedback.message}
           </div>
@@ -568,14 +576,10 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
         isRefreshing={isRefreshing}
         onRefresh={() => void refreshQueue()}
       />
-      {feedback ? (
+      {feedback?.tone === 'success' ? (
         <div
-          role={feedback.tone === 'error' ? 'alert' : 'status'}
-          className={
-            feedback.tone === 'error'
-              ? 'rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'
-              : 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200'
-          }
+          role="status"
+          className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success-emphasis"
         >
           {feedback.message}
         </div>
@@ -642,7 +646,7 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
       <div className="grid min-h-[36rem] overflow-hidden rounded-xl border bg-card shadow-sm lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside className="border-b bg-muted/20 lg:border-r lg:border-b-0">
           <div className="border-b px-5 py-4">
-            <p className="text-xs font-semibold tracking-wide text-emerald-700 uppercase dark:text-emerald-300">
+            <p className="text-xs font-semibold tracking-wide text-success-emphasis uppercase">
               Aguardando proposta
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -651,7 +655,10 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
             </p>
           </div>
 
-          <div className="max-h-80 divide-y overflow-y-auto lg:max-h-[calc(100vh-18rem)]">
+          <ScrollArea
+            className="h-80 lg:h-[calc(100dvh-18rem)] lg:min-h-80 lg:max-h-[48rem]"
+            contentClassName="divide-y"
+          >
             {filteredProposals.map((proposal) => {
               const isSelected = proposal.quoteRequestId === selected?.quoteRequestId;
 
@@ -662,7 +669,7 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                   aria-pressed={isSelected}
                   onClick={() => selectProposal(proposal.quoteRequestId)}
                   className={`w-full px-5 py-4 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    isSelected ? 'bg-emerald-500/10' : ''
+                    isSelected ? 'bg-primary/10' : ''
                   }`}
                 >
                   <span className="flex items-start justify-between gap-3">
@@ -675,7 +682,7 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                         {formatPhone(proposal.contact.phone)}
                       </span>
                     </span>
-                    <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[0.7rem] font-semibold text-amber-800 dark:text-amber-200">
+                    <span className="rounded-full bg-warning/15 px-2 py-1 text-[0.7rem] font-semibold text-warning-emphasis">
                       #{proposal.summary.sequence}
                     </span>
                   </span>
@@ -694,7 +701,7 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                 Nenhum orçamento corresponde aos filtros.
               </p>
             ) : null}
-          </div>
+          </ScrollArea>
         </aside>
 
         {selected ? (
@@ -709,7 +716,7 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                   {formatPhone(selected.contact.phone)}
                 </p>
               </div>
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200">
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-success/10 px-3 py-1.5 text-xs font-semibold text-success-emphasis">
                 <CheckCircle2 className="size-3.5" aria-hidden="true" />
                 Resumo confirmado
               </span>
@@ -719,7 +726,7 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
               <Card>
                 <CardHeader className="border-b">
                   <CardTitle className="flex items-center gap-2">
-                    <FileText className="size-4 text-emerald-700 dark:text-emerald-300" />
+                    <FileText className="size-4 text-success-emphasis" />
                     Resumo do orçamento
                   </CardTitle>
                 </CardHeader>
@@ -798,7 +805,7 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
               <Card>
                 <CardHeader className="border-b">
                   <CardTitle className="flex items-center gap-2">
-                    <Upload className="size-4 text-primary" />
+                    <Upload className="size-4 text-primary-emphasis" />
                     PDF da proposta
                   </CardTitle>
                   <p className="text-sm text-muted-foreground">
@@ -810,14 +817,14 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                     htmlFor={`proposal-file-${selected.quoteRequestId}`}
                     className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-6 py-8 text-center transition-colors hover:bg-muted/40"
                   >
-                    <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary-emphasis">
                       <FileClock className="size-5" aria-hidden="true" />
                     </span>
                     <span className="mt-3 text-sm font-semibold">
                       Clique para selecionar um ou mais PDFs
                     </span>
                     <span className="mt-1 text-xs text-muted-foreground">
-                      O arquivo também será validado pela Tenant API.
+                      O arquivo será validado antes do envio.
                     </span>
                     <input
                       id={`proposal-file-${selected.quoteRequestId}`}
@@ -845,7 +852,7 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                     <div
                       className={`rounded-xl border p-4 ${
                         fileValidation.valid
-                          ? 'border-emerald-500/30 bg-emerald-500/5'
+                          ? 'border-success/30 bg-success/5'
                           : 'border-destructive/30 bg-destructive/5'
                       }`}
                     >
@@ -853,8 +860,8 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                         <FileCheck2
                           className={
                             fileValidation.valid
-                              ? 'mt-0.5 size-5 text-emerald-700 dark:text-emerald-300'
-                              : 'mt-0.5 size-5 text-destructive'
+                              ? 'mt-0.5 size-5 text-success-emphasis'
+                              : 'mt-0.5 size-5 text-destructive-emphasis'
                           }
                           aria-hidden="true"
                         />
@@ -866,12 +873,12 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                                 {formatQuoteProposalPdfSize(fileValidation.metadata.sizeBytes)} ·
                                 PDF validado
                               </p>
-                              <p className="mt-2 text-xs text-emerald-800 dark:text-emerald-200">
+                              <p className="mt-2 text-xs text-success-emphasis">
                                 Pronto para revisar e enviar.
                               </p>
                             </>
                           ) : (
-                            <p role="alert" className="mt-1 text-xs text-destructive">
+                            <p role="alert" className="mt-1 text-xs text-destructive-emphasis">
                               {fileValidation.message}
                             </p>
                           )}
@@ -893,8 +900,8 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                             <span
                               className={
                                 validation?.valid
-                                  ? 'shrink-0 text-xs text-emerald-700 dark:text-emerald-300'
-                                  : 'shrink-0 text-xs text-destructive'
+                                  ? 'shrink-0 text-xs text-success-emphasis'
+                                  : 'shrink-0 text-xs text-destructive-emphasis'
                               }
                             >
                               {validation?.valid
@@ -913,8 +920,8 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
                         selected.proposalDocument.status === 'failed'
                           ? 'border-destructive/30 bg-destructive/5'
                           : selected.proposalDocument.status === 'queued'
-                            ? 'border-blue-500/30 bg-blue-500/5'
-                            : 'border-emerald-500/30 bg-emerald-500/5'
+                            ? 'border-info/30 bg-info/5'
+                            : 'border-success/30 bg-success/5'
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -979,8 +986,8 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
           <DialogHeader>
             <DialogTitle>Confirmar envio da proposta?</DialogTitle>
             <DialogDescription>
-              Confira o cliente e o arquivo. Após confirmar, a Tenant API registrará o PDF e
-              solicitará o envio automático pelo WhatsApp.
+              Confira o cliente e o arquivo. Após confirmar, o PDF será registrado e solicitará o
+              envio automático pelo WhatsApp.
             </DialogDescription>
           </DialogHeader>
 

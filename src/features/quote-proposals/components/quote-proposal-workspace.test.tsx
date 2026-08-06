@@ -6,6 +6,12 @@ import { validateQuoteProposalPdf } from '../domain';
 import { createPendingQuoteProposalFixture } from '../testing/quote-proposal-fixture';
 import { QuoteProposalWorkspace } from './quote-proposal-workspace';
 
+const toastAdd = jest.fn();
+
+jest.mock('@/shared/ui/toast', () => ({
+  toast: { add: (...args: unknown[]) => toastAdd(...args) },
+}));
+
 jest.mock('../actions', () => ({
   refreshQuoteProposalQueueAction: jest.fn(),
   sendQuoteProposalAction: jest.fn(),
@@ -69,6 +75,10 @@ describe('QuoteProposalWorkspace', () => {
     expect(
       screen.getByRole('combobox', { name: 'Filtrar orçamentos pendentes por rota' }),
     ).toHaveTextContent('Todas as rotas');
+    expect(document.querySelector('[data-slot="scroll-area"]')).toHaveClass(
+      'h-80',
+      'lg:h-[calc(100dvh-18rem)]',
+    );
     expect(screen.queryByText(/^all$/i)).not.toBeInTheDocument();
   });
 
@@ -222,7 +232,14 @@ describe('QuoteProposalWorkspace', () => {
 
     await user.click(screen.getByRole('button', { name: 'Enviar proposta' }));
     await user.click(await screen.findByRole('button', { name: 'Confirmar envio' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Falha temporária no envio.');
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Falha temporária no envio.',
+        }),
+      ),
+    );
 
     const retryButton = screen.getByRole('button', { name: 'Enviar proposta' });
     await waitFor(() => expect(retryButton).toBeEnabled());
@@ -269,12 +286,18 @@ describe('QuoteProposalWorkspace', () => {
     expect(screen.getByRole('button', { name: 'Enviar proposta' })).toBeDisabled();
   });
 
-  it('renders empty and Tenant API error states', () => {
+  it('renders an empty state and reports loading failures without technical details', () => {
     render(
       <QuoteProposalWorkspace initialProposals={[]} initialError="Tenant API indisponível." />,
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Tenant API indisponível.');
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        description: 'Não foi possível atualizar os orçamentos.',
+      }),
+    );
+    expect(screen.queryByText('Tenant API indisponível.')).not.toBeInTheDocument();
     expect(screen.getByText('Nenhuma proposta aguardando envio')).toBeInTheDocument();
   });
 

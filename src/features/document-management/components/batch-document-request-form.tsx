@@ -11,7 +11,19 @@ import {
 import type { TenantUser } from '@/features/tenant-administration/domain';
 import { Button } from '@/shared/ui/button';
 import { Checkbox } from '@/shared/ui/checkbox';
+import {
+  Combobox,
+  ComboboxClear,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxInputGroup,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from '@/shared/ui/combobox';
 import { Input } from '@/shared/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
 
 function userLabel(user: TenantUser): string {
@@ -42,6 +54,11 @@ export function BatchDocumentRequestForm({
     const user = availableUsers.find((candidate) => candidate.id === id);
     return user ? [user] : [];
   });
+  const candidateOptions = availableUsers
+    .filter((user) => !selectedUserIds.includes(user.id))
+    .map((user) => ({ value: user.id, label: userLabel(user) }));
+  const candidateOption =
+    candidateOptions.find((option) => option.value === candidateUserId) ?? null;
   const allDocumentsSelected =
     availableDocumentTypes.length > 0 &&
     selectedDocumentTypeIds.length === availableDocumentTypes.length;
@@ -71,19 +88,25 @@ export function BatchDocumentRequestForm({
       ))}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-1 text-sm font-medium">
+        <label className="space-y-1 text-sm font-medium" htmlFor="batch-document-context">
           <span>Contexto</span>
-          <select
-            name="context"
-            required
-            className="h-9 w-full rounded-lg border bg-background px-3"
-          >
-            {Object.entries(DOCUMENT_CONTEXT_LABELS).map(([context, label]) => (
-              <option key={context} value={context}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Select name="context" defaultValue="admission" required>
+            <SelectTrigger id="batch-document-context" className="h-9 w-full">
+              <SelectValue>
+                {(value: string | null) =>
+                  DOCUMENT_CONTEXT_LABELS[value as keyof typeof DOCUMENT_CONTEXT_LABELS] ||
+                  'Selecione o contexto'
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(DOCUMENT_CONTEXT_LABELS).map(([context, label]) => (
+                <SelectItem key={context} value={context}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
         <label className="space-y-1 text-sm font-medium">
           <span>Prazo</span>
@@ -94,21 +117,30 @@ export function BatchDocumentRequestForm({
       <fieldset className="space-y-3 rounded-xl border p-4">
         <legend className="px-1 font-semibold">Usuários que receberão a solicitação</legend>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <select
-            aria-label="Usuário a adicionar"
-            value={candidateUserId}
-            onChange={(event) => setCandidateUserId(event.target.value)}
-            className="h-9 min-w-0 flex-1 rounded-lg border bg-background px-3"
+          <Combobox
+            items={candidateOptions}
+            value={candidateOption}
+            onValueChange={(option) => setCandidateUserId(option?.value ?? '')}
           >
-            <option value="">Selecione um usuário</option>
-            {availableUsers
-              .filter((user) => !selectedUserIds.includes(user.id))
-              .map((user) => (
-                <option key={user.id} value={user.id}>
-                  {userLabel(user)}
-                </option>
-              ))}
-          </select>
+            <ComboboxInputGroup className="min-w-0 flex-1">
+              <ComboboxInput
+                aria-label="Usuário a adicionar"
+                placeholder="Pesquise por nome, usuário ou e-mail"
+              />
+              <ComboboxClear />
+              <ComboboxTrigger />
+            </ComboboxInputGroup>
+            <ComboboxContent>
+              <ComboboxEmpty>Nenhum usuário encontrado.</ComboboxEmpty>
+              <ComboboxList>
+                {(option: { value: string; label: string }) => (
+                  <ComboboxItem key={option.value} value={option}>
+                    {option.label}
+                  </ComboboxItem>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
           <Button type="button" variant="outline" onClick={addUser} disabled={!candidateUserId}>
             <Plus /> Adicionar usuário
           </Button>

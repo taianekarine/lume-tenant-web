@@ -14,11 +14,11 @@ export interface AiAgentsPageProps {
 export function AiAgentsPage({ session }: AiAgentsPageProps) {
   return (
     <AuthenticatedShell user={session.user}>
-      <main className={styles.content()}>
+      <div className={styles.content()}>
         <p className={styles.eyebrow()}>Ferramentas internas</p>
         <h1 className={styles.title()}>Agentes de IA</h1>
         <p className={styles.description()}>
-          Consulte os assistentes planejados para apoiar as equipes da Milenium. Use a busca para
+          Consulte os assistentes planejados para apoiar as equipes da Lume. Use a busca para
           localizar agentes por nome, área ou capacidade.
         </p>
 
@@ -34,7 +34,7 @@ export function AiAgentsPage({ session }: AiAgentsPageProps) {
         </aside>
 
         <AgentCatalog agents={AI_AGENT_CATALOG} />
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

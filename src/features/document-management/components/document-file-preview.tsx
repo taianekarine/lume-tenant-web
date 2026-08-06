@@ -26,7 +26,7 @@ export function DocumentFilePreview({
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
         {fileName} · {side}
       </Button>
-      <DialogContent className="h-[90vh] max-w-[min(94vw,1200px)] grid-rows-[auto_1fr] p-0">
+      <DialogContent className="h-[96dvh] w-[96vw] max-w-none grid-rows-[auto_1fr] overflow-hidden p-0 sm:max-w-[96vw] lg:max-w-[min(96vw,100rem)]">
         <DialogHeader className="border-b p-4 pr-12">
           <DialogTitle>{fileName}</DialogTitle>
           <DialogDescription>Visualização segura do arquivo enviado.</DialogDescription>
@@ -34,7 +34,7 @@ export function DocumentFilePreview({
         <iframe
           title={`Arquivo ${fileName}`}
           src={`/documents/files/${fileId}`}
-          className="h-full min-h-0 w-full rounded-b-xl bg-background"
+          className="h-full min-h-0 w-full overflow-hidden rounded-b-xl border-0 bg-background"
         />
       </DialogContent>
     </Dialog>

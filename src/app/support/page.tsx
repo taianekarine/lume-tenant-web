@@ -19,7 +19,7 @@ export default async function SupportRoute() {
 
   return (
     <AuthenticatedShell user={session.user}>
-      <main className="mx-auto w-full max-w-6xl p-4 md:p-6">
+      <div className="mx-auto w-full max-w-6xl p-4 md:p-6">
         <SupportPage
           requester={{
             name: profile.name,
@@ -27,7 +27,7 @@ export default async function SupportRoute() {
             email: profile.email,
           }}
         />
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

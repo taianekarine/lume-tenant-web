@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 256" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Lume</title>
+  <desc id="desc">Lume wordmark with a rising sun and discovery spark icon.</desc>
+  <g stroke="#D97706" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M41 169h119" />
+    <path d="M70 169a30 30 0 0 1 60 0" />
+    <path d="M100 90v24" />
+    <path d="m63 105 16 20" />
+    <path d="m137 105-16 20" />
+    <path d="m40 138 24 8" />
+    <path d="m160 138-24 8" />
+    <path d="M183 64c3 17 11 25 28 28-17 3-25 11-28 28-3-17-11-25-28-28 17-3 25-11 28-28Z" />
+  </g>
+  <text x="232" y="169" fill="#1C1B18" font-family="Geist, Inter, Arial, sans-serif" font-size="116" font-weight="400" letter-spacing="-6">Lume</text>
+</svg>

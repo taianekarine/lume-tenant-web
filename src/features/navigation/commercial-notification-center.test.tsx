@@ -10,6 +10,12 @@ import {
   markDepartmentNotificationReadAction,
 } from './department-notification-action';
 
+const toastAdd = jest.fn();
+
+jest.mock('@/shared/ui/toast', () => ({
+  toast: { add: (...args: unknown[]) => toastAdd(...args) },
+}));
+
 jest.mock('./department-notification-action', () => ({
   getDepartmentNotificationsAction: jest.fn(),
   markDepartmentNotificationReadAction: jest.fn(),
@@ -108,7 +114,7 @@ describe('CommercialNotificationCenter', () => {
     expect(screen.getByText('2 orçamentos pendentes')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /2 orçamentos pendentes/ })).toHaveAttribute(
       'href',
-      '/quote-proposals/pending',
+      '/quote-proposals?tab=pending',
     );
     expect(screen.getByText('Ana Paula')).toBeInTheDocument();
     expect(screen.queryByText('active-commercial')).not.toBeInTheDocument();
@@ -240,10 +246,15 @@ describe('CommercialNotificationCenter', () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.getByRole('alert', { hidden: true })).toHaveTextContent(
-        'não foi possível sincronizar a leitura',
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description:
+            'A notificação foi marcada neste dispositivo, mas não foi possível sincronizar a leitura.',
+        }),
       ),
     );
+    expect(screen.queryByRole('alert', { hidden: true })).not.toBeInTheDocument();
     await interaction.click(screen.getByRole('button', { name: 'Fechar' }));
 
     window.dispatchEvent(new CustomEvent('quote-proposals:count', { detail: 2 }));

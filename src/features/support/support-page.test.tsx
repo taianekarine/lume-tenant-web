@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { submitSupportRequestAction } from './support-actions';
 import { buildSupportMailtoUrl, SupportPage } from './support-page';
 
+const toastAdd = jest.fn();
+
+jest.mock('@/shared/ui/toast', () => ({
+  toast: { add: (...args: unknown[]) => toastAdd(...args) },
+}));
+
 jest.mock('./support-actions', () => ({
   submitSupportRequestAction: jest.fn(),
 }));
@@ -50,7 +56,7 @@ describe('buildSupportMailtoUrl', () => {
     const user = userEvent.setup();
     render(<SupportPage requester={requester} />);
 
-    expect(screen.getByRole('heading', { name: 'Abrir Ticket por e-mail' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Solicitação de suporte' })).toBeInTheDocument();
     expect(screen.queryByText('Para')).not.toBeInTheDocument();
     expect(screen.queryByText('Cópia')).not.toBeInTheDocument();
     expect(screen.queryByText('devops@mileniumturismo.com.br')).not.toBeInTheDocument();
@@ -68,7 +74,8 @@ describe('buildSupportMailtoUrl', () => {
         message: 'Não consigo concluir uma operação no painel.',
       }),
     );
-    expect(await screen.findByText(/Protocolo: request-001/)).toBeInTheDocument();
+    expect(await screen.findByText('Solicitação enviada com sucesso.')).toBeInTheDocument();
+    expect(screen.queryByText('request-001')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Abrir no aplicativo de e-mail' })).toBeNull();
   });
 
@@ -90,5 +97,13 @@ describe('buildSupportMailtoUrl', () => {
     expect(
       await screen.findByRole('button', { name: 'Abrir no aplicativo de e-mail' }),
     ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Não foi possível enviar a solicitação. Tente novamente.',
+        }),
+      ),
+    );
   });
 });

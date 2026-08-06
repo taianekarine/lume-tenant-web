@@ -40,7 +40,7 @@ export default async function Page() {
     initialError =
       error instanceof WhatsAppConversationRepositoryError
         ? error.message
-        : 'Não foi possível carregar as conversas da Tenant API.';
+        : 'Não foi possível carregar as conversas.';
   }
 
   return (

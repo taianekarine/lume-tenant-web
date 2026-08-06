@@ -98,9 +98,7 @@ describe('getAuthorizedNavigationItems', () => {
     );
 
     expect(items.map((item) => item.label)).toContain('Orçamentos');
-    expect(items.find((item) => item.label === 'Orçamentos')?.href).toBe(
-      '/quote-proposals/pending',
-    );
+    expect(items.find((item) => item.label === 'Orçamentos')?.href).toBe('/quote-proposals');
   });
 
   it('does not grant administration or commercial navigation outside the linked department', () => {

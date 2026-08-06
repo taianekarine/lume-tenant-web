@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { DocumentTypeSummary } from '../domain';
@@ -53,9 +53,15 @@ describe('BatchDocumentRequestForm', () => {
     );
     const userSelect = screen.getByLabelText('Usuário a adicionar');
 
-    fireEvent.change(userSelect, { target: { value: users[0].id } });
+    await interaction.click(userSelect);
+    await interaction.click(
+      screen.getByRole('option', { name: /Ana Silva · ana · ana@example.com/ }),
+    );
     await interaction.click(screen.getByRole('button', { name: 'Adicionar usuário' }));
-    fireEvent.change(userSelect, { target: { value: users[1].id } });
+    await interaction.click(userSelect);
+    await interaction.click(
+      screen.getByRole('option', { name: /Ana Souza · anas · ana.souza@example.com/ }),
+    );
     await interaction.click(screen.getByRole('button', { name: 'Adicionar usuário' }));
     await interaction.click(
       screen.getByRole('checkbox', { name: /^Selecionar todos os documentos/ }),

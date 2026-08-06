@@ -17,7 +17,7 @@ export const sectionHeadingEyebrowStyles = cva([
   'font-semibold',
   'uppercase',
   'tracking-[0.3em]',
-  'text-primary',
+  'text-primary-emphasis',
 ]);
 
 // export const sectionHeadingTitleStyles = cva([

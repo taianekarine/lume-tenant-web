@@ -11,6 +11,7 @@ import {
 } from '@/features/tenant-administration/server';
 import { AuthenticatedShell } from '@/features/navigation';
 import { Button } from '@/shared/ui/button';
+import { PageFeedbackToast } from '@/shared/page-feedback-toast';
 
 export default async function UserEditorRoute({
   params,
@@ -46,12 +47,12 @@ export default async function UserEditorRoute({
 
   return (
     <AuthenticatedShell user={session.user}>
-      <main className="mx-auto w-full max-w-6xl p-4 md:p-6">
+      <div className="mx-auto w-full max-w-6xl p-4 md:p-6">
         <Button render={<Link href="/users" />} nativeButton={false} variant="outline">
           Voltar para usuários
         </Button>
         <header className="my-8">
-          <p className="text-sm font-medium text-emerald-600">Administração local</p>
+          <p className="text-sm font-medium text-primary-emphasis">Administração local</p>
           <h1 className="text-3xl font-bold tracking-tight">Editar {user.name}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {session.user.isAdministrator
@@ -59,24 +60,13 @@ export default async function UserEditorRoute({
               : 'Revise os dados pessoais e o perfil usado nas exigências documentais.'}
           </p>
         </header>
-        {query.error || query.success ? (
-          <p
-            role={query.error ? 'alert' : 'status'}
-            className={
-              query.error
-                ? 'mb-6 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive'
-                : 'mb-6 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700'
-            }
-          >
-            {query.error ?? query.success}
-          </p>
-        ) : null}
+        <PageFeedbackToast error={query.error} success={query.success} />
         <UserEditorForm
           user={user}
           permissionCatalog={permissionCatalog}
           canManageAccess={session.user.isAdministrator === true}
         />
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

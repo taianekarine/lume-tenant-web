@@ -5,5 +5,5 @@ export const logoutButtonStyles = {
 
   button: cva('max-sm:[&_span]:sr-only'),
 
-  feedback: cva('max-w-xs text-right text-xs font-medium text-destructive'),
+  feedback: cva('max-w-xs text-right text-xs font-medium text-destructive-emphasis'),
 };

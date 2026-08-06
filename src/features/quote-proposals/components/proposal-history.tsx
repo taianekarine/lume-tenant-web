@@ -494,7 +494,7 @@ export function ProposalHistory({
               </h2>
               <p className="text-sm text-muted-foreground">{description}</p>
             </div>
-            <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+            <span className="rounded-full bg-success/10 px-3 py-1 text-sm font-semibold text-success-emphasis">
               {total} {total === 1 ? itemLabel.singular : itemLabel.plural}
             </span>
           </div>
@@ -594,10 +594,10 @@ export function ProposalHistory({
                                 <span
                                   className={
                                     proposal.decision.status === 'approved'
-                                      ? 'font-semibold text-emerald-700 dark:text-emerald-300'
+                                      ? 'font-semibold text-success-emphasis'
                                       : proposal.decision.status === 'rejected' ||
                                           proposal.decision.status === 'cancelled'
-                                        ? 'font-semibold text-destructive'
+                                        ? 'font-semibold text-destructive-emphasis'
                                         : 'font-medium text-muted-foreground'
                                   }
                                 >
@@ -691,7 +691,7 @@ export function ProposalHistory({
           {newProposalError ? (
             <div
               role="alert"
-              className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive-emphasis"
             >
               {newProposalError}
             </div>
@@ -917,7 +917,7 @@ export function ProposalHistory({
                       Validando PDF...
                     </p>
                   ) : newProposalFile && newProposalFileValidation?.valid ? (
-                    <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                    <p className="text-sm text-success-emphasis">
                       {newProposalFile.name} ·{' '}
                       {formatQuoteProposalPdfSize(newProposalFileValidation.metadata.sizeBytes)} ·
                       PDF validado
@@ -925,7 +925,7 @@ export function ProposalHistory({
                   ) : newProposalFile &&
                     newProposalFileValidation &&
                     !newProposalFileValidation.valid ? (
-                    <p role="alert" className="text-sm text-destructive">
+                    <p role="alert" className="text-sm text-destructive-emphasis">
                       {newProposalFileValidation.message}
                     </p>
                   ) : (
@@ -1000,7 +1000,7 @@ export function ProposalHistory({
               Carregando PDFs...
             </p>
           ) : documentHistoryError ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-sm text-destructive-emphasis">
               {documentHistoryError}
             </p>
           ) : documentHistory.length === 0 ? (
@@ -1014,7 +1014,7 @@ export function ProposalHistory({
                   key={document.id}
                   className="flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center"
                 >
-                  <FileText className="size-5 shrink-0 text-primary" aria-hidden="true" />
+                  <FileText className="size-5 shrink-0 text-primary-emphasis" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{document.fileName}</p>
                     <p className="text-xs text-muted-foreground">

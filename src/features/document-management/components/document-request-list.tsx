@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 
 import type { DocumentRequestSummary } from '../domain';
 import { DOCUMENT_CONTEXT_LABELS, DOCUMENT_STATUS_LABELS } from '../domain';
@@ -11,6 +12,7 @@ import {
   AccordionTrigger,
 } from '@/shared/ui/accordion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Button } from '@/shared/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +21,8 @@ import {
   DialogTitle,
 } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
+import { Progress } from '@/shared/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui/tabs';
 
 const statusPriority: Readonly<Record<string, number>> = {
@@ -46,20 +50,15 @@ function RequestCard({
   const content = (
     <Card className="h-full transition-colors hover:bg-muted/30">
       <CardHeader>
-        <CardTitle>{management ? request.subject.name : request.checklist.name}</CardTitle>
-        <CardDescription>
-          {management ? `${request.checklist.name} · ` : ''}
-          {DOCUMENT_CONTEXT_LABELS[request.context]}
-        </CardDescription>
+        <CardTitle>{management ? request.subject.name : 'Meu dossiê documental'}</CardTitle>
+        <CardDescription>{DOCUMENT_CONTEXT_LABELS[request.context]}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between gap-3 text-sm">
           <span>{DOCUMENT_STATUS_LABELS[request.status]}</span>
           <strong>{progress}%</strong>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-muted">
-          <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
-        </div>
+        <Progress value={progress} aria-label={`${progress}% dos documentos aprovados`} />
         <p className="text-xs text-muted-foreground">
           {request.deadline
             ? `Prazo: ${new Date(request.deadline).toLocaleDateString('pt-BR')}`
@@ -71,24 +70,25 @@ function RequestCard({
 
   if (management) {
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onOpen?.(request)}
-        className="rounded-xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+        className="block h-auto w-full items-stretch justify-start rounded-xl p-0 text-left whitespace-normal outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
         aria-label={`Revisar documentos de ${request.subject.name}`}
       >
         {content}
-      </button>
+      </Button>
     );
   }
 
   return (
-    <a
+    <Link
       href={`/documents/${request.id}`}
       className="rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
     >
       {content}
-    </a>
+    </Link>
   );
 }
 
@@ -152,12 +152,12 @@ export function DocumentRequestList({
   const [selected, setSelected] = useState<DocumentRequestSummary | null>(null);
 
   const normalized = useMemo(() => {
-    const source = management ? [...representativeRequests(requests)] : [...requests];
+    const source = [...representativeRequests(requests)];
     return source.sort((left, right) => {
       const priority = (statusPriority[left.status] ?? 10) - (statusPriority[right.status] ?? 10);
       return priority || right.updatedAt.localeCompare(left.updatedAt);
     });
-  }, [management, requests]);
+  }, [requests]);
 
   if (requests.length === 0) {
     return (
@@ -218,43 +218,79 @@ export function DocumentRequestList({
             placeholder="Nome ou e-mail"
           />
         </label>
-        <label className="space-y-1 text-sm font-medium">
+        <label className="space-y-1 text-sm font-medium" htmlFor="document-status-filter">
           <span>Status</span>
-          <select
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            className="h-9 w-full rounded-lg border bg-background px-3"
-          >
-            <option value="all">Todos</option>
-            {Object.entries(DOCUMENT_STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Select value={status} onValueChange={(value) => setStatus(value ?? 'all')}>
+            <SelectTrigger id="document-status-filter" className="h-9 w-full">
+              <SelectValue>
+                {(value: string | null) =>
+                  value === 'all' ? 'Todos' : DOCUMENT_STATUS_LABELS[value ?? ''] || 'Todos'
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {Object.entries(DOCUMENT_STATUS_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
-        <label className="space-y-1 text-sm font-medium">
+        <label className="space-y-1 text-sm font-medium" htmlFor="document-context-filter">
           <span>Contexto</span>
-          <select
-            value={context}
-            onChange={(event) => setContext(event.target.value)}
-            className="h-9 w-full rounded-lg border bg-background px-3"
-          >
-            <option value="all">Todos</option>
-            {Object.entries(DOCUMENT_CONTEXT_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+          <Select value={context} onValueChange={(value) => setContext(value ?? 'all')}>
+            <SelectTrigger id="document-context-filter" className="h-9 w-full">
+              <SelectValue>
+                {(value: string | null) =>
+                  value === 'all'
+                    ? 'Todos'
+                    : DOCUMENT_CONTEXT_LABELS[value as keyof typeof DOCUMENT_CONTEXT_LABELS] ||
+                      'Todos'
+                }
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {Object.entries(DOCUMENT_CONTEXT_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       </div>
 
       <Tabs defaultValue="pending">
-        <TabsList>
-          <TabsTrigger value="pending">Com pendências ({pending.length})</TabsTrigger>
-          <TabsTrigger value="approved">Completos ({approved.length})</TabsTrigger>
-          <TabsTrigger value="all">Todos ({filtered.length})</TabsTrigger>
+        <TabsList className="grid h-auto w-full grid-cols-3">
+          <TabsTrigger
+            value="pending"
+            className="min-w-0 px-1 sm:px-3"
+            aria-label={`Com pendências, ${pending.length}`}
+            title={`Com pendências (${pending.length})`}
+          >
+            <span className="w-full min-w-0 truncate">
+              <span className="hidden sm:inline">Com </span>Pendências ({pending.length})
+            </span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="approved"
+            className="min-w-0 px-1 sm:px-3"
+            aria-label={`Completos, ${approved.length}`}
+            title={`Completos (${approved.length})`}
+          >
+            <span className="w-full min-w-0 truncate">Completos ({approved.length})</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="all"
+            className="min-w-0 px-1 sm:px-3"
+            aria-label={`Todos, ${filtered.length}`}
+            title={`Todos (${filtered.length})`}
+          >
+            <span className="w-full min-w-0 truncate">Todos ({filtered.length})</span>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="pending">
           <RequestGrid requests={pending} management onOpen={setSelected} />
@@ -268,7 +304,7 @@ export function DocumentRequestList({
       </Tabs>
 
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="h-[92vh] max-w-[min(96vw,1500px)] grid-rows-[auto_1fr] p-0">
+        <DialogContent className="h-[92vh] w-[96vw] max-w-[1500px] grid-rows-[auto_1fr] p-0 sm:max-w-[1500px]">
           <DialogHeader className="border-b p-4 pr-12">
             <DialogTitle>Revisão documental — {selected?.subject.name}</DialogTitle>
             <DialogDescription>

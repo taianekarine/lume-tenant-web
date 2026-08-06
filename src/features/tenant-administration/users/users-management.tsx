@@ -8,6 +8,7 @@ import {
   ChevronRight,
   KeyRound,
   LoaderCircle,
+  CircleHelp,
   PauseCircle,
   Plus,
   Search,
@@ -28,7 +29,14 @@ import {
   useTransition,
   type KeyboardEvent,
 } from 'react';
-import { useController, useFieldArray, useForm, useWatch, type Control } from 'react-hook-form';
+import {
+  Controller,
+  useController,
+  useFieldArray,
+  useForm,
+  useWatch,
+  type Control,
+} from 'react-hook-form';
 
 import {
   createTenantUserFormAction,
@@ -83,6 +91,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 import { Textarea } from '@/shared/ui/textarea';
 import { toast } from '@/shared/ui/toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/ui/tooltip';
 
 import {
   compatiblePermissionCodes,
@@ -98,9 +107,9 @@ const STATUS_LABELS: Readonly<Record<TenantUserStatus, string>> = {
 };
 
 const STATUS_CLASSES: Readonly<Record<TenantUserStatus, string>> = {
-  active: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200',
+  active: 'bg-success/10 text-success-emphasis',
   inactive: 'bg-muted text-muted-foreground',
-  suspended: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+  suspended: 'bg-warning/10 text-warning-emphasis',
 };
 
 const STATUS_FILTER_LABELS: Readonly<Record<string, string>> = {
@@ -128,6 +137,27 @@ const GENERAL_DOCUMENTS = [
   'Certidão criminal civil/federal',
 ] as const;
 
+const USER_CLASSIFICATION_LABELS = {
+  Administrativo: 'Administrativo',
+  Geral: 'Geral',
+  Motorista: 'Motorista',
+} as const;
+
+const MARITAL_STATUS_LABELS = {
+  'not-informed': 'Não informado',
+  single: 'Solteiro(a)',
+  married: 'Casado(a)',
+  'stable-union': 'União estável',
+  divorced: 'Divorciado(a)',
+  widowed: 'Viúvo(a)',
+} as const;
+
+const MILITARY_STATUS_LABELS = {
+  'pending-confirmation': 'Pendente de confirmação',
+  applicable: 'Aplicável',
+  'not-applicable': 'Não aplicável',
+} as const;
+
 function documentPreview(values: UserFormValues): string[] {
   const result: string[] = [...GENERAL_DOCUMENTS];
   if (['married', 'stable-union'].includes(values.maritalStatus ?? '')) {
@@ -148,7 +178,7 @@ function documentPreview(values: UserFormValues): string[] {
   if (values.militaryDocumentStatus === 'pending-confirmation') {
     result.push('Pendência do DP: confirmar documentação militar');
   }
-  if (values.jobTitle?.toLocaleLowerCase('pt-BR').includes('motorista')) {
+  if (values.jobTitle === 'Motorista') {
     result.push(
       'CNH com categoria D, EAR e validade (sem duplicar a CNH)',
       'Curso de Transporte Coletivo de Passageiros',
@@ -229,44 +259,70 @@ function PermissionFields({
   if (permissions.length === 0) {
     return (
       <p className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
-        A Tenant API não publicou permissões compatíveis com os departamentos selecionados.
+        Selecione um departamento para consultar as permissões compatíveis.
       </p>
     );
   }
 
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      {[...groups].map(([resource, codes]) => (
-        <section key={resource} className="rounded-xl border p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <ShieldCheck className="size-4 text-emerald-600" />
-            <h3 className="font-semibold">{getPermissionResourceLabel(resource)}</h3>
-          </div>
-          <div className="space-y-2">
-            {codes.map((code) => {
-              const action = code.slice(permissionResource(code).length + 1);
-              const id = `permission-${code}`;
-              return (
-                <Field key={code} orientation="horizontal">
-                  <Checkbox
-                    id={id}
-                    disabled={disabled}
-                    checked={field.value.includes(code)}
-                    onCheckedChange={(checked) =>
-                      field.onChange(
-                        checked
-                          ? [...field.value, code]
-                          : field.value.filter((candidate) => candidate !== code),
-                      )
-                    }
-                  />
-                  <FieldLabel htmlFor={id}>{getPermissionCodeLabel(resource, action)}</FieldLabel>
-                </Field>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+      {[...groups].map(([resource, codes]) => {
+        const resourceLabel = getPermissionResourceLabel(resource);
+        const selectedCount = codes.filter((code) => field.value.includes(code)).length;
+        const allSelected = selectedCount === codes.length;
+        const partiallySelected = selectedCount > 0 && !allSelected;
+        const selectAllId = `permission-${resource}-all`;
+
+        return (
+          <section key={resource} className="rounded-xl border p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <ShieldCheck className="size-4 text-primary-emphasis" />
+              <h3 className="font-semibold">{resourceLabel}</h3>
+            </div>
+            <Field orientation="horizontal" className="mb-3 border-b pb-3">
+              <Checkbox
+                id={selectAllId}
+                checked={allSelected}
+                indeterminate={partiallySelected}
+                disabled={disabled}
+                aria-label={`Selecionar todas em ${resourceLabel}`}
+                onCheckedChange={(checked) => {
+                  const next = new Set(field.value);
+                  codes.forEach((code) => {
+                    if (checked) next.add(code);
+                    else next.delete(code);
+                  });
+                  field.onChange([...next]);
+                }}
+              />
+              <FieldLabel htmlFor={selectAllId}>Selecionar todas</FieldLabel>
+            </Field>
+            <div className="space-y-2">
+              {codes.map((code) => {
+                const action = code.slice(permissionResource(code).length + 1);
+                const id = `permission-${code}`;
+                return (
+                  <Field key={code} orientation="horizontal">
+                    <Checkbox
+                      id={id}
+                      disabled={disabled}
+                      checked={field.value.includes(code)}
+                      onCheckedChange={(checked) =>
+                        field.onChange(
+                          checked
+                            ? [...field.value, code]
+                            : field.value.filter((candidate) => candidate !== code),
+                        )
+                      }
+                    />
+                    <FieldLabel htmlFor={id}>{getPermissionCodeLabel(resource, action)}</FieldLabel>
+                  </Field>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -292,7 +348,7 @@ function CreateUserDialog({
       documentAccessMode: canManageAccess ? 'standard' : 'document-portal',
       departments: [],
       permissionCodes: [],
-      jobTitle: '',
+      jobTitle: 'Geral',
       maritalStatus: 'not-informed',
       militaryDocumentStatus: 'pending-confirmation',
       dependents: [],
@@ -379,7 +435,7 @@ function CreateUserDialog({
         <Plus />
         Novo usuário
       </DialogTrigger>
-      <DialogContent showCloseButton={false} className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+      <DialogContent showCloseButton={false} className="max-h-[96dvh] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
           <DialogTitle>Cadastrar usuário</DialogTitle>
           <DialogDescription>
@@ -445,7 +501,22 @@ function CreateUserDialog({
                 <FieldError errors={[form.formState.errors.email]} />
               </Field>
               <Field data-invalid={Boolean(form.formState.errors.password)}>
-                <FieldLabel htmlFor="new-user-password">Senha inicial</FieldLabel>
+                <span className="flex items-center gap-1.5">
+                  <FieldLabel htmlFor="new-user-password">Senha inicial</FieldLabel>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger
+                        aria-label="Ver regra da senha inicial"
+                        className="rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <CircleHelp className="size-4" aria-hidden="true" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Mínimo de 12 caracteres, com maiúscula, minúscula, número e símbolo.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </span>
                 <Input
                   id="new-user-password"
                   type="password"
@@ -453,28 +524,38 @@ function CreateUserDialog({
                   autoComplete="new-password"
                   {...form.register('password')}
                 />
-                <FieldDescription>
-                  Mínimo de 12 caracteres, com maiúscula, minúscula, número e símbolo.
-                </FieldDescription>
                 <FieldError errors={[form.formState.errors.password]} />
               </Field>
               {canManageAccess ? (
                 <Field>
                   <FieldLabel htmlFor="new-user-document-access">Modo de acesso</FieldLabel>
-                  <select
-                    id="new-user-document-access"
-                    className="h-11 rounded-lg border bg-background px-3"
-                    {...form.register('documentAccessMode')}
-                  >
-                    <option value="standard">Colaborador — painel autorizado</option>
-                    <option value="document-portal">Candidato — somente documentos</option>
-                  </select>
+                  <Controller
+                    control={form.control}
+                    name="documentAccessMode"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger id="new-user-document-access" className="h-11 w-full">
+                          <SelectValue>
+                            {field.value === 'document-portal'
+                              ? 'Candidato — somente documentos'
+                              : 'Colaborador — painel autorizado'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="standard">Colaborador — painel autorizado</SelectItem>
+                          <SelectItem value="document-portal">
+                            Candidato — somente documentos
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                   <FieldDescription>
                     Candidatos permanecem restritos ao portal documental após o primeiro acesso.
                   </FieldDescription>
                 </Field>
               ) : (
-                <div className="rounded-lg border bg-muted/40 p-4 text-sm sm:col-span-2">
+                <div className="rounded-lg border bg-muted/40 p-4 text-sm">
                   <p className="font-medium">Acesso inicial somente para documentos</p>
                   <p className="mt-1 text-muted-foreground">
                     RH e Departamento Pessoal podem criar este acesso inicial. Departamentos e
@@ -483,38 +564,75 @@ function CreateUserDialog({
                 </div>
               )}
               <Field data-invalid={Boolean(form.formState.errors.jobTitle)}>
-                <FieldLabel htmlFor="new-user-job-title">Cargo ou função</FieldLabel>
-                <Input id="new-user-job-title" className="h-11" {...form.register('jobTitle')} />
+                <FieldLabel htmlFor="new-user-job-title">Classificação do usuário</FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="jobTitle"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange} required>
+                      <SelectTrigger id="new-user-job-title" className="h-11 w-full">
+                        <SelectValue>{USER_CLASSIFICATION_LABELS[field.value]}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(USER_CLASSIFICATION_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 <FieldError errors={[form.formState.errors.jobTitle]} />
               </Field>
               <Field>
                 <FieldLabel htmlFor="new-user-marital-status">Situação civil</FieldLabel>
-                <select
-                  id="new-user-marital-status"
-                  className="h-11 rounded-lg border bg-background px-3"
-                  {...form.register('maritalStatus')}
-                >
-                  <option value="not-informed">Não informada</option>
-                  <option value="single">Solteiro(a)</option>
-                  <option value="married">Casado(a)</option>
-                  <option value="stable-union">União estável</option>
-                  <option value="divorced">Divorciado(a)</option>
-                  <option value="widowed">Viúvo(a)</option>
-                </select>
+                <Controller
+                  control={form.control}
+                  name="maritalStatus"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="new-user-marital-status" className="h-11 w-full">
+                        <SelectValue>
+                          {MARITAL_STATUS_LABELS[field.value ?? 'not-informed']}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="not-informed">Não informado</SelectItem>
+                        <SelectItem value="single">Solteiro(a)</SelectItem>
+                        <SelectItem value="married">Casado(a)</SelectItem>
+                        <SelectItem value="stable-union">União estável</SelectItem>
+                        <SelectItem value="divorced">Divorciado(a)</SelectItem>
+                        <SelectItem value="widowed">Viúvo(a)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
               </Field>
-              <Field className="sm:col-span-2">
+              <Field>
                 <FieldLabel htmlFor="new-user-military-status">
                   Situação da documentação militar
                 </FieldLabel>
-                <select
-                  id="new-user-military-status"
-                  className="h-11 rounded-lg border bg-background px-3"
-                  {...form.register('militaryDocumentStatus')}
-                >
-                  <option value="pending-confirmation">Pendente de confirmação pelo DP</option>
-                  <option value="applicable">Aplicável</option>
-                  <option value="not-applicable">Não aplicável</option>
-                </select>
+                <Controller
+                  control={form.control}
+                  name="militaryDocumentStatus"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="new-user-military-status" className="h-11 w-full">
+                        <SelectValue>
+                          {MILITARY_STATUS_LABELS[field.value ?? 'pending-confirmation']}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending-confirmation">
+                          Pendente de confirmação
+                        </SelectItem>
+                        <SelectItem value="applicable">Aplicável</SelectItem>
+                        <SelectItem value="not-applicable">Não aplicável</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 <FieldDescription>
                   A regra não utiliza gênero e pode ser decidida manualmente.
                 </FieldDescription>
@@ -542,7 +660,7 @@ function CreateUserDialog({
                   {dependents.fields.map((dependent, index) => (
                     <div
                       key={dependent.id}
-                      className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_11rem_10rem_auto]"
+                      className="grid gap-3 rounded-lg border p-3 lg:grid-cols-[1fr_11rem_10rem_auto]"
                     >
                       <Input
                         aria-label={`Nome do dependente ${index + 1}`}
@@ -608,7 +726,7 @@ function CreateUserDialog({
               <FieldLegend>Permissões individuais</FieldLegend>
               <FieldDescription>
                 Somente permissões compatíveis com os departamentos selecionados são exibidas. A
-                Tenant API valida esse limite no cadastro.
+                validação mantém esse limite no cadastro.
               </FieldDescription>
               <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
                 Dashboard, Agentes de IA, Perfil e Suporte são acessos comuns automáticos e, por
@@ -734,7 +852,7 @@ function UserStatusActions({ user }: { readonly user: TenantUser }) {
               <DialogTitle>Suspender {user.name}</DialogTitle>
               <DialogDescription>
                 Durante o período informado, novas autenticações e sessões existentes serão
-                bloqueadas pela Tenant API.
+                bloqueadas enquanto o usuário estiver suspenso.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -1078,7 +1196,7 @@ function UsersFiltersState({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <FieldDescription>
-          Inclui permissões individuais e automáticas publicadas pela Tenant API.
+          Inclui permissões individuais e automáticas disponíveis para este acesso.
         </FieldDescription>
         {values.search.trim() ? (
           <Button
@@ -1175,10 +1293,12 @@ export function UsersManagement({
     <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-emerald-600">Administração de acessos</p>
+          <p className="text-sm font-medium text-primary-emphasis">Administração de acessos</p>
           <h1 className="text-3xl font-bold tracking-tight">Usuários</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {users.meta.total} conta(s) encontrada(s) neste tenant.
+            {users.meta.total === 1
+              ? '1 conta encontrada nesta organização.'
+              : `${users.meta.total} contas encontradas nesta organização.`}
           </p>
         </div>
         {canCreate ? (
@@ -1235,7 +1355,7 @@ export function UsersManagement({
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{user.name}</p>
                       {user.isAdministrator ? (
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary-emphasis">
                           Administrador
                         </span>
                       ) : null}
@@ -1257,7 +1377,9 @@ export function UsersManagement({
                     <span className="text-sm">
                       {user.isAdministrator
                         ? 'Acesso administrativo completo'
-                        : `${user.permissionCodes.length} permissão(ões) individual(is)`}
+                        : user.permissionCodes.length === 1
+                          ? '1 permissão individual'
+                          : `${user.permissionCodes.length} permissões individuais`}
                     </span>
                   </TableCell>
                   <TableCell>

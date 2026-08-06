@@ -6,6 +6,12 @@ import { createWhatsAppConversationFixture } from '@/features/whatsapp-conversat
 
 import { DashboardPage } from './dashboard-page';
 
+const toastAdd = jest.fn();
+
+jest.mock('@/shared/ui/toast', () => ({
+  toast: { add: (...args: unknown[]) => toastAdd(...args) },
+}));
+
 jest.mock('next/navigation', () => ({
   usePathname: jest.fn(),
 }));
@@ -60,7 +66,7 @@ describe('DashboardPage', () => {
 
     render(<DashboardPage session={employeeSession} conversations={conversations} />);
 
-    expect(document.querySelector('main.mx-auto')).toHaveClass('py-5', 'sm:py-6');
+    expect(document.querySelector('main div.mx-auto')).toHaveClass('py-5', 'sm:py-6');
     expect(
       screen.getByRole('heading', {
         name: 'Dashboard Comercial',
@@ -90,7 +96,13 @@ describe('DashboardPage', () => {
       />,
     );
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Tenant API indisponível.');
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        description: 'Não foi possível carregar todos os indicadores.',
+      }),
+    );
+    expect(screen.queryByText('Tenant API indisponível.')).not.toBeInTheDocument();
     expect(screen.getByText('Nenhuma conversa encontrada para este período.')).toBeInTheDocument();
   });
 
@@ -115,7 +127,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Motivos de cancelamento')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '5 Pendentes' })).toHaveAttribute(
       'href',
-      '/quote-proposals/pending',
+      '/quote-proposals?tab=pending',
     );
   });
 

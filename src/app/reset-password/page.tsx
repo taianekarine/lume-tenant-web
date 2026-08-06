@@ -24,9 +24,6 @@ export default async function ResetPasswordPage({
               <p className="text-sm text-muted-foreground">
                 Este link não existe ou expirou. Solicite novas instruções de recuperação.
               </p>
-              <p className="font-mono text-xs text-destructive">
-                Código do erro: INVALID_PASSWORD_CHANGE_TOKEN
-              </p>
               <Button
                 render={<Link href="/forgot-password" />}
                 nativeButton={false}

@@ -3,6 +3,9 @@
 O fluxo de checklists, upload, revisão humana e candidatos restritos está em
 [`docs/document-management.md`](docs/document-management.md).
 
+Os tokens, decisões de componentes e regras de acessibilidade do design system
+Lume estão em [`docs/design-system.md`](docs/design-system.md).
+
 Aplicação operacional instalada por cliente. Ela se comunica somente com o
 `lume-tenant-api` da mesma instalação e continua funcional sem acesso ao
 `lume-control`.
@@ -48,11 +51,11 @@ provisionada aparece apenas como informação de leitura.
 As rotas `/users` e `/license` exigem vínculo com o departamento Gerência e,
 respectivamente, `users:view`/`users:manage` ou `license:view`. A sidebar separa
 módulos em **Geral**, **Comercial** e **Administração**; Painel WhatsApp e
-Orçamentos são exclusivos do escopo Comercial. **Orçamentos** é uma pasta de
-navegação com as filas **Pendentes**, **Enviadas**, **Aprovadas** e
-**Canceladas**; Pendentes aparece primeiro e é a única subpasta com a contagem
-autoritativa da Tenant API. A pasta exibe apenas um ícone quando há notificação.
-Os gráficos e motivos de cancelamento ficam no Dashboard Comercial.
+Orçamentos são exclusivos do escopo Comercial. **Orçamentos** é um único item
+de navegação e abre `/quote-proposals`, onde as filas **Pendentes**, **Enviadas**,
+**Aprovadas** e **Canceladas** aparecem como abas. A contagem pendente é
+autoritativa da Tenant API. Os gráficos e motivos de cancelamento ficam no
+Dashboard Comercial.
 
 O botão **Esqueci minha senha** abre o fluxo público e não revela se o
 identificador informado existe. A senha inicial criada durante o
@@ -114,8 +117,8 @@ O atendente responsável pode alterar o status comercial no Painel WhatsApp.
 A ação recarrega a conversa autoritativa, exige motivo para recusa ou
 cancelamento e respeita a versão devolvida pela Tenant API. A criação de um
 orçamento também parte exclusivamente da conversa comercial já assumida; as
-rotas de Orçamentos permanecem dedicadas às filas Pendentes, Enviadas,
-Aprovadas e Canceladas.
+a página de Orçamentos mantém as filas Pendentes, Enviadas, Aprovadas e
+Canceladas em abas.
 
 Na administração de usuários, `users:update` representa **Editar acesso** e
 permite alterar dados, departamentos, permissões e solicitar recuperação de
@@ -130,7 +133,8 @@ contrato.
 2. Informe a URL da Tenant API desta instalação.
 3. Gere um `SESSION_SECRET` exclusivo com pelo menos 32 bytes.
 4. Mantenha simulação e mocks desabilitados, exceto em teste local intencional.
-5. Ajuste nome, produto, logotipo e cor caso o tenant use outra identidade.
+5. Ajuste apenas o nome público do cliente e do produto; marca, logotipo e cores
+   são definidos pelo design system Lume.
 6. Instale as dependências e execute `npm.cmd run dev`.
 
 Os exemplos de ambiente são organizados por finalidade e informam o que é

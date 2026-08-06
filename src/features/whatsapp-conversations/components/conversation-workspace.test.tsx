@@ -13,6 +13,14 @@ import type { WhatsAppConversation } from '../domain';
 import { createWhatsAppConversationFixture } from '../testing/whatsapp-conversation-fixture';
 import { ConversationWorkspace } from './conversation-workspace';
 
+jest.setTimeout(15_000);
+
+const toastAdd = jest.fn();
+
+jest.mock('@/shared/ui/toast', () => ({
+  toast: { add: (...args: unknown[]) => toastAdd(...args) },
+}));
+
 jest.mock('../actions', () => ({
   closeWhatsAppConversationAction: jest.fn(),
   forwardWhatsAppConversationAction: jest.fn(),
@@ -83,7 +91,9 @@ describe('ConversationWorkspace', () => {
     const detailHeader = contactHeading.closest('header');
 
     expect(identityRow).toHaveClass('flex', 'flex-col', 'items-start');
-    expect(detailHeader).toHaveClass('px-4', 'py-2', 'bg-emerald-50/70');
+    expect(detailHeader).toHaveClass('px-4', 'py-2', 'bg-primary/8');
+    const conversationList = screen.getByRole('button', { name: /Taiane Karine/ }).parentElement;
+    expect(conversationList).toHaveClass('h-[min(28rem,55dvh)]', 'xl:h-auto', 'xl:flex-1');
     expect(screen.getAllByText('553496305110')).toHaveLength(2);
     expect(screen.getByText(/Última interação: 29\/07\/2026, 16:50/)).toBeInTheDocument();
   });
@@ -171,7 +181,10 @@ describe('ConversationWorkspace', () => {
     await openMessages(user);
     expect(await screen.findByText('proposta.pdf')).toBeInTheDocument();
     expect(screen.getByText(/· Falha no envio$/)).toBeInTheDocument();
-    expect(screen.getByText('Evolution não respondeu.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Não foi possível enviar esta mensagem. Tente novamente.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Evolution não respondeu.')).not.toBeInTheDocument();
     expect(screen.queryByText(/PROVIDER_TIMEOUT/)).not.toBeInTheDocument();
     expect(screen.queryByText('Dados adicionais confirmados')).not.toBeInTheDocument();
     expect(screen.queryByText('Auditoria essencial')).not.toBeInTheDocument();
@@ -363,7 +376,14 @@ describe('ConversationWorkspace', () => {
 
     await user.click(screen.getByRole('button', { name: 'Assumir' }));
 
-    expect(await screen.findByText('Conflito: atendimento recarregado.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Conflito: atendimento recarregado.',
+        }),
+      ),
+    );
     expect(await screen.findByText('Responsável: Outro atendente')).toBeInTheDocument();
     expect(screen.getAllByText('Bot bloqueado')).toHaveLength(1);
   });
@@ -378,7 +398,14 @@ describe('ConversationWorkspace', () => {
     );
 
     expect(screen.getByText('Nenhuma conversa encontrada')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Tenant API indisponível.');
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        description: 'Não foi possível atualizar a lista de conversas.',
+      }),
+    );
+    expect(screen.queryByText('Tenant API indisponível.')).not.toBeInTheDocument();
+    expect(screen.getByText('A lista não pôde ser atualizada.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Tentar novamente' }));
 
@@ -432,7 +459,15 @@ describe('ConversationWorkspace', () => {
     await act(async () => {
       resolveFirstRequest?.(response({ message: 'Falha temporária.' }, 503));
     });
-    expect(await screen.findByRole('alert')).toHaveTextContent('Falha temporária.');
+    expect(await screen.findByText('O histórico não pôde ser carregado.')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Não foi possível carregar as mensagens. Tente novamente.',
+        }),
+      ),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Tentar novamente' }));
 
@@ -452,7 +487,7 @@ describe('ConversationWorkspace', () => {
       'w-full',
       'overflow-x-hidden',
       'data-[side=right]:w-full',
-      'sm:data-[side=right]:w-[min(84rem,calc(100vw-2rem))]',
+      'sm:data-[side=right]:w-[min(52rem,calc(100vw-3rem))]',
       'sm:max-w-none',
     );
     expect(messageSheet).not.toHaveClass('sm:max-w-2xl');
@@ -647,8 +682,18 @@ describe('ConversationWorkspace', () => {
     await user.click(screen.getByRole('button', { name: 'Encerrar' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
 
-    expect(await screen.findAllByText('A Tenant API recusou o encerramento.')).not.toHaveLength(0);
-    expect(screen.getByRole('button', { name: 'Confirmar encerramento' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Não foi possível concluir a operação.',
+        }),
+      ),
+    );
+    expect(screen.queryByText('A Tenant API recusou o encerramento.')).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Confirmar encerramento' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Atendimento encerrado\. O próximo contato/)).not.toBeInTheDocument();
   });
 
@@ -992,7 +1037,14 @@ describe('ConversationWorkspace', () => {
     await user.type(input, 'Rascunho importante');
 
     await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
-    expect(await screen.findAllByText('Conflito: o rascunho foi preservado.')).not.toHaveLength(0);
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Conflito: o rascunho foi preservado.',
+        }),
+      ),
+    );
     expect(input).toHaveValue('Rascunho importante');
 
     const firstInput = mockedSendMessage.mock.calls[0][0];
@@ -1009,10 +1061,21 @@ describe('ConversationWorkspace', () => {
       text: firstInput.text,
     });
     expect(input).toHaveValue('Rascunho importante');
-    expect(await screen.findAllByText('Falha temporária; tente novamente.')).not.toHaveLength(0);
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Falha temporária; tente novamente.',
+        }),
+      ),
+    );
   });
 
   it('preserves the original version after an ambiguous send failure', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    });
     const assignedTo = { id: 'employee-001', name: 'Usuário Comercial' };
     const conversation = createWhatsAppConversationFixture({
       conversationState: 'human-active',
@@ -1055,9 +1118,17 @@ describe('ConversationWorkspace', () => {
     });
     await user.type(input, 'Mensagem com confirmação incerta');
     await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Não foi possível concluir a operação.',
+        }),
+      ),
+    );
     expect(
-      await screen.findAllByText('A resposta da API se perdeu; o resultado é incerto.'),
-    ).not.toHaveLength(0);
+      screen.queryByText('A resposta da API se perdeu; o resultado é incerto.'),
+    ).not.toBeInTheDocument();
 
     const firstInput = mockedSendMessage.mock.calls[0][0];
     await user.click(screen.getByRole('button', { name: 'Atualizar' }));
@@ -1126,7 +1197,10 @@ describe('ConversationWorkspace', () => {
     await user.click(screen.getByRole('button', { name: 'Atualizar' }));
 
     expect(await screen.findByText(/· Falha no envio$/)).toBeInTheDocument();
-    expect(screen.getByText('Evolution indisponível.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Não foi possível enviar esta mensagem. Tente novamente.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Evolution indisponível.')).not.toBeInTheDocument();
     expect(screen.queryByText(/EVOLUTION_UNAVAILABLE/)).not.toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });

@@ -169,7 +169,7 @@ export function ConversationQuoteActions({
               Carregando orçamentos...
             </p>
           ) : listError ? (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-sm text-destructive-emphasis">
               {listError}
             </p>
           ) : (

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { ChevronDown } from 'lucide-react';
 
 import { DocumentManagementError } from '@/features/document-management/application';
 import {
@@ -17,6 +18,8 @@ import { AuthenticatedShell } from '@/features/navigation';
 import type { TenantUserList } from '@/features/tenant-administration/domain';
 import { executeAuthenticatedTenantRequest } from '@/features/tenant-administration/server';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
+import { PageFeedbackToast } from '@/shared/page-feedback-toast';
 
 export default async function DocumentManagementPage({
   searchParams,
@@ -67,10 +70,10 @@ export default async function DocumentManagementPage({
 
   return (
     <AuthenticatedShell user={session.user}>
-      <main className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
+      <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
         <header>
           <div>
-            <p className="text-sm font-medium text-primary">RH e Departamento Pessoal</p>
+            <p className="text-sm font-medium text-primary-emphasis">RH e Departamento Pessoal</p>
             <h1 className="text-2xl font-bold tracking-tight">Gestão documental</h1>
             <p className="text-sm text-muted-foreground">
               Solicite, acompanhe, revise e renove documentos sem aprovação automática.
@@ -105,46 +108,36 @@ export default async function DocumentManagementPage({
             </CardHeader>
           </Card>
         </div>
-        {serviceErrors.length ? (
-          <div role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-            {serviceErrors.map((message) => (
-              <p key={message}>{message}</p>
-            ))}
-          </div>
-        ) : null}
-        {query.error || query.success ? (
-          <p
-            role={query.error ? 'alert' : 'status'}
-            className={
-              query.error
-                ? 'rounded-lg bg-destructive/10 p-3 text-sm text-destructive'
-                : 'rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700'
-            }
-          >
-            {query.error ?? query.success}
-          </p>
-        ) : null}
+        <PageFeedbackToast
+          error={query.error ? [query.error, ...serviceErrors] : serviceErrors}
+          success={query.success}
+        />
 
         <Card>
-          <details>
-            <summary className="cursor-pointer list-none p-6">
-              <p className="font-semibold">Criar solicitação avulsa</p>
-              <p className="text-sm text-muted-foreground">
-                Escolha os documentos uma vez e envie solicitações individuais para um ou mais
-                usuários.
-              </p>
-            </summary>
-            <CardContent>
-              <BatchDocumentRequestForm users={users.data} documentTypes={documentTypes} />
-            </CardContent>
-          </details>
+          <Collapsible className="group/document-batch">
+            <CollapsibleTrigger className="flex w-full items-center justify-between gap-4 rounded-xl p-6 text-left transition-colors duration-200 hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none">
+              <span>
+                <span className="block font-semibold">Criar solicitação avulsa</span>
+                <span className="block text-sm text-muted-foreground">
+                  Escolha os documentos uma vez e envie solicitações individuais para um ou mais
+                  usuários.
+                </span>
+              </span>
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-open/document-batch:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <BatchDocumentRequestForm users={users.data} documentTypes={documentTypes} />
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
         </Card>
 
         <section className="space-y-3">
           <h2 className="text-lg font-bold">Solicitações em acompanhamento</h2>
           <DocumentRequestList requests={requests.data} management />
         </section>
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

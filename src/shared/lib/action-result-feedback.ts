@@ -1,3 +1,5 @@
+import { userFacingMessage } from './user-facing-message';
+
 export type ActionResultFeedback =
   | {
       readonly success: true;
@@ -10,5 +12,7 @@ export type ActionResultFeedback =
     };
 
 export function formatActionResultDescription(result: ActionResultFeedback): string {
-  return result.success ? result.message : `${result.message}\nCódigo do erro: ${result.errorCode}`;
+  return result.success
+    ? result.message
+    : userFacingMessage(result.message, 'Não foi possível concluir a operação.');
 }

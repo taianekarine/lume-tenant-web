@@ -179,7 +179,7 @@ describe('users management permissions', () => {
     expect(screen.getByLabelText('Departamento')).toBeInTheDocument();
     expect(screen.getByLabelText('Permissão efetiva')).toBeInTheDocument();
     expect(
-      screen.getByText('Inclui permissões individuais e automáticas publicadas pela Tenant API.'),
+      screen.getByText('Inclui permissões individuais e automáticas disponíveis para este acesso.'),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Estado')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Novo usuário' })).toBeInTheDocument();
@@ -386,7 +386,7 @@ describe('users management permissions', () => {
     );
   });
 
-  it('shows the public error code in a failed user action toast', async () => {
+  it('does not expose the internal error code in a failed user action toast', async () => {
     const interaction = userEvent.setup();
     const toastAdd = jest.spyOn(toast, 'add');
     jest.mocked(updateTenantUserStatusAction).mockResolvedValueOnce({
@@ -409,8 +409,7 @@ describe('users management permissions', () => {
     await waitFor(() =>
       expect(toastAdd).toHaveBeenCalledWith(
         expect.objectContaining({
-          description:
-            'Você não possui permissão para alterar este usuário.\nCódigo do erro: FORBIDDEN',
+          description: 'Você não possui permissão para alterar este usuário.',
           type: 'error',
         }),
       ),
@@ -420,6 +419,42 @@ describe('users management permissions', () => {
 });
 
 describe('user editor form', () => {
+  it('keeps dependent fields stacked until the large breakpoint in edit and create flows', () => {
+    const dependent = {
+      name: 'Maria Dependente',
+      birthDate: '2018-08-20',
+      relationship: 'filha',
+    };
+    const editor = render(
+      <UserEditorForm
+        user={{ ...tenantUser, dependents: [dependent] }}
+        permissionCatalog={permissionCatalog}
+        canManageAccess
+      />,
+    );
+
+    const editorRow = screen.getByLabelText('Nome do dependente 1').parentElement;
+    expect(editorRow).toHaveClass('lg:grid-cols-[1fr_11rem_10rem_auto]');
+    expect(editorRow).not.toHaveClass('sm:grid-cols-[1fr_11rem_10rem_auto]');
+    editor.unmount();
+
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit={false}
+        canManageAccess={false}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Novo usuário' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /dependente/ }));
+
+    const createRow = screen.getByLabelText('Nome do dependente 1').parentElement;
+    expect(createRow).toHaveClass('lg:grid-cols-[1fr_11rem_10rem_auto]');
+    expect(createRow).not.toHaveClass('sm:grid-cols-[1fr_11rem_10rem_auto]');
+  });
+
   it('updates departments and direct permissions without exposing CPF', async () => {
     const interaction = userEvent.setup();
     render(
@@ -440,7 +475,7 @@ describe('user editor form', () => {
       email: tenantUser.email,
       isAdministrator: false,
       documentAccessMode: 'standard',
-      jobTitle: '',
+      jobTitle: 'Geral',
       maritalStatus: 'not-informed',
       militaryDocumentStatus: 'pending-confirmation',
       dependents: [],
@@ -530,12 +565,12 @@ describe('user editor form', () => {
     };
     expect(input.isAdministrator).toBe(false);
     expect(input.departments).toEqual(['commercial']);
-    expect(input.permissionCodes).toHaveLength(1);
-    expect(permissionCatalog.permissionsByDepartment?.commercial).toContain(
-      input.permissionCodes[0],
+    expect(input.permissionCodes).toEqual(
+      expect.arrayContaining(['commercial:view', 'commercial:manage']),
     );
+    expect(input.permissionCodes).not.toContain('dashboard:view');
     expect(input.permissionCodes).not.toContain('users:manage');
-  });
+  }, 15_000);
 
   it('does not expose administrator assignment when creating a user', async () => {
     const interaction = userEvent.setup();

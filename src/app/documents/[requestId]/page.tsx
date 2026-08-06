@@ -7,6 +7,7 @@ import {
   requireDocumentSession,
 } from '@/features/document-management/server';
 import { AuthenticatedShell } from '@/features/navigation';
+import { PageFeedbackToast } from '@/shared/page-feedback-toast';
 
 export default async function DocumentRequestPage({
   params,
@@ -31,21 +32,10 @@ export default async function DocumentRequestPage({
 
   return (
     <AuthenticatedShell user={session.user}>
-      <main className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-6">
-        {query.error || query.success ? (
-          <p
-            role={query.error ? 'alert' : 'status'}
-            className={
-              query.error
-                ? 'rounded-lg bg-destructive/10 p-3 text-sm text-destructive'
-                : 'rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700'
-            }
-          >
-            {query.error ?? query.success}
-          </p>
-        ) : null}
+      <div className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-6">
+        <PageFeedbackToast error={query.error} success={query.success} />
         <DocumentRequestWorkspace request={request} canReview={false} returnPath={returnPath} />
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

@@ -23,6 +23,7 @@ import {
 
 import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
 import { Button } from '@/shared/ui/button';
+import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import {
   Dialog,
   DialogClose,
@@ -253,9 +254,9 @@ async function responseMessage(response: Response): Promise<string> {
     const value = (await response.json()) as { readonly message?: unknown };
     return typeof value.message === 'string'
       ? value.message
-      : `Consulta falhou com status ${response.status}.`;
+      : 'Não foi possível atualizar as conversas.';
   } catch {
-    return `Consulta falhou com status ${response.status}.`;
+    return 'Não foi possível atualizar as conversas.';
   }
 }
 
@@ -313,6 +314,24 @@ export function ConversationWorkspace({
   useEffect(() => {
     selectedConversationIdRef.current = selectedConversationId;
   }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (!listError) return;
+    toast.add({
+      title: 'Conversas não atualizadas',
+      description: 'Não foi possível atualizar a lista de conversas.',
+      type: 'error',
+    });
+  }, [listError]);
+
+  useEffect(() => {
+    if (feedbackTone !== 'error' || !feedbackMessage) return;
+    toast.add({
+      title: 'Operação não concluída',
+      description: userFacingMessage(feedbackMessage, 'Não foi possível concluir a operação.'),
+      type: 'error',
+    });
+  }, [feedbackMessage, feedbackTone]);
 
   const replaceConversation = useCallback(
     (updatedConversation: WhatsAppConversation, preserveExistingMessages = true) => {
@@ -794,9 +813,9 @@ export function ConversationWorkspace({
             </div>
 
             {listError ? (
-              <div role="alert" className={styles.errorBanner()}>
+              <div className={styles.errorBanner()}>
                 <AlertCircle aria-hidden="true" />
-                <span>{listError}</span>
+                <span>A lista não pôde ser atualizada.</span>
                 <button type="button" onClick={() => void refreshList(true)}>
                   Tentar novamente
                 </button>
@@ -954,7 +973,11 @@ export function ConversationWorkspace({
                         {conversation.unreadCount > 0 ? (
                           <span
                             className={styles.unreadBadge()}
-                            aria-label={`${conversation.unreadCount} mensagens não lidas`}
+                            aria-label={
+                              conversation.unreadCount === 1
+                                ? '1 mensagem não lida'
+                                : `${conversation.unreadCount} mensagens não lidas`
+                            }
                           >
                             {conversation.unreadCount}
                           </span>
@@ -987,7 +1010,7 @@ export function ConversationWorkspace({
                 <p className={styles.emptyTitle()}>Nenhuma conversa encontrada</p>
                 <p className={styles.emptyDescription()}>
                   {listError
-                    ? 'A lista será restaurada quando a Tenant API responder.'
+                    ? 'A lista será restaurada quando a conexão for retomada.'
                     : 'Altere a busca ou os filtros selecionados.'}
                 </p>
               </div>
@@ -1046,7 +1069,7 @@ export function ConversationWorkspace({
                     <small>
                       {isWhatsAppBotBlocked(selectedConversation)
                         ? 'A automação não pode responder neste estado.'
-                        : 'A Tenant API permite a automação neste estado.'}
+                        : 'A automação está permitida neste estado.'}
                     </small>
                   </span>
                 </div>
@@ -1213,7 +1236,7 @@ export function ConversationWorkspace({
                       }
                       isSendingMessage={isSendingMessage}
                       onSendMessage={handleSendHumanMessage}
-                      feedbackMessage={feedbackMessage}
+                      feedbackMessage={feedbackTone === 'error' ? '' : feedbackMessage}
                       feedbackTone={feedbackTone}
                     />
                     <button
@@ -1486,16 +1509,18 @@ export function ConversationWorkspace({
                 </DialogContent>
               </Dialog>
 
-              <footer className={styles.detailFooter()}>
-                <p
-                  aria-live="polite"
-                  className={styles.feedback({
-                    tone: feedbackTone,
-                  })}
-                >
-                  {isUpdatingConversation ? 'Atualizando atendimento...' : feedbackMessage}
-                </p>
-              </footer>
+              {isUpdatingConversation || (feedbackMessage && feedbackTone !== 'error') ? (
+                <footer className={styles.detailFooter()}>
+                  <p
+                    aria-live="polite"
+                    className={styles.feedback({
+                      tone: feedbackTone,
+                    })}
+                  >
+                    {isUpdatingConversation ? 'Atualizando atendimento...' : feedbackMessage}
+                  </p>
+                </footer>
+              ) : null}
             </>
           ) : (
             <div className={styles.emptyDetail()}>

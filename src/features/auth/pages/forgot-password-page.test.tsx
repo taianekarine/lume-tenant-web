@@ -1,9 +1,15 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { requestPasswordResetAction } from '../actions/password-recovery-action';
 import { PASSWORD_RECOVERY_CONFIRMATION } from '../lib/password-recovery-messages';
 import { ForgotPasswordPage } from './forgot-password-page';
+
+const toastAdd = jest.fn();
+
+jest.mock('@/shared/ui/toast', () => ({
+  toast: { add: (...args: unknown[]) => toastAdd(...args) },
+}));
 
 jest.mock('../actions/password-recovery-action', () => ({
   requestPasswordResetAction: jest.fn(),
@@ -23,6 +29,9 @@ describe('ForgotPasswordPage', () => {
       message: PASSWORD_RECOVERY_CONFIRMATION,
     });
     render(<ForgotPasswordPage />);
+
+    expect(screen.getByRole('img', { name: 'Lume' })).toBeInTheDocument();
+    expect(screen.getByText('Portal seguro')).toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Usuário ou e-mail'), 'taiane@example.com');
     await user.click(screen.getByRole('button', { name: 'Enviar instruções' }));
@@ -44,11 +53,16 @@ describe('ForgotPasswordPage', () => {
     await user.click(screen.getByRole('button', { name: 'Enviar instruções' }));
 
     expect(await screen.findByText('Informe seu usuário ou e-mail.')).toBeInTheDocument();
-    expect(screen.getByText('Código do erro: VALIDATION_ERROR')).toBeInTheDocument();
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        description: 'Revise o campo destacado e tente novamente.',
+      }),
+    );
     expect(mockedRequestPasswordReset).not.toHaveBeenCalled();
   });
 
-  it('shows the stable API error code beside the friendly failure message', async () => {
+  it('shows the friendly failure in a toast without exposing the internal code', async () => {
     const user = userEvent.setup();
     mockedRequestPasswordReset.mockResolvedValue({
       success: false,
@@ -60,9 +74,14 @@ describe('ForgotPasswordPage', () => {
     await user.type(screen.getByLabelText('Usuário ou e-mail'), 'taiane@example.com');
     await user.click(screen.getByRole('button', { name: 'Enviar instruções' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Muitas solicitações foram realizadas. Tente novamente.',
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          description: 'Muitas solicitações foram realizadas. Tente novamente.',
+        }),
+      ),
     );
-    expect(screen.getByText('Código do erro: TOO_MANY_REQUESTS')).toBeInTheDocument();
+    expect(screen.queryByText(/Código do erro/)).not.toBeInTheDocument();
   });
 });

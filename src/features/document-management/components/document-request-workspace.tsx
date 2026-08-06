@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ChevronDown } from 'lucide-react';
 
 import {
   addDocumentRequestItemAction,
@@ -10,6 +11,7 @@ import {
 import type { DocumentRequestDetail, DocumentTypeSummary } from '../domain';
 import { DOCUMENT_CONTEXT_LABELS, DOCUMENT_STATUS_LABELS } from '../domain';
 import { DocumentFilePreview } from './document-file-preview';
+import { DocumentUploadForm } from './document-upload-form';
 import {
   Accordion,
   AccordionContent,
@@ -18,7 +20,10 @@ import {
 } from '@/shared/ui/accordion';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Input } from '@/shared/ui/input';
+import { Progress } from '@/shared/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
 
 function latestReason(item: DocumentRequestDetail['items'][number]): string | null {
@@ -92,7 +97,7 @@ export function DocumentRequestWorkspace({
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <p className="text-sm font-medium text-primary">
+        <p className="text-sm font-medium text-primary-emphasis">
           {DOCUMENT_CONTEXT_LABELS[request.context]}
         </p>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -125,68 +130,75 @@ export function DocumentRequestWorkspace({
                 </Button>
               </>
             ) : null}
-            <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary-emphasis">
               {progress}% concluído
             </span>
           </div>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-muted">
-          <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
-        </div>
+        <Progress value={progress} aria-label={`${progress}% da solicitação concluída`} />
       </header>
 
       {canReview ? (
-        <details className="rounded-xl border bg-card p-4">
-          <summary className="cursor-pointer font-semibold">Incluir documento manualmente</summary>
-          <form
-            action={addDocumentRequestItemAction.bind(null, request.id, returnPath)}
-            className="mt-4 grid gap-3 md:grid-cols-2"
-          >
-            <label className="space-y-1 text-sm font-medium">
-              <span>Tipo de documento</span>
-              <select
-                name="documentTypeId"
-                className="h-9 w-full rounded-lg border bg-background px-3"
-                required
+        <Collapsible className="group/manual-document rounded-xl border bg-card">
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-xl p-4 text-left font-semibold transition-colors duration-200 hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none">
+            Incluir documento manualmente
+            <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 group-data-open/manual-document:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <form
+              action={addDocumentRequestItemAction.bind(null, request.id, returnPath)}
+              className="grid gap-3 px-4 pb-4 md:grid-cols-2"
+            >
+              <label className="space-y-1 text-sm font-medium" htmlFor="manual-document-type">
+                <span>Tipo de documento</span>
+                <Select name="documentTypeId" required>
+                  <SelectTrigger id="manual-document-type" className="h-9 w-full">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {documentTypes
+                      .filter((type) => type.active)
+                      .map((type) => (
+                        <SelectItem key={type.id} value={type.id}>
+                          {type.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label
+                className="space-y-1 text-sm font-medium"
+                htmlFor="manual-document-requirement"
               >
-                <option value="">Selecione</option>
-                {documentTypes
-                  .filter((type) => type.active)
-                  .map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label className="space-y-1 text-sm font-medium">
-              <span>Exigência</span>
-              <select
-                name="requirement"
-                className="h-9 w-full rounded-lg border bg-background px-3"
-                defaultValue="required"
-              >
-                <option value="required">Obrigatório</option>
-                <option value="optional">Opcional</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-sm font-medium">
-              <span>Prazo</span>
-              <Input name="dueAt" type="date" />
-            </label>
-            <label className="space-y-1 text-sm font-medium">
-              <span>Motivo da inclusão</span>
-              <Input name="reason" minLength={3} maxLength={1000} required />
-            </label>
-            <label className="space-y-1 text-sm font-medium md:col-span-2">
-              <span>Instruções</span>
-              <Textarea name="instructions" maxLength={2000} />
-            </label>
-            <div className="md:col-span-2">
-              <Button type="submit">Incluir documento</Button>
-            </div>
-          </form>
-        </details>
+                <span>Exigência</span>
+                <Select name="requirement" defaultValue="required">
+                  <SelectTrigger id="manual-document-requirement" className="h-9 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="required">Obrigatório</SelectItem>
+                    <SelectItem value="optional">Opcional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="space-y-1 text-sm font-medium">
+                <span>Prazo</span>
+                <Input name="dueAt" type="date" />
+              </label>
+              <label className="space-y-1 text-sm font-medium">
+                <span>Motivo da inclusão</span>
+                <Input name="reason" minLength={3} maxLength={1000} required />
+              </label>
+              <label className="space-y-1 text-sm font-medium md:col-span-2">
+                <span>Instruções</span>
+                <Textarea name="instructions" maxLength={2000} />
+              </label>
+              <div className="md:col-span-2">
+                <Button type="submit">Incluir documento</Button>
+              </div>
+            </form>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
 
       <div className="space-y-4">
@@ -258,15 +270,22 @@ export function DocumentRequestWorkspace({
                       )}
                       className="grid gap-2 rounded-lg border bg-muted/30 p-3 md:grid-cols-[12rem_1fr_auto]"
                     >
-                      <select
+                      <Select
                         name="policy"
-                        className="h-9 rounded-lg border bg-background px-3 text-sm"
                         defaultValue={item.status === 'waived' ? 'waived' : item.requirement}
                       >
-                        <option value="required">Obrigatório</option>
-                        <option value="optional">Opcional</option>
-                        <option value="waived">Dispensado</option>
-                      </select>
+                        <SelectTrigger
+                          className="h-9 w-full"
+                          aria-label={`Exigência de ${item.documentType.name}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="required">Obrigatório</SelectItem>
+                          <SelectItem value="optional">Opcional</SelectItem>
+                          <SelectItem value="waived">Dispensado</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Input
                         name="reason"
                         placeholder="Motivo da alteração"
@@ -280,7 +299,7 @@ export function DocumentRequestWorkspace({
                     </form>
                   ) : null}
                   {latestReason(item) ? (
-                    <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                    <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
                       Motivo: {latestReason(item)}
                     </p>
                   ) : null}
@@ -303,7 +322,7 @@ export function DocumentRequestWorkspace({
                           <p className="font-semibold">Pré-validação</p>
                           <p>{latest.validation.summary}</p>
                           {latest.validation.alerts.map((alert, index) => (
-                            <p key={index} className="mt-1 text-amber-700">
+                            <p key={index} className="mt-1 text-warning-emphasis">
                               {String(alert)}
                             </p>
                           ))}
@@ -313,45 +332,15 @@ export function DocumentRequestWorkspace({
                   ) : null}
 
                   {canUpload ? (
-                    <form
+                    <DocumentUploadForm
                       action={uploadAction}
-                      className="space-y-3 rounded-lg border border-dashed p-4"
-                    >
-                      <label className="block text-sm font-medium" htmlFor={`files-${item.id}`}>
-                        {repeatableByDependent && requiresFrontBack
-                          ? 'Selecione frente e verso de cada filho, mantendo cada par em sequência'
-                          : repeatableByDependent
-                            ? 'Selecione os arquivos de todos os filhos'
-                            : requiresFrontBack
-                              ? 'Selecione frente e verso, nesta ordem'
-                              : 'Selecione o arquivo ou as páginas'}
-                      </label>
-                      <Input
-                        id={`files-${item.id}`}
-                        name="files"
-                        type="file"
-                        accept={accepts.join(',')}
-                        multiple={requiresFrontBack || item.config.allowsMultiplePages === true}
-                        required
-                      />
-                      <input
-                        type="hidden"
-                        name="requiresFrontBack"
-                        value={requiresFrontBack ? 'true' : 'false'}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {repeatableByDependent
-                          ? 'Você pode selecionar documentos de mais de um filho no mesmo envio. '
-                          : ''}
-                        Formatos: PDF, JPEG ou PNG. Os limites configurados serão validados pela
-                        API.
-                      </p>
-                      <Button type="submit">
-                        {item.status === 'pending-human-review'
-                          ? 'Substituir arquivo enviado'
-                          : 'Enviar documento'}
-                      </Button>
-                    </form>
+                      itemId={item.id}
+                      accepts={accepts}
+                      requiresFrontBack={requiresFrontBack}
+                      repeatableByDependent={repeatableByDependent}
+                      allowsMultiplePages={item.config.allowsMultiplePages === true}
+                      replace={item.status === 'pending-human-review'}
+                    />
                   ) : null}
 
                   {latest &&
@@ -456,16 +445,21 @@ export function DocumentRequestWorkspace({
                           ))}
                         </fieldset>
                       ) : null}
-                      <label className="space-y-1 text-sm font-medium">
+                      <label
+                        className="space-y-1 text-sm font-medium"
+                        htmlFor={`decision-${item.id}`}
+                      >
                         <span>Decisão</span>
-                        <select
-                          name="decision"
-                          className="h-9 w-full rounded-lg border bg-background px-3"
-                        >
-                          <option value="approved">Aprovar</option>
-                          <option value="resubmission-required">Solicitar reenvio</option>
-                          <option value="rejected">Recusar</option>
-                        </select>
+                        <Select name="decision" defaultValue="approved">
+                          <SelectTrigger id={`decision-${item.id}`} className="h-9 w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="approved">Aprovar</SelectItem>
+                            <SelectItem value="resubmission-required">Solicitar reenvio</SelectItem>
+                            <SelectItem value="rejected">Recusar</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </label>
                       <label className="space-y-1 text-sm font-medium">
                         <span>Validade</span>
@@ -475,18 +469,25 @@ export function DocumentRequestWorkspace({
                         <span>Motivo da recusa/reenvio</span>
                         <Input name="reason" maxLength={1000} />
                       </label>
-                      <label className="space-y-1 text-sm font-medium">
+                      <label
+                        className="space-y-1 text-sm font-medium"
+                        htmlFor={`original-status-${item.id}`}
+                      >
                         <span>Conferência do original</span>
-                        <select
+                        <Select
                           name="originalCheckStatus"
                           defaultValue={requiresOriginal ? 'pending' : 'not-required'}
-                          className="h-9 w-full rounded-lg border bg-background px-3"
                         >
-                          <option value="not-required">Não exigido</option>
-                          <option value="pending">Pendente</option>
-                          <option value="confirmed">Original conferido</option>
-                          <option value="divergent">Divergência encontrada</option>
-                        </select>
+                          <SelectTrigger id={`original-status-${item.id}`} className="h-9 w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="not-required">Não exigido</SelectItem>
+                            <SelectItem value="pending">Pendente</SelectItem>
+                            <SelectItem value="confirmed">Original conferido</SelectItem>
+                            <SelectItem value="divergent">Divergência encontrada</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </label>
                       <label className="space-y-1 text-sm font-medium">
                         <span>Observação do original</span>
@@ -510,7 +511,7 @@ export function DocumentRequestWorkspace({
                   <AccordionTrigger>
                     <span className="flex flex-1 items-center justify-between gap-3 pr-2">
                       <span>{item.documentType.name}</span>
-                      <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-700">
+                      <span className="rounded-full bg-success/10 px-2.5 py-1 text-xs text-success-emphasis">
                         Aprovado
                       </span>
                     </span>

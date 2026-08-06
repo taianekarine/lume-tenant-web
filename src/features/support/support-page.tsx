@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, ExternalLink, LoaderCircle, Send } from 'lucide-react';
+import { ExternalLink, LoaderCircle, Send } from 'lucide-react';
 import * as React from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -10,6 +10,8 @@ import { Card, CardContent } from '@/shared/ui/card';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/shared/ui/field';
 import { Input } from '@/shared/ui/input';
 import { Textarea } from '@/shared/ui/textarea';
+import { toast } from '@/shared/ui/toast';
+import { userFacingMessage } from '@/shared/lib/user-facing-message';
 
 import { submitSupportRequestAction } from './support-actions';
 import { supportFormSchema, type SupportFormData } from './support-schema';
@@ -56,6 +58,18 @@ export function SupportPage({ requester }: { readonly requester: SupportRequeste
     defaultValues: { subject: '', message: '' },
   });
 
+  React.useEffect(() => {
+    if (!providerError) return;
+    toast.add({
+      title: 'Solicitação não enviada',
+      description: userFacingMessage(
+        providerError.message,
+        'Não foi possível enviar a solicitação. Tente novamente.',
+      ),
+      type: 'error',
+    });
+  }, [providerError]);
+
   const submit = form.handleSubmit((values) => {
     setProviderError(null);
     setSuccessMessage('');
@@ -69,17 +83,16 @@ export function SupportPage({ requester }: { readonly requester: SupportRequeste
         return;
       }
       form.reset();
-      setSuccessMessage(`Solicitação enviada com sucesso. Protocolo: ${result.requestId}`);
+      setSuccessMessage('Solicitação enviada com sucesso.');
     });
   });
 
   return (
     <>
       <div className="mb-4">
-        <h1 className="text-2xl font-bold tracking-tight">Abrir Ticket por e-mail</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Solicitação de suporte</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Descreva sua solicitação. O Lume enviará a mensagem com seus dados de identificação pelo
-          provedor de e-mail configurado.
+          Descreva sua solicitação. O Lume enviará a mensagem com seus dados de identificação.
         </p>
       </div>
       <Card className="max-w-3xl">
@@ -112,39 +125,30 @@ export function SupportPage({ requester }: { readonly requester: SupportRequeste
             </Button>
 
             {successMessage ? (
-              <p
-                role="status"
-                className="text-sm font-medium text-emerald-700 dark:text-emerald-300"
-              >
+              <p role="status" className="text-sm font-medium text-success-emphasis">
                 {successMessage}
               </p>
             ) : null}
 
             {providerError ? (
-              <div
-                role="alert"
-                className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4"
-              >
-                <p className="flex items-start gap-2 text-sm text-destructive">
-                  <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                  <span>
-                    {providerError.message}
-                    {providerError.fallbackAllowed
-                      ? ' Como alternativa, abra o aplicativo de e-mail com destinatários, assunto, mensagem e seus dados já preenchidos.'
-                      : ''}
-                  </span>
-                </p>
+              <div className="space-y-3 rounded-xl border bg-muted/40 p-4">
                 {providerError.fallbackAllowed ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      window.location.assign(buildSupportMailtoUrl(form.getValues(), requester))
-                    }
-                  >
-                    <ExternalLink />
-                    Abrir no aplicativo de e-mail
-                  </Button>
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Você também pode continuar pelo aplicativo de e-mail com os dados já
+                      preenchidos.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        window.location.assign(buildSupportMailtoUrl(form.getValues(), requester))
+                      }
+                    >
+                      <ExternalLink />
+                      Abrir no aplicativo de e-mail
+                    </Button>
+                  </>
                 ) : null}
               </div>
             ) : null}

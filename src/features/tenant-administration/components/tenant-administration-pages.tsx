@@ -16,7 +16,7 @@ export function LicensePage({
 
   return (
     <AuthenticatedShell user={session.user}>
-      <main className={styles.content}>
+      <div className={styles.content}>
         <header className={styles.header}>
           <div>
             <p className={styles.eyebrow}>Instalação local</p>
@@ -51,7 +51,7 @@ export function LicensePage({
             ))}
           </div>
         </section>
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

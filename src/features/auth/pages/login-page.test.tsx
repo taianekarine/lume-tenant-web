@@ -4,6 +4,16 @@ import userEvent from '@testing-library/user-event';
 import { completePasswordChangeAction, loginAction } from '../actions/login-action';
 import { LoginPage } from './login-page';
 
+const toastAdd = jest.fn();
+
+jest.mock('@/shared/ui/toast', () => ({
+  toast: { add: (...args: unknown[]) => toastAdd(...args) },
+}));
+
+beforeAll(() => {
+  window.PointerEvent ??= MouseEvent as typeof PointerEvent;
+});
+
 jest.mock('../actions/login-action', () => ({
   completePasswordChangeAction: jest.fn(),
   loginAction: jest.fn(),
@@ -36,6 +46,9 @@ describe('LoginPage', () => {
 
   it('deve renderizar os campos principais do formulário', () => {
     render(<LoginPage />);
+
+    expect(screen.getByRole('img', { name: 'Lume' })).toBeInTheDocument();
+    expect(screen.getByText('Portal seguro')).toBeInTheDocument();
 
     expect(
       screen.getByRole('heading', {
@@ -73,7 +86,12 @@ describe('LoginPage', () => {
     expect(await screen.findByText('Informe seu usuário ou e-mail.')).toBeInTheDocument();
 
     expect(screen.getByText('Informe sua senha.')).toBeInTheDocument();
-    expect(screen.getByText('Código do erro: VALIDATION_ERROR')).toBeInTheDocument();
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        description: 'Revise os campos destacados e tente novamente.',
+      }),
+    );
   });
 
   it('deve rejeitar um documento numérico', async () => {
@@ -92,7 +110,12 @@ describe('LoginPage', () => {
     );
 
     expect(await screen.findByText('Informe um usuário ou e-mail válido.')).toBeInTheDocument();
-    expect(screen.getByText('Código do erro: VALIDATION_ERROR')).toBeInTheDocument();
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        description: 'Revise os campos destacados e tente novamente.',
+      }),
+    );
   });
 
   it('deve permitir mostrar e ocultar a senha', async () => {
@@ -130,7 +153,11 @@ describe('LoginPage', () => {
 
     await user.type(screen.getByLabelText('Senha'), 'teste123');
 
-    await user.click(screen.getByLabelText('Lembrar-me neste dispositivo'));
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'Lembrar-me neste dispositivo',
+      }),
+    );
 
     await user.click(
       screen.getByRole('button', {
@@ -144,8 +171,9 @@ describe('LoginPage', () => {
       remember: true,
     });
 
-    expect(await screen.findByText('Login simulado indisponível.')).toBeInTheDocument();
-    expect(screen.getByText('Código do erro: SERVICE_UNAVAILABLE')).toBeInTheDocument();
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'error', description: 'Login simulado indisponível.' }),
+    );
   });
 
   it('opens the first-access dialog and changes the password without creating a session', async () => {
@@ -173,7 +201,7 @@ describe('LoginPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Defina sua nova senha' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Código do erro: ACCOUNT_PASSWORD_SETUP_REQUIRED')).toBeInTheDocument();
+    expect(screen.queryByText(/Código do erro/)).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Nova senha'), 'SenhaNova@2026');
     await user.type(screen.getByLabelText('Confirmar nova senha'), 'SenhaNova@2026');

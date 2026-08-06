@@ -17,6 +17,12 @@ jest.mock('next/navigation', () => ({
 jest.mock('@/features/auth/server', () => ({
   getCurrentAuthenticatedSession: jest.fn(),
 }));
+jest.mock('@/features/quote-proposals/server', () => ({
+  getPendingQuoteProposalsForDashboard: jest.fn().mockResolvedValue({ items: [], total: 2 }),
+  getSentQuoteProposalsForDashboard: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+  getApprovedQuoteProposalsForDashboard: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+  getCancelledQuoteProposalsForDashboard: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+}));
 
 const mockedSession = jest.mocked(getCurrentAuthenticatedSession);
 const mockedRedirect = jest.mocked(redirect);
@@ -57,7 +63,7 @@ describe('quote proposals parent route', () => {
   it('redirects a visitor without a session to login', async () => {
     mockedSession.mockResolvedValue(null);
 
-    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow('NEXT_REDIRECT');
 
     expect(mockedRedirect).toHaveBeenCalledWith('/login');
   });
@@ -65,21 +71,23 @@ describe('quote proposals parent route', () => {
   it('protects the route with permission and Commercial scope', async () => {
     mockedSession.mockResolvedValue(createSession(['dashboard:view']));
 
-    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow('NEXT_REDIRECT');
     expect(mockedRedirect).toHaveBeenCalledWith('/dashboard');
 
     mockedSession.mockResolvedValue(
       createSession(['whatsapp-conversations:manage'], ['operations']),
     );
-    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow('NEXT_REDIRECT');
     expect(mockedRedirect).toHaveBeenLastCalledWith('/dashboard');
   });
 
-  it('redirects an authorized operator to the priority pending queue', async () => {
+  it('renders all queues as tabs and honors the requested tab', async () => {
     mockedSession.mockResolvedValue(createSession(['whatsapp-conversations:manage']));
 
-    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    const result = await Page({ searchParams: Promise.resolve({ tab: 'approved' }) });
 
-    expect(mockedRedirect).toHaveBeenCalledWith('/quote-proposals/pending');
+    expect(result.props.initialTab).toBe('approved');
+    expect(result.props.pendingTotal).toBe(2);
+    expect(mockedRedirect).not.toHaveBeenCalled();
   });
 });

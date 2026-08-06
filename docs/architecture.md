@@ -18,8 +18,9 @@ As permissões são strings opacas no formato `recurso:ação`. O backend é a
 autoridade do catálogo e pode introduzir novas permissões sem exigir uma
 publicação imediata do frontend.
 
-O branding vem das variáveis `NEXT_PUBLIC_TENANT_*`. Departamentos e módulos
-específicos, como o fluxo comercial de transporte da Milenium, devem permanecer
+A identidade principal vem do design system Lume e não é configurável por
+tenant. `NEXT_PUBLIC_TENANT_NAME` e `NEXT_PUBLIC_TENANT_PRODUCT_NAME` fornecem
+somente contexto textual. Departamentos e módulos específicos permanecem
 configuráveis por tenant.
 
 O departamento é o limite estrutural de navegação e dados; permissões
@@ -155,9 +156,8 @@ segurança, catálogos de MIME e estados de lote entre backend e frontend.
 Propostas comerciais usam uma fronteira separada,
 `LumeApiQuoteProposalRepository`, sem criar um segundo dono de estado. O
 Dashboard Comercial mostra os gráficos calculados pelo `summary` autoritativo
-da Tenant API. A rota `/quote-proposals` apenas redireciona para a fila
-prioritária e a pasta Comercial separa as subrotas
-`stage=pending`, `stage=sent`, `stage=approved` e `stage=cancelled`; um documento
+da Tenant API. A rota `/quote-proposals` concentra as quatro filas em abas
+controladas por `tab=pending`, `tab=sent`, `tab=approved` e `tab=cancelled`; um documento
 só entra em Enviadas quando a confirmação positiva do provedor já estiver
 persistida. Canceladas inclui decisões recusadas e cancelamentos, sempre com o
 motivo publicado no histórico e no resumo agregado. Os filtros automáticos
@@ -175,9 +175,8 @@ reutilizado após falha do envio; `batchId`, `batchDocumentIds` e `commandId`
 permanecem estáveis durante a mesma tentativa lógica. A atribuição automática ao atendente que enviou a
 primeira proposta é uma regra da Tenant API. O histórico é separado por
 conversa e solicitação, não por telefone, e o detalhe autoritativo fornece a
-lista completa de PDFs. A sidebar consulta a contagem autoritativa, exibe um
-único ícone na pasta Orçamentos quando há notificação e reserva o badge numérico
-para Pendentes. A tela atualiza a fila a cada cinco segundos, ao
+lista completa de PDFs. A sidebar consulta a contagem autoritativa e exibe o
+badge numérico no item único Orçamentos. A tela atualiza a fila a cada cinco segundos, ao
 retomar o foco e por ação manual, removendo o item somente depois que a Tenant
 API publicar a confirmação assíncrona de todos os membros do lote. O painel de
 conversa traduz essa confirmação para `Proposta enviada` e `Aguardando cliente`,

@@ -213,7 +213,7 @@ function errorResult(
     success: false,
     code: 'service-unavailable',
     message:
-      'Não foi possível confirmar o envio pela Tenant API. O PDF selecionado foi preservado para nova tentativa.',
+      'Não foi possível confirmar o envio. O PDF selecionado foi preservado para nova tentativa.',
     ...(uploadedDocument ? { uploadedDocument } : {}),
   };
 }
@@ -235,7 +235,7 @@ function mutationErrorResult(error: unknown): MutateQuoteProposalActionResult {
   return {
     success: false,
     code: 'service-unavailable',
-    message: 'Não foi possível concluir a alteração pela Tenant API.',
+    message: 'Não foi possível concluir a alteração.',
   };
 }
 
@@ -413,7 +413,7 @@ export async function getQuoteProposalDocumentHistoryAction(
     }
     return {
       success: false,
-      message: 'Não foi possível consultar o histórico de PDFs pela Tenant API.',
+      message: 'Não foi possível consultar o histórico de PDFs.',
     };
   }
 }
@@ -448,7 +448,7 @@ export async function getConversationQuoteProposalsAction(
     }
     return {
       success: false,
-      message: 'Não foi possível consultar os orçamentos pela Tenant API.',
+      message: 'Não foi possível consultar os orçamentos.',
     };
   }
 }

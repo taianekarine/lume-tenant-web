@@ -10,6 +10,7 @@ import {
   requirePeopleOperationsTenantSession,
   rethrowTenantPageError,
 } from '@/features/tenant-administration/server';
+import { PageFeedbackToast } from '@/shared/page-feedback-toast';
 
 export default async function UsersRoute({
   searchParams,
@@ -70,19 +71,8 @@ export default async function UsersRoute({
 
   return (
     <AuthenticatedShell user={session.user}>
-      <main className="mx-auto w-full max-w-[1600px] p-4 md:p-6">
-        {query.error || query.success ? (
-          <p
-            role={query.error ? 'alert' : 'status'}
-            className={
-              query.error
-                ? 'mb-6 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive'
-                : 'mb-6 rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700'
-            }
-          >
-            {query.error ?? query.success}
-          </p>
-        ) : null}
+      <div className="mx-auto w-full max-w-[1600px] p-4 md:p-6">
+        <PageFeedbackToast error={query.error} success={query.success} />
         <UsersManagement
           users={users}
           permissionCatalog={permissionCatalog}
@@ -95,7 +85,7 @@ export default async function UsersRoute({
           canManageAccess={session.user.isAdministrator === true}
           filters={filters}
         />
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

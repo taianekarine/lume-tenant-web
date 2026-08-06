@@ -2,13 +2,16 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 
-import { tenantBranding } from '@/config/tenant-branding';
 import { ThemeToggle } from '@/features/navigation/theme-toggle';
+import { LumeBrand } from '@/shared/lume-brand';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Checkbox } from '@/shared/ui/checkbox';
+import { Input } from '@/shared/ui/input';
+import { toast } from '@/shared/ui/toast';
 
 import { loginAction, type LoginActionFailure } from '../actions/login-action';
 import type { PasswordSetupChallenge } from '../application';
@@ -25,6 +28,7 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
     useState<PasswordSetupChallenge | null>(null);
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
@@ -36,6 +40,11 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
       remember: false,
     },
   });
+
+  useEffect(() => {
+    if (!loginError) return;
+    toast.add({ title: 'Acesso não concluído', description: loginError.message, type: 'error' });
+  }, [loginError]);
 
   async function handleLogin(values: LoginFormData) {
     setLoginError(null);
@@ -76,7 +85,8 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
       </div>
       <Card className={loginPageStyles.card()}>
         <CardHeader className={loginPageStyles.cardHeader()}>
-          <p className={loginPageStyles.platformName()}>{tenantBranding.productName}</p>
+          <LumeBrand priority className={loginPageStyles.brand()} />
+          <p className={loginPageStyles.platformName()}>Portal seguro</p>
 
           <CardTitle>
             <h1 className={loginPageStyles.title()}>Acesse sua conta</h1>
@@ -91,7 +101,7 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
           {passwordChanged ? (
             <p
               role="status"
-              className="mb-5 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700"
+              className="mb-5 rounded-lg bg-success/10 p-3 text-sm text-success-emphasis"
             >
               Senha definida com sucesso. Entre com sua nova senha.
             </p>
@@ -99,7 +109,6 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
           <form
             className={loginPageStyles.form()}
             onSubmit={handleSubmit(handleLogin, handleInvalidLogin)}
-            aria-describedby={loginError ? 'login-error' : undefined}
             noValidate
           >
             <div className={loginPageStyles.fieldGroup()}>
@@ -107,16 +116,14 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
                 Usuário ou e-mail
               </label>
 
-              <input
+              <Input
                 id="identifier"
                 type="text"
                 autoComplete="username"
                 placeholder="Digite seu usuário ou e-mail"
                 aria-invalid={Boolean(errors.identifier)}
                 aria-describedby={errors.identifier ? 'identifier-error' : undefined}
-                className={loginPageStyles.input({
-                  invalid: Boolean(errors.identifier),
-                })}
+                className={loginPageStyles.input()}
                 {...register('identifier')}
               />
 
@@ -144,17 +151,14 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
               </div>
 
               <div className={loginPageStyles.passwordContainer()}>
-                <input
+                <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   placeholder="Digite sua senha"
                   aria-invalid={Boolean(errors.password)}
                   aria-describedby={errors.password ? 'password-error' : undefined}
-                  className={loginPageStyles.input({
-                    hasAction: true,
-                    invalid: Boolean(errors.password),
-                  })}
+                  className={loginPageStyles.input({ hasAction: true })}
                   {...register('password')}
                 />
 
@@ -176,23 +180,23 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
               )}
             </div>
 
-            <label className={loginPageStyles.rememberLabel()}>
-              <input
-                type="checkbox"
-                className={loginPageStyles.checkbox()}
-                {...register('remember')}
-              />
-              Lembrar-me neste dispositivo
-            </label>
-
-            {loginError && (
-              <p id="login-error" role="alert" className={loginPageStyles.fieldError()}>
-                <span className="block">{loginError.message}</span>
-                <span className="mt-1 block font-mono text-xs">
-                  Código do erro: {loginError.errorCode}
-                </span>
-              </p>
-            )}
+            <Controller
+              control={control}
+              name="remember"
+              render={({ field }) => (
+                <label htmlFor="remember" className={loginPageStyles.rememberLabel()}>
+                  <Checkbox
+                    id="remember"
+                    name={field.name}
+                    checked={field.value}
+                    onBlur={field.onBlur}
+                    onCheckedChange={field.onChange}
+                    ref={field.ref}
+                  />
+                  Lembrar-me neste dispositivo
+                </label>
+              )}
+            />
 
             <Button
               type="submit"

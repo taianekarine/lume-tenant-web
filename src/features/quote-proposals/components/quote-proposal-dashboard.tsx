@@ -22,10 +22,10 @@ const statusChartConfig = {
 } satisfies ChartConfig;
 
 const statusRoutes = {
-  pending: '/quote-proposals/pending',
-  sent: '/quote-proposals/sent',
-  approved: '/quote-proposals/approved',
-  cancelled: '/quote-proposals/cancelled',
+  pending: '/quote-proposals?tab=pending',
+  sent: '/quote-proposals?tab=sent',
+  approved: '/quote-proposals?tab=approved',
+  cancelled: '/quote-proposals?tab=cancelled',
 } as const;
 
 export interface QuoteProposalDashboardProps {
@@ -77,9 +77,7 @@ export function QuoteProposalDashboard({
   return (
     <section aria-labelledby="quote-dashboard-title" className="space-y-5">
       <header>
-        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-          Atendimento comercial
-        </p>
+        <p className="text-sm font-semibold text-primary-emphasis">Atendimento comercial</p>
         <h1 id="quote-dashboard-title" className="mt-1 text-2xl font-bold tracking-tight">
           Orçamentos
         </h1>
@@ -91,7 +89,7 @@ export function QuoteProposalDashboard({
       {initialError ? (
         <div
           role="alert"
-          className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive-emphasis"
         >
           {initialError}
         </div>

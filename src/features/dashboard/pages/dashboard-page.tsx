@@ -1,7 +1,8 @@
 'use client';
 
 import { Bar, BarChart, CartesianGrid, Pie, PieChart, XAxis } from 'recharts';
-import { BarChart3, Building2, CircleAlert } from 'lucide-react';
+import { BarChart3, Building2 } from 'lucide-react';
+import { useEffect } from 'react';
 
 import type { AuthenticatedSession } from '@/features/auth/domain';
 import { AuthenticatedShell } from '@/features/navigation';
@@ -16,6 +17,7 @@ import {
   type WhatsAppConversationDepartment,
 } from '@/features/whatsapp-conversations/domain';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { toast } from '@/shared/ui/toast';
 import {
   ChartContainer,
   ChartLegend,
@@ -77,6 +79,14 @@ export function DashboardPage({
   quoteMetrics = null,
   quoteInitialError = null,
 }: DashboardPageProps) {
+  useEffect(() => {
+    if (!initialError) return;
+    toast.add({
+      title: 'Indicadores não carregados',
+      description: 'Não foi possível carregar todos os indicadores.',
+      type: 'error',
+    });
+  }, [initialError]);
   const assignedDepartments = session.user.departments.filter(
     (department): department is WhatsAppConversationDepartment =>
       isWhatsAppConversationDepartment(department),
@@ -144,7 +154,7 @@ export function DashboardPage({
 
   return (
     <AuthenticatedShell user={session.user}>
-      <main className={styles.content()}>
+      <div className={styles.content()}>
         <p className={styles.eyebrow()}>Olá, {session.user.name}</p>
         <div className={styles.heading()}>
           <div>
@@ -160,16 +170,9 @@ export function DashboardPage({
           </div>
           <span className={styles.liveBadge()}>
             <BarChart3 aria-hidden="true" />
-            Dados da Tenant API
+            Dados atualizados
           </span>
         </div>
-
-        {initialError ? (
-          <div role="alert" className={styles.errorBanner()}>
-            <CircleAlert aria-hidden="true" />
-            <span>{initialError}</span>
-          </div>
-        ) : null}
 
         <ConversationMetricsCards conversations={scopedConversations} className="mt-5" />
 
@@ -284,7 +287,7 @@ export function DashboardPage({
             <QuoteProposalDashboard metrics={quoteMetrics} initialError={quoteInitialError} />
           </div>
         ) : null}
-      </main>
+      </div>
     </AuthenticatedShell>
   );
 }

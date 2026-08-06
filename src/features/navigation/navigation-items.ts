@@ -55,7 +55,7 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
   },
   {
     label: 'Orçamentos',
-    href: '/quote-proposals/pending',
+    href: '/quote-proposals',
     permission: 'whatsapp-conversations:manage',
     alternativePermissions: ['whatsapp-conversations:view', 'commercial:view', 'commercial:manage'],
     icon: FileClock,

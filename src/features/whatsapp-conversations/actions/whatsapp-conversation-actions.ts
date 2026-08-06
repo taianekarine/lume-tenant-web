@@ -127,7 +127,7 @@ function standardActionFailure(error: unknown): WhatsAppConversationActionResult
   return {
     success: false,
     code: 'service-unavailable',
-    message: 'Não foi possível atualizar o atendimento na Tenant API.',
+    message: 'Não foi possível atualizar o atendimento.',
   };
 }
 
@@ -330,7 +330,7 @@ export async function forwardWhatsAppConversationAction(
     return {
       success: false,
       code: 'service-unavailable',
-      message: 'Não foi possível encaminhar o atendimento na Tenant API.',
+      message: 'Não foi possível encaminhar o atendimento.',
     };
   }
 }

@@ -41,7 +41,7 @@ describe('AuthenticatedShell', () => {
   it('shares the authorized navigation and session actions with internal pages', () => {
     const { container } = render(
       <AuthenticatedShell user={employee}>
-        <main>Conteúdo protegido</main>
+        <div>Conteúdo protegido</div>
       </AuthenticatedShell>,
     );
 
@@ -50,6 +50,9 @@ describe('AuthenticatedShell', () => {
         name: 'Navegação da área interna',
       }),
     ).toBeInTheDocument();
+    const lumeBrand = screen.getByRole('img', { name: 'Lume' });
+    expect(lumeBrand).toBeInTheDocument();
+    expect(lumeBrand.closest('button')).toBeNull();
     expect(
       screen
         .getAllByRole('link', { name: 'Dashboard' })
@@ -61,6 +64,7 @@ describe('AuthenticatedShell', () => {
       'menu',
     );
     expect(screen.getByText('Conteúdo protegido')).toBeInTheDocument();
+    expect(container.querySelectorAll('main')).toHaveLength(1);
     expect(container.querySelector('header [data-slot="separator"]')).not.toBeInTheDocument();
   });
 
@@ -68,7 +72,7 @@ describe('AuthenticatedShell', () => {
     const user = userEvent.setup();
     render(
       <AuthenticatedShell user={employee}>
-        <main>Conteúdo protegido</main>
+        <div>Conteúdo protegido</div>
       </AuthenticatedShell>,
     );
 

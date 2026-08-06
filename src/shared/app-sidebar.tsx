@@ -1,12 +1,9 @@
 'use client';
 
-import { LayoutGrid } from 'lucide-react';
-
-import { tenantBranding } from '@/config/tenant-branding';
 import type { User } from '@/features/auth/domain';
 import { AuthenticatedNavigation } from '@/features/navigation/authenticated-navigation';
+import { LumeBrand } from '@/shared/lume-brand';
 import { NavUser } from '@/shared/nav-user';
-import { TeamSwitcher } from '@/shared/team-switcher';
 import {
   Sidebar,
   SidebarContent,
@@ -20,29 +17,15 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
-  const tenantLogo = tenantBranding.logoUrl ? (
-    <span
-      role="img"
-      aria-label={`Logo ${tenantBranding.tenantName}`}
-      className="size-5 bg-contain bg-center bg-no-repeat"
-      style={{ backgroundImage: `url("${tenantBranding.logoUrl}")` }}
-    />
-  ) : (
-    <LayoutGrid aria-hidden="true" />
-  );
-
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher
-          teams={[
-            {
-              name: tenantBranding.tenantName,
-              logo: tenantLogo,
-              plan: 'Área protegida',
-            },
-          ]}
-        />
+        <div className="flex h-12 items-center overflow-hidden rounded-xl px-2 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-0!">
+          <LumeBrand
+            compact
+            className="gap-2 group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:[&>span:last-child]:hidden"
+          />
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <nav aria-label="Navegação da área interna">

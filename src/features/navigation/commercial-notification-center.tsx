@@ -11,6 +11,7 @@ import {
   isWhatsAppConversationDepartment,
   type WhatsAppConversation,
 } from '@/features/whatsapp-conversations/domain';
+import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import { Button } from '@/shared/ui/button';
 import {
   Drawer,
@@ -23,6 +24,7 @@ import {
   DrawerTrigger,
 } from '@/shared/ui/drawer';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/shared/ui/empty';
+import { toast } from '@/shared/ui/toast';
 
 import {
   getDepartmentNotificationsAction,
@@ -375,6 +377,18 @@ export function CommercialNotificationCenter({ user }: { readonly user: User }) 
     [snapshot],
   );
 
+  useEffect(() => {
+    if (!error) return;
+    toast.add({
+      title: 'Notificações não atualizadas',
+      description: userFacingMessage(
+        error,
+        'Não foi possível atualizar as notificações. Tente novamente.',
+      ),
+      type: 'error',
+    });
+  }, [error]);
+
   if (!visible) return null;
 
   return (
@@ -427,21 +441,19 @@ export function CommercialNotificationCenter({ user }: { readonly user: User }) 
         </DrawerHeader>
 
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
-          {error ? (
-            <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-
-          {pendingCount === 0 && !error ? (
+          {pendingCount === 0 ? (
             <Empty className="border">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <Bell aria-hidden="true" />
                 </EmptyMedia>
-                <EmptyTitle>Nenhuma pendência nova</EmptyTitle>
+                <EmptyTitle>
+                  {error ? 'Notificações indisponíveis' : 'Nenhuma pendência nova'}
+                </EmptyTitle>
                 <EmptyDescription>
-                  Novos avisos relacionados aos seus departamentos aparecerão aqui.
+                  {error
+                    ? 'Use o botão de atualizar para tentar novamente.'
+                    : 'Novos avisos relacionados aos seus departamentos aparecerão aqui.'}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -458,12 +470,12 @@ export function CommercialNotificationCenter({ user }: { readonly user: User }) 
                   <Link
                     href={
                       notification.type === 'quote-proposal-pending'
-                        ? '/quote-proposals/pending'
+                        ? '/quote-proposals?tab=pending'
                         : notification.href
                     }
                     className="flex items-center gap-3 rounded-xl border bg-card p-3 transition hover:bg-muted"
                   >
-                    <span className="rounded-lg bg-amber-500/10 p-2 text-amber-700">
+                    <span className="rounded-lg bg-warning/10 p-2 text-warning-emphasis">
                       {notification.type === 'quote-proposal-pending' ? (
                         <FileClock aria-hidden="true" className="size-4" />
                       ) : (
@@ -493,7 +505,7 @@ export function CommercialNotificationCenter({ user }: { readonly user: User }) 
                         href="/whatsapp-conversations"
                         className="flex items-center gap-3 rounded-xl border bg-card p-3 transition hover:bg-muted"
                       >
-                        <span className="rounded-lg bg-red-500/10 p-2 text-red-700">
+                        <span className="rounded-lg bg-destructive/10 p-2 text-destructive-emphasis">
                           <BotOff aria-hidden="true" className="size-4" />
                         </span>
                         <span className="min-w-0 flex-1">

@@ -70,7 +70,7 @@ export default async function Page() {
       initialError =
         error instanceof WhatsAppConversationRepositoryError
           ? error.message
-          : 'Não foi possível carregar os indicadores da Tenant API.';
+          : 'Não foi possível carregar os indicadores.';
     }
   } else {
     initialError =
@@ -109,7 +109,7 @@ export default async function Page() {
       quoteInitialError =
         error instanceof QuoteProposalRepositoryError
           ? error.message
-          : 'Não foi possível carregar os indicadores comerciais da Tenant API.';
+          : 'Não foi possível carregar os indicadores comerciais.';
     }
   }
 

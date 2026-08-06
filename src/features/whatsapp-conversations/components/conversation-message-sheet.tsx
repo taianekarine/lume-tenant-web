@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useLayoutEffect, useRef } from 'react';
+
 import {
   AlertCircle,
   FileText,
@@ -31,6 +33,7 @@ import {
 } from '@/shared/ui/sheet';
 import { Skeleton } from '@/shared/ui/skeleton';
 import { Textarea } from '@/shared/ui/textarea';
+import { toast } from '@/shared/ui/toast';
 
 import { HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH } from '../application';
 import type {
@@ -207,6 +210,64 @@ export function ConversationMessageSheet({
   feedbackMessage,
   feedbackTone,
 }: ConversationMessageSheetProps) {
+  const historyRef = useRef<HTMLDivElement>(null);
+  const previousHistoryRef = useRef({
+    open: false,
+    loaded: false,
+    firstId: '',
+    lastId: '',
+    scrollHeight: 0,
+    scrollTop: 0,
+    clientHeight: 0,
+  });
+  const firstMessageId = conversation.messages[0]?.id ?? '';
+  const lastMessageId = conversation.messages.at(-1)?.id ?? '';
+
+  useEffect(() => {
+    if (!open || !detailError) return;
+    toast.add({
+      title: 'Histórico não carregado',
+      description: 'Não foi possível carregar as mensagens. Tente novamente.',
+      type: 'error',
+    });
+  }, [detailError, open]);
+
+  useLayoutEffect(() => {
+    const history = historyRef.current;
+    if (!history || !open || !isLoaded) return;
+    const previous = previousHistoryRef.current;
+    const openingHistory = !previous.open || !previous.loaded;
+    const prependedMessages =
+      previous.firstId !== '' &&
+      previous.firstId !== firstMessageId &&
+      previous.lastId === lastMessageId;
+    const wasNearBottom = previous.scrollHeight - previous.scrollTop - previous.clientHeight < 80;
+
+    if (openingHistory) {
+      history.scrollTop = history.scrollHeight;
+    } else if (prependedMessages) {
+      history.scrollTop = previous.scrollTop + history.scrollHeight - previous.scrollHeight;
+    } else if (wasNearBottom && previous.lastId !== lastMessageId) {
+      history.scrollTop = history.scrollHeight;
+    }
+
+    previousHistoryRef.current = {
+      open,
+      loaded: isLoaded,
+      firstId: firstMessageId,
+      lastId: lastMessageId,
+      scrollHeight: history.scrollHeight,
+      scrollTop: history.scrollTop,
+      clientHeight: history.clientHeight,
+    };
+  }, [firstMessageId, isLoaded, lastMessageId, open]);
+
+  useEffect(() => {
+    if (open) return;
+    previousHistoryRef.current.open = false;
+    previousHistoryRef.current.loaded = false;
+  }, [open]);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetTrigger
@@ -222,11 +283,11 @@ export function ConversationMessageSheet({
         </span>
       </SheetTrigger>
 
-      <SheetContent className="w-full gap-0 overflow-x-hidden data-[side=right]:w-full sm:max-w-none sm:data-[side=right]:w-[min(84rem,calc(100vw-2rem))]">
+      <SheetContent className="w-full gap-0 overflow-x-hidden data-[side=right]:w-full sm:max-w-none sm:data-[side=right]:w-[min(52rem,calc(100vw-3rem))]">
         <SheetHeader className="border-b pr-12">
           <SheetTitle>Conversa com {conversation.contact.name}</SheetTitle>
           <SheetDescription>
-            {conversation.contact.phone} · mensagens e anexos persistidos pela Tenant API
+            {conversation.contact.phone} · Mensagens e anexos salvos.
           </SheetDescription>
           <Button
             type="button"
@@ -240,7 +301,16 @@ export function ConversationMessageSheet({
           </Button>
         </SheetHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 p-4 sm:p-6">
+        <div
+          ref={historyRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/20 p-4 sm:p-6"
+          onScroll={(event) => {
+            const history = event.currentTarget;
+            previousHistoryRef.current.scrollHeight = history.scrollHeight;
+            previousHistoryRef.current.scrollTop = history.scrollTop;
+            previousHistoryRef.current.clientHeight = history.clientHeight;
+          }}
+        >
           {isLoading && !isLoaded ? (
             <div className="space-y-4" role="status">
               <span className="sr-only">Carregando histórico completo...</span>
@@ -249,14 +319,8 @@ export function ConversationMessageSheet({
               <Skeleton className="h-16 w-1/2 rounded-2xl" />
             </div>
           ) : detailError ? (
-            <div
-              className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
-              role="alert"
-            >
-              <span className="flex items-center gap-2">
-                <AlertCircle aria-hidden="true" />
-                {detailError}
-              </span>
+            <div className="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
+              <p className="text-sm text-muted-foreground">O histórico não pôde ser carregado.</p>
               <Button type="button" variant="outline" size="sm" onClick={onRetry}>
                 Tentar novamente
               </Button>
@@ -315,12 +379,9 @@ export function ConversationMessageSheet({
                               />
                             ) : null}
                             {failedAttempt ? (
-                              <p className="flex items-start gap-1 text-xs text-destructive">
+                              <p className="flex items-start gap-1 text-xs text-destructive-emphasis">
                                 <AlertCircle aria-hidden="true" className="mt-0.5 size-3.5" />
-                                <span>
-                                  {failedAttempt.errorMessage ??
-                                    'Não foi possível enviar esta mensagem. Tente novamente.'}
-                                </span>
+                                <span>Não foi possível enviar esta mensagem. Tente novamente.</span>
                               </p>
                             ) : null}
                           </div>
@@ -363,7 +424,7 @@ export function ConversationMessageSheet({
             <span
               className={
                 canSendMessage
-                  ? 'shrink-0 whitespace-nowrap rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300'
+                  ? 'shrink-0 whitespace-nowrap rounded-full bg-success/10 px-2 py-1 text-[11px] font-semibold text-success-emphasis'
                   : 'shrink-0 whitespace-nowrap rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground'
               }
             >
@@ -442,9 +503,9 @@ export function ConversationMessageSheet({
               aria-live="polite"
               className={
                 feedbackTone === 'error'
-                  ? 'text-sm text-destructive'
+                  ? 'text-sm text-destructive-emphasis'
                   : feedbackTone === 'success'
-                    ? 'text-sm text-emerald-700 dark:text-emerald-300'
+                    ? 'text-sm text-success-emphasis'
                     : 'text-sm text-muted-foreground'
               }
             >

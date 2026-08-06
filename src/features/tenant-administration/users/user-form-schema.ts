@@ -7,7 +7,9 @@ const userAssignmentFields = {
   documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
   departments: z.array(z.string()),
   permissionCodes: z.array(z.string()),
-  jobTitle: z.string().trim().max(120).optional(),
+  jobTitle: z.enum(['Administrativo', 'Geral', 'Motorista'], {
+    error: 'Selecione a classificação do usuário.',
+  }),
   maritalStatus: z
     .enum(['single', 'married', 'stable-union', 'divorced', 'widowed', 'not-informed'])
     .default('not-informed'),

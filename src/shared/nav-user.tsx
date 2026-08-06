@@ -6,6 +6,7 @@ import { ChevronsUpDown, CircleUserRound, LifeBuoy, UserRound } from 'lucide-rea
 import { LogoutButton } from '@/features/auth/components';
 import { hasPermission, type User } from '@/features/auth/domain';
 import { ThemeToggle } from '@/features/navigation/theme-toggle';
+import { AccentColorPicker } from '@/features/navigation/accent-color-preference';
 import { CurrentUserAvatar } from '@/shared/current-user-avatar';
 import {
   DropdownMenu,
@@ -79,7 +80,10 @@ export function NavUser({ user }: { readonly user: User }) {
             <DropdownMenuSeparator />
             <div className="flex items-center justify-between gap-3 px-2 py-1.5 text-sm">
               <span>Tema</span>
-              <ThemeToggle />
+              <span className="flex items-center gap-2">
+                <AccentColorPicker userId={user.id} />
+                <ThemeToggle />
+              </span>
             </div>
             <DropdownMenuSeparator />
             <div className="p-1 [&_form]:w-full [&_button]:w-full [&_button]:justify-start">

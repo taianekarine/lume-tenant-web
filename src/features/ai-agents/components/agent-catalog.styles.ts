@@ -17,9 +17,7 @@ export const agentCatalogStyles = {
     'pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground',
   ),
 
-  input: cva(
-    'h-11 w-full rounded-xl border border-input bg-background pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-blue-600 focus:ring-3 focus:ring-blue-600/15',
-  ),
+  input: cva('h-11 rounded-xl pl-11 pr-4 transition-colors duration-200'),
 
   resultCount: cva('text-sm font-medium text-muted-foreground'),
 
@@ -32,14 +30,14 @@ export const agentCatalogStyles = {
   cardHeading: cva('flex items-start justify-between gap-4'),
 
   cardIcon: cva(
-    'flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700',
+    'flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary-emphasis',
   ),
 
   status: cva(
-    'rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200',
+    'rounded-full bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning-emphasis ring-1 ring-warning/25',
   ),
 
-  category: cva('text-xs font-semibold uppercase tracking-wider text-blue-600'),
+  category: cva('text-xs font-semibold uppercase tracking-wider text-primary-emphasis'),
 
   title: cva('text-lg font-bold text-foreground'),
 
@@ -53,7 +51,7 @@ export const agentCatalogStyles = {
 
   capability: cva('flex items-start gap-2 text-sm leading-6 text-muted-foreground'),
 
-  capabilityIcon: cva('mt-2 size-1.5 shrink-0 rounded-full bg-blue-600'),
+  capabilityIcon: cva('mt-2 size-1.5 shrink-0 rounded-full bg-primary'),
 
   emptyState: cva(
     'mt-6 rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center',

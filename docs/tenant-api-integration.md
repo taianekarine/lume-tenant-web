@@ -280,11 +280,11 @@ criar uma interface incompatível ou uma segunda implementação de conversão.
 
 ## Fila e envio de propostas comerciais
 
-As rotas autenticadas de Orçamentos consomem filas exclusivas da Tenant API.
-`/quote-proposals` redireciona para `/quote-proposals/pending`; as demais listas
-ficam em `/quote-proposals/sent`, `/quote-proposals/approved` e
-`/quote-proposals/cancelled`. Os gráficos e os motivos de cancelamento são
-mostrados no Dashboard Comercial.
+A página autenticada de Orçamentos consome as quatro filas exclusivas da Tenant
+API em `/quote-proposals`. Pendentes, Enviadas, Aprovadas e Canceladas são abas
+selecionáveis por `tab=pending|sent|approved|cancelled`; as URLs antigas são
+mantidas apenas como redirecionamentos de compatibilidade. Os gráficos e os
+motivos de cancelamento são mostrados no Dashboard Comercial.
 O backend seleciona solicitações comerciais em `under-review`; o navegador não
 monta a fila a partir de dados locais e não recebe credenciais da API. O adapter
 server-only `LumeApiQuoteProposalRepository` agrega a paginação, valida o
@@ -296,9 +296,8 @@ primeiros 100 registros. A resposta inclui `summary` com as contagens
 `cancellationReasons`. O dashboard usa esse resumo independente da página e
 não soma apenas os itens visíveis.
 
-A sidebar usa um único ícone na pasta **Orçamentos** para sinalizar que alguma
-subrota possui notificação. Somente **Pendentes** publica a contagem numérica
-autoritativa. Valores internos como `all`, stages e códigos de tipo de serviço
+A sidebar usa um único item **Orçamentos** e publica nele a contagem numérica
+autoritativa de **Pendentes**. Valores internos como `all`, stages e códigos de tipo de serviço
 permanecem no contrato, mas são traduzidos antes de chegar ao atendente.
 
 Cada confirmação aceita de um a cinco PDFs. Cada arquivo mantém limite

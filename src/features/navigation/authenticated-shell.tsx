@@ -19,6 +19,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/shared/ui/sideb
 import { getAuthorizedNavigationItems } from './navigation-items';
 import { CommercialNotificationCenter } from './commercial-notification-center';
 import { ThemeToggle } from './theme-toggle';
+import { AccentColorPreferenceSync } from './accent-color-preference';
 
 export interface AuthenticatedShellProps {
   readonly user: User;
@@ -30,15 +31,10 @@ export function AuthenticatedShell({ user, children }: AuthenticatedShellProps) 
   const currentItem = getAuthorizedNavigationItems(user).find(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
   );
-  const quoteRouteLabel = {
-    '/quote-proposals/pending': 'Orçamentos · Pendentes',
-    '/quote-proposals/sent': 'Orçamentos · Enviadas',
-    '/quote-proposals/approved': 'Orçamentos · Aprovadas',
-    '/quote-proposals/cancelled': 'Orçamentos · Canceladas',
-  }[pathname];
 
   return (
     <CurrentUserProfilePictureProvider key={user.id} userId={user.id}>
+      <AccentColorPreferenceSync userId={user.id} />
       <SidebarProvider>
         <AppSidebar user={user} />
         <SidebarInset className="min-w-0">
@@ -52,7 +48,7 @@ export function AuthenticatedShell({ user, children }: AuthenticatedShellProps) 
                 <BreadcrumbSeparator className="hidden sm:block" />
                 <BreadcrumbItem className="min-w-0">
                   <BreadcrumbPage className="truncate font-semibold">
-                    {quoteRouteLabel ?? currentItem?.label ?? 'Área interna'}
+                    {currentItem?.label ?? 'Área interna'}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>

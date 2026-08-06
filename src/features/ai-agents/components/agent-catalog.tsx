@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Bot, Search } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { Input } from '@/shared/ui/input';
 
 import type { AiAgent } from '../domain';
 import { agentCatalogStyles as styles } from './agent-catalog.styles';
@@ -52,7 +53,7 @@ export function AgentCatalog({ agents }: AgentCatalogProps) {
           </label>
           <div className={styles.inputContainer()}>
             <Search aria-hidden="true" className={styles.searchIcon()} />
-            <input
+            <Input
               id="agent-catalog-search"
               type="search"
               value={searchTerm}

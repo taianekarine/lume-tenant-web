@@ -44,7 +44,7 @@ describe('AiAgentsPage', () => {
   it('presents the protected catalog and marks its navigation item as current', () => {
     render(<AiAgentsPage session={session} />);
 
-    expect(document.querySelector('main.mx-auto')).toHaveClass('py-5', 'sm:py-6');
+    expect(document.querySelector('main div.mx-auto')).toHaveClass('py-5', 'sm:py-6');
     expect(screen.getByRole('heading', { name: 'Agentes de IA' })).toBeInTheDocument();
     expect(screen.getByText('Integração em preparação')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Agentes de IA' })[0]).toHaveAttribute(

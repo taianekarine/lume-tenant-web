@@ -4,10 +4,23 @@ function filesFrom(source: FormData): File[] {
     .filter((entry): entry is File => typeof entry !== 'string' && entry.size > 0);
 }
 
+function namedFilesFrom(source: FormData, name: string): File[] {
+  return source
+    .getAll(name)
+    .filter((entry): entry is File => typeof entry !== 'string' && entry.size > 0);
+}
+
 export function buildDocumentUploadFormData(source: FormData, commandId: string): FormData {
   const upload = new FormData();
-  const files = filesFrom(source);
   const requiresFrontBack = source.get('requiresFrontBack') === 'true';
+  const frontFiles = namedFilesFrom(source, 'frontFiles');
+  const backFiles = namedFilesFrom(source, 'backFiles');
+  const files =
+    requiresFrontBack && (frontFiles.length > 0 || backFiles.length > 0)
+      ? frontFiles.flatMap((front, index) =>
+          backFiles[index] ? [front, backFiles[index]] : [front],
+        )
+      : filesFrom(source);
 
   upload.set('commandId', commandId);
   for (const file of files) upload.append('files', file);

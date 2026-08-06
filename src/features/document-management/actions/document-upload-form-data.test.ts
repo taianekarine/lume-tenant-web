@@ -37,6 +37,25 @@ describe('buildDocumentUploadFormData', () => {
     expect(result.get('pageNumbers')).toBe('1,1,2,2');
   });
 
+  it('intercala seleções individuais de frente e verso', () => {
+    const source = new FormData();
+    source.set('requiresFrontBack', 'true');
+    source.append('frontFiles', file('frente-1.jpg'));
+    source.append('frontFiles', file('frente-2.jpg'));
+    source.append('backFiles', file('verso-1.jpg'));
+    source.append('backFiles', file('verso-2.jpg'));
+
+    const result = buildDocumentUploadFormData(source, 'command-id');
+
+    expect((result.getAll('files') as File[]).map((entry) => entry.name)).toEqual([
+      'frente-1.jpg',
+      'verso-1.jpg',
+      'frente-2.jpg',
+      'verso-2.jpg',
+    ]);
+    expect(result.get('sides')).toBe('front,back,front,back');
+  });
+
   it('numera documentos de vários filhos na ordem selecionada', () => {
     const source = new FormData();
     source.set('requiresFrontBack', 'false');
