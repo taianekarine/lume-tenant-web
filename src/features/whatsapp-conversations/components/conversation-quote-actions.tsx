@@ -9,6 +9,7 @@ import {
 } from '@/features/quote-proposals/actions';
 import { ProposalHistory } from '@/features/quote-proposals/components';
 import type { PendingQuoteProposal } from '@/features/quote-proposals/domain';
+import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import { Button } from '@/shared/ui/button';
 import {
   Dialog,
@@ -106,7 +107,9 @@ export function ConversationQuoteActions({
       setListError('');
       return;
     }
-    setListError(result.message);
+    setListError(
+      userFacingMessage(result.message, 'Não foi possível consultar os orçamentos desta conversa.'),
+    );
   }
 
   function openList() {

@@ -24,6 +24,7 @@ function createRepository(): jest.Mocked<WhatsAppConversationRepository> {
     closeConversationAfterRejection: jest.fn(),
     closeConversation: jest.fn(),
     sendHumanMessage: jest.fn(),
+    downloadMessageContent: jest.fn(),
   };
 }
 

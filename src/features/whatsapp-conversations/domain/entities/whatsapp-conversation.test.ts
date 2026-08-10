@@ -184,14 +184,14 @@ describe('WhatsApp conversation domain', () => {
     ).toBe(true);
   });
 
-  it('still blocks closing while a proposal is in progress', () => {
+  it('allows closing the human session while preserving a proposal in progress', () => {
     const closable = createWhatsAppConversationFixture({
       conversationState: 'sent-to-human',
       requestStatus: 'under-review',
       hasApprovedQuoteRequest: true,
     });
 
-    expect(canCloseWhatsAppConversation(closable)).toBe(false);
+    expect(canCloseWhatsAppConversation(closable)).toBe(true);
   });
 
   it('recognizes a confirmed request awaiting a proposal and after a second contact', () => {

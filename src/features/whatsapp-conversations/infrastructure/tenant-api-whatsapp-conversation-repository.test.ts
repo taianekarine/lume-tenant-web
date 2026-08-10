@@ -285,7 +285,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
         },
         attachment: expect.objectContaining({
           fileName: 'proposta.pdf',
-          url: 'https://files.example.test/proposta.pdf',
+          url: `/api/whatsapp-conversations/${conversationId}/messages/00000000-0000-4000-8000-000000000501/content`,
         }),
         attempts: [
           expect.objectContaining({

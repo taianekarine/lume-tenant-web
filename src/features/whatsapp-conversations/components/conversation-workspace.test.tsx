@@ -494,12 +494,12 @@ describe('ConversationWorkspace', () => {
     expect(messageSheet).not.toHaveClass('sm:max-w-2xl');
   });
 
-  it('mantém o encerramento indisponível enquanto existe proposta em andamento', async () => {
+  it('permite encerrar somente a sessão humana enquanto existe proposta em andamento', async () => {
     const conversation = createWhatsAppConversationFixture({ unreadCount: 0 });
     mockFetchDetail(conversation);
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    expect(screen.getByRole('button', { name: 'Encerrar atendimento' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Encerrar atendimento' })).toBeEnabled();
     expect(mockedForward).not.toHaveBeenCalled();
     expect(mockedMarkAsRead).not.toHaveBeenCalled();
   });
@@ -691,6 +691,17 @@ describe('ConversationWorkspace', () => {
         }),
       ),
     );
+    expect(toastAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        description: 'Não foi possível encerrar o atendimento. Tente novamente.',
+      }),
+    );
+    expect(
+      toastAdd.mock.calls.some(([notification]) =>
+        JSON.stringify(notification).includes('Tenant API'),
+      ),
+    ).toBe(false);
     expect(screen.queryByText('A Tenant API recusou o encerramento.')).not.toBeInTheDocument();
     expect(
       await screen.findByRole('button', { name: 'Confirmar encerramento' }),

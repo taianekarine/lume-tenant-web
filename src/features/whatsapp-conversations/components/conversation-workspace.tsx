@@ -636,7 +636,12 @@ export function ConversationWorkspace({
 
       toast.add({
         title: result.success ? 'Atendimento encerrado' : 'Não foi possível encerrar',
-        description: result.success ? successMessage : result.message,
+        description: result.success
+          ? successMessage
+          : userFacingMessage(
+              result.message,
+              'Não foi possível encerrar o atendimento. Tente novamente.',
+            ),
         type: result.success ? 'success' : 'error',
       });
 

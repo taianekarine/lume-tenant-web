@@ -47,6 +47,12 @@ export interface SendHumanWhatsAppMessageResult {
   readonly message: WhatsAppMessage;
 }
 
+export interface WhatsAppMediaContent {
+  readonly bytes: Uint8Array;
+  readonly fileName: string;
+  readonly mimeType: string;
+}
+
 export interface WhatsAppConversationRepository {
   getConversations(
     filters?: GetWhatsAppConversationsFilters,
@@ -85,4 +91,8 @@ export interface WhatsAppConversationRepository {
     conversationId: string,
     command: SendHumanWhatsAppMessageCommand,
   ): Promise<SendHumanWhatsAppMessageResult>;
+  downloadMessageContent(
+    conversationId: string,
+    messageId: string,
+  ): Promise<WhatsAppMediaContent>;
 }

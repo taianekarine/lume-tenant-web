@@ -33,7 +33,7 @@ mais recente antes de aceitar uma ação.
 - módulos operacionais, como agentes de IA e o Painel WhatsApp.
 
 O frontend não cria usuários por meio do plano de controle e não se comunica
-diretamente com n8n ou `lume-edge-agent`.
+diretamente com automações externas ou `lume-edge-agent`.
 
 O departamento define o escopo estrutural de páginas e filas; a permissão
 individual limita as operações disponíveis dentro desse escopo. O cadastro de
@@ -102,7 +102,7 @@ abertura de documentos quando a Evolution fornece uma URL HTTPS válida. Esses
 conteúdos permanecem no histórico, mas nunca são enviados à IA para leitura.
 O header autenticado também concentra o sino para todos os usuários ativos; a Tenant API
 retorna somente notificações compatíveis com seus departamentos. Não há
-integração direta do navegador com n8n, Redis ou Evolution.
+integração direta do navegador com cache ou Evolution.
 
 No MVP, uma proposta aprovada não impede o atendente de encerrar a conversa,
 desde que não exista outra proposta em coleta, aguardando cliente ou em análise.

@@ -463,6 +463,13 @@ export function QuoteProposalWorkspace(props: QuoteProposalWorkspaceProps) {
             ? `${selectedFiles.length} PDFs registrados para envio. O atendimento será vinculado ao atendente responsável pelo envio.`
             : 'Proposta registrada para envio. O atendimento será vinculado ao atendente responsável pelo envio.',
       });
+
+      // A entrega é concluída de forma assíncrona pela API. Atualizações
+      // rápidas mantêm contadores, abas e listas sincronizados sem exigir F5.
+      void refreshQueue();
+      for (const delay of [400, 1_200, 2_500]) {
+        window.setTimeout(() => void refreshQueue(), delay);
+      }
     });
   }
 

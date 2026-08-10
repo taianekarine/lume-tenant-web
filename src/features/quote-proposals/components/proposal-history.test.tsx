@@ -368,4 +368,127 @@ describe('ProposalHistory', () => {
     expect(within(dialog).getByText('proposta-alternativa.pdf')).toBeInTheDocument();
     expect(within(dialog).getAllByRole('button', { name: 'Visualizar' })).toHaveLength(2);
   });
+
+  it('não expõe integrações ao falhar a consulta dos PDFs', async () => {
+    const source = sentProposal(2);
+    mockedDocumentHistory.mockResolvedValue({
+      success: false,
+      message: 'A Tenant API recebeu HTTP 503 do n8n.',
+    });
+    const user = userEvent.setup();
+    render(
+      <ProposalHistory
+        proposals={[source]}
+        total={1}
+        onCreated={jest.fn()}
+        onDecided={jest.fn()}
+        onError={jest.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Visualizar PDF' }));
+    const dialog = await screen.findByRole('dialog', { name: 'PDFs da solicitação' });
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Não foi possível consultar os PDFs desta solicitação.',
+    );
+    expect(within(dialog).queryByText(/Tenant API|HTTP 503|n8n/i)).not.toBeInTheDocument();
+  });
+
+  it('não expõe integrações ao falhar o cadastro de um orçamento', async () => {
+    const source = sentProposal(2);
+    mockedCreate.mockResolvedValue({
+      success: false,
+      code: 'service-unavailable',
+      message: 'O n8n retornou HTTP 502.',
+    });
+    const user = userEvent.setup();
+    render(
+      <ProposalHistory
+        proposals={[source]}
+        total={1}
+        onCreated={jest.fn()}
+        onDecided={jest.fn()}
+        onError={jest.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Nova proposta' }));
+    const dialog = screen.getByRole('dialog', { name: 'Nova proposta' });
+    await user.click(within(dialog).getByRole('button', { name: 'Cadastrar' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Não foi possível cadastrar o orçamento.',
+    );
+    expect(within(dialog).queryByText(/n8n|HTTP 502/i)).not.toBeInTheDocument();
+  });
+
+  it('não expõe integrações ao falhar o envio de uma proposta', async () => {
+    const source = sentProposal(2);
+    const created = createPendingQuoteProposalFixture({
+      summary: { ...source.summary, sequence: 3 },
+      conversationVersion: 10,
+    });
+    mockedCreate.mockResolvedValue({ success: true, proposal: created });
+    mockedSend.mockResolvedValue({
+      success: false,
+      code: 'service-unavailable',
+      message: 'O provedor Evolution retornou HTTP 503.',
+    });
+    const user = userEvent.setup();
+    render(
+      <ProposalHistory
+        proposals={[source]}
+        total={1}
+        onCreated={jest.fn()}
+        onDecided={jest.fn()}
+        onError={jest.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Nova proposta' }));
+    const dialog = screen.getByRole('dialog', { name: 'Nova proposta' });
+    await user.upload(
+      within(dialog).getByLabelText('PDF da proposta'),
+      new File(['%PDF-1.7\nconteudo\n%%EOF'], 'nova-proposta.pdf', {
+        type: 'application/pdf',
+      }),
+    );
+    expect(await within(dialog).findByText(/PDF validado/)).toBeInTheDocument();
+    const submit = within(dialog).getByRole('button', { name: 'Cadastrar e enviar' });
+    await waitFor(() => expect(submit).toBeEnabled());
+    await user.click(submit);
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Não foi possível enviar a proposta.',
+    );
+    expect(within(dialog).queryByText(/Evolution|HTTP 503/i)).not.toBeInTheDocument();
+  });
+
+  it('não repassa integrações internas ao falhar uma decisão', async () => {
+    const source = sentProposal(2);
+    mockedDecide.mockResolvedValue({
+      success: false,
+      code: 'service-unavailable',
+      message: 'A Tenant API não conseguiu chamar o n8n.',
+    });
+    const onError = jest.fn();
+    const user = userEvent.setup();
+    render(
+      <ProposalHistory
+        proposals={[source]}
+        total={1}
+        onCreated={jest.fn()}
+        onDecided={jest.fn()}
+        onError={onError}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Aprovar' }));
+
+    await waitFor(() =>
+      expect(onError).toHaveBeenCalledWith('Não foi possível registrar a decisão.'),
+    );
+    expect(onError).not.toHaveBeenCalledWith(expect.stringMatching(/Tenant API|n8n/i));
+  });
 });

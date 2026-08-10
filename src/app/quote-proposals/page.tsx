@@ -13,6 +13,7 @@ import {
 } from '@/features/quote-proposals/server';
 import { canReadQuoteProposals } from '@/features/quote-proposals/server/quote-proposal-access';
 import { canManageQuoteProposals } from '@/features/quote-proposals/server/quote-proposal-access';
+import { userFacingMessage } from '@/shared/lib/user-facing-message';
 
 export const metadata: Metadata = {
   title: 'Orçamentos | Lume',
@@ -55,7 +56,9 @@ export default async function Page({
   const errorFor = (index: number, fallback: string): string | null => {
     const result = results[index];
     if (result.status === 'fulfilled') return null;
-    return result.reason instanceof QuoteProposalRepositoryError ? result.reason.message : fallback;
+    return result.reason instanceof QuoteProposalRepositoryError
+      ? userFacingMessage(result.reason.message, fallback)
+      : fallback;
   };
 
   return (

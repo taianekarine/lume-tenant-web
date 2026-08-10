@@ -204,6 +204,12 @@ Em produção, a URL da API deve usar HTTPS e autenticação simulada é sempre
 recusada. O datasource de WhatsApp usa `api` por padrão; `mock` exige ativação
 explícita fora de produção e é recusado quando `NODE_ENV=production`.
 
+`LUME_TENANT_WHATSAPP_DATA_SOURCE` pertence exclusivamente ao Tenant Web e
+seleciona entre o adaptador real da Tenant API (`api`) e os dados locais de teste
+(`mock`). Essa variável não escolhe quem processa os eventos do WhatsApp. A
+automação é executada pela própria Tenant API, e o Tenant Web permanece
+configurado com `api` sem conhecer consumidores internos.
+
 ## Ações e limites reais do contrato WhatsApp
 
 A Tenant API publica cinco comandos de estado do painel — assumir, devolver ao
@@ -263,7 +269,7 @@ possui limite de 84 rem, o dobro do limite anterior de 42 rem, sem rolagem
 horizontal. Todas essas escritas usam Server Actions: o
 navegador não recebe credenciais e não chama o provedor.
 
-O frontend nunca contorna essas ausências chamando n8n, Redis, Evolution,
+O frontend nunca contorna essas ausências chamando cache, Evolution,
 `lume-edge-agent` ou `lume-control` diretamente.
 
 ## Contrato futuro de arquivos, importação e exportação

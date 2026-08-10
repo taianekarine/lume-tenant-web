@@ -6,6 +6,7 @@ import {
   type SendHumanWhatsAppMessageCommand,
   type SendHumanWhatsAppMessageResult,
   type WhatsAppConversationRepository,
+  type WhatsAppMediaContent,
 } from '../../application';
 import type { WhatsAppConversation, WhatsAppConversationDepartment } from '../../domain';
 import { INITIAL_MOCK_WHATSAPP_CONVERSATIONS } from './mock-whatsapp-conversations';
@@ -144,11 +145,11 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
     }
 
     return updateConversation(conversationId, expectedVersion, {
-      conversationState: 'closed',
-      flowStep: 'closed',
+      conversationState: 'bot-active',
+      flowStep: 'main-menu',
       assignedTo: null,
       unreadCount: 0,
-      closedAt: new Date().toISOString(),
+      closedAt: null,
     });
   }
 
@@ -158,16 +159,6 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
     reason?: string | null,
   ): Promise<WhatsAppConversation> {
     const current = mockConversations[getConversationIndex(conversationId)];
-    if (
-      ['collecting-information', 'waiting-for-customer', 'under-review'].includes(
-        current.requestStatus,
-      )
-    ) {
-      throw new WhatsAppConversationRepositoryError(
-        'conflict',
-        'A conversa possui uma solicitação de orçamento em andamento.',
-      );
-    }
     if (current.requestStatus === 'rejected' && !reason?.trim()) {
       throw new WhatsAppConversationRepositoryError(
         'validation',
@@ -176,11 +167,11 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
     }
 
     return updateConversation(conversationId, expectedVersion, {
-      conversationState: 'closed',
-      flowStep: 'closed',
+      conversationState: 'bot-active',
+      flowStep: 'main-menu',
       assignedTo: null,
       unreadCount: 0,
-      closedAt: new Date().toISOString(),
+      closedAt: null,
     });
   }
 
@@ -218,6 +209,13 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
     });
 
     return { conversation, message };
+  }
+
+  async downloadMessageContent(): Promise<WhatsAppMediaContent> {
+    throw new WhatsAppConversationRepositoryError(
+      'not-found',
+      'O arquivo não está disponível nos dados de demonstração.',
+    );
   }
 }
 

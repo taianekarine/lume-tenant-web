@@ -261,13 +261,16 @@ function mapQuoteRequest(
   };
 }
 
-function mapAttachment(media: ApiMessage['media']): WhatsAppMessageAttachment | null {
-  if (media === null) return null;
+function mapAttachment(message: ApiMessage): WhatsAppMessageAttachment | null {
+  if (message.kind === 'text') return null;
+
+  const media = message.media ?? {};
+  const secureUrl = `/api/whatsapp-conversations/${encodeURIComponent(message.conversationId)}/messages/${encodeURIComponent(message.id)}/content`;
 
   return {
     mimeType: typeof media.mimeType === 'string' ? media.mimeType : null,
     size: typeof media.size === 'number' ? media.size : null,
-    url: typeof media.url === 'string' ? media.url : null,
+    url: secureUrl,
     fileName: typeof media.fileName === 'string' ? media.fileName : null,
     metadata: media,
   };
@@ -280,7 +283,7 @@ function mapMessage(message: ApiMessage): WhatsAppMessage {
     deliveryStatus: message.deliveryStatus,
     kind: message.kind,
     text: message.text,
-    attachment: mapAttachment(message.media),
+    attachment: mapAttachment(message),
     sentBy: message.sentBy ?? null,
     occurredAt: message.occurredAt,
     attempts: message.attempts,
@@ -451,6 +454,59 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
     ]);
 
     return mapConversation(conversation, messages, transitions);
+  }
+
+  async downloadMessageContent(
+    conversationId: string,
+    messageId: string,
+  ): Promise<{
+    readonly bytes: Uint8Array;
+    readonly fileName: string;
+    readonly mimeType: string;
+  }> {
+    let response: Response;
+    try {
+      response = await this.fetcher(
+        `${this.baseUrl}/whatsapp/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/content`,
+        {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+            Accept: '*/*',
+            Authorization: `Bearer ${this.accessToken}`,
+          },
+          signal: AbortSignal.timeout(Math.max(this.timeoutMs, 35_000)),
+        },
+      );
+    } catch {
+      throw new WhatsAppConversationRepositoryError(
+        'service-unavailable',
+        'Não foi possível carregar a mídia desta conversa.',
+      );
+    }
+
+    if (!response.ok) {
+      throw new WhatsAppConversationRepositoryError(
+        responseStatusToErrorCode(response.status),
+        'Não foi possível carregar a mídia desta conversa.',
+      );
+    }
+
+    const encodedFileName = response.headers.get('x-whatsapp-media-filename');
+    let fileName = 'midia-whatsapp';
+    if (encodedFileName) {
+      try {
+        fileName = decodeURIComponent(encodedFileName);
+      } catch {
+        fileName = 'midia-whatsapp';
+      }
+    }
+
+    return {
+      bytes: new Uint8Array(await response.arrayBuffer()),
+      fileName,
+      mimeType: response.headers.get('content-type') ?? 'application/octet-stream',
+    };
   }
 
   async takeOverConversation(

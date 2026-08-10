@@ -19,6 +19,7 @@ import {
   isValidCivilDate,
   splitBrazilianDateTime,
 } from '@/shared/lib/civil-date-time';
+import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Checkbox } from '@/shared/ui/checkbox';
@@ -339,7 +340,9 @@ export function ProposalHistory({
     if (result.success) {
       setDocumentHistory(result.documents);
     } else {
-      setDocumentHistoryError(result.message);
+      setDocumentHistoryError(
+        userFacingMessage(result.message, 'Não foi possível consultar os PDFs desta solicitação.'),
+      );
     }
     setIsLoadingDocumentHistory(false);
   }
@@ -376,7 +379,9 @@ export function ProposalHistory({
           notes: values.notes || null,
         });
         if (!result.success) {
-          setNewProposalError(result.message);
+          setNewProposalError(
+            userFacingMessage(result.message, 'Não foi possível cadastrar o orçamento.'),
+          );
           return;
         }
         createdProposal = result.proposal;
@@ -432,7 +437,9 @@ export function ProposalHistory({
           );
         }
         onCreated(queuedProposal);
-        setNewProposalError(sendResult.message);
+        setNewProposalError(
+          userFacingMessage(sendResult.message, 'Não foi possível enviar a proposta.'),
+        );
         return;
       }
 
@@ -459,7 +466,7 @@ export function ProposalHistory({
         reason,
       });
       if (!result.success) {
-        onError(result.message);
+        onError(userFacingMessage(result.message, 'Não foi possível registrar a decisão.'));
         return;
       }
       setRejectedProposal(null);

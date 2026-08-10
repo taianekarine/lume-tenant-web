@@ -168,7 +168,7 @@ describe('loginAction', () => {
           password: user.password,
           remember: false,
         }),
-      ).rejects.toThrow('NEXT_REDIRECT');
+      ).resolves.toEqual({ success: true, destination: '/dashboard' });
 
       const savedSession = jest.mocked(sessionStorage.save).mock.calls[0]?.[0];
 
@@ -192,7 +192,7 @@ describe('loginAction', () => {
       expect(JSON.stringify(savedSession)).not.toContain(user.password);
       expect(apiTokenStorage.remove).toHaveBeenCalledTimes(1);
       expect(authenticationGateway.authenticate).not.toHaveBeenCalled();
-      expect(mockedRedirect).toHaveBeenCalledWith('/dashboard');
+      expect(mockedRedirect).not.toHaveBeenCalled();
     },
   );
 
@@ -282,7 +282,7 @@ describe('loginAction', () => {
         password: 'SenhaForte@2026',
         remember: true,
       }),
-    ).rejects.toThrow('NEXT_REDIRECT');
+    ).resolves.toEqual({ success: true, destination: '/dashboard' });
 
     expect(authenticationGateway.authenticate).toHaveBeenCalledWith({
       identifier: 'administrador.api',
@@ -292,7 +292,7 @@ describe('loginAction', () => {
     expect(sessionStorage.save).toHaveBeenCalledWith(apiSession);
     expect(apiTokenStorage.save).toHaveBeenCalledWith(apiTokens);
     expect(apiTokenStorage.remove).not.toHaveBeenCalled();
-    expect(mockedRedirect).toHaveBeenCalledWith('/dashboard');
+    expect(mockedRedirect).not.toHaveBeenCalled();
   });
 
   it('uses the API when the simulation flag is absent', async () => {
@@ -304,7 +304,7 @@ describe('loginAction', () => {
         password: 'SenhaForte@2026',
         remember: false,
       }),
-    ).rejects.toThrow('NEXT_REDIRECT');
+    ).resolves.toEqual({ success: true, destination: '/dashboard' });
 
     expect(authenticationGateway.authenticate).toHaveBeenCalledTimes(1);
   });

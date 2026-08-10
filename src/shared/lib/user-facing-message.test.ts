@@ -6,6 +6,7 @@ describe('userFacingMessage', () => {
   it.each([
     'Tenant API indisponível.',
     'A resposta da API retornou HTTP 500.',
+    'O n8n retornou uma falha.',
     'Evolution não respondeu.',
     'Falha no provedor configurado.',
     'Código do erro: SERVICE_UNAVAILABLE',

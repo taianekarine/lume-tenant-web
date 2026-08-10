@@ -1,0 +1,108 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+
+import type { WhatsAppMessage, WhatsAppMessageKind } from '../domain';
+import { createWhatsAppConversationFixture } from '../testing/whatsapp-conversation-fixture';
+import { ConversationMessageSheet } from './conversation-message-sheet';
+
+const conversationId = '00000000-0000-4000-8000-000000000101';
+
+function mediaMessage(
+  id: string,
+  kind: Exclude<WhatsAppMessageKind, 'text'>,
+  mimeType: string,
+  fileName: string,
+): WhatsAppMessage {
+  return {
+    id,
+    direction: 'inbound',
+    deliveryStatus: 'received',
+    kind,
+    text: null,
+    attachment: {
+      mimeType,
+      size: 2_048,
+      url: `/api/whatsapp-conversations/${conversationId}/messages/${id}/content`,
+      fileName,
+      metadata: {},
+    },
+    sentBy: null,
+    occurredAt: '2026-08-06T12:00:00.000Z',
+    attempts: [],
+  };
+}
+
+function renderSheet() {
+  const messages: readonly WhatsAppMessage[] = [
+    {
+      id: '00000000-0000-4000-8000-000000000510',
+      direction: 'inbound',
+      deliveryStatus: 'received',
+      kind: 'text',
+      text: 'Mensagem de texto legível.',
+      attachment: null,
+      sentBy: null,
+      occurredAt: '2026-08-06T11:59:00.000Z',
+      attempts: [],
+    },
+    mediaMessage('00000000-0000-4000-8000-000000000511', 'image', 'image/jpeg', 'foto.jpg'),
+    mediaMessage('00000000-0000-4000-8000-000000000512', 'audio', 'audio/mp4', 'audio.m4a'),
+    mediaMessage('00000000-0000-4000-8000-000000000513', 'video', 'video/mp4', 'video.mp4'),
+    mediaMessage('00000000-0000-4000-8000-000000000514', 'sticker', 'image/webp', 'figurinha.webp'),
+    mediaMessage(
+      '00000000-0000-4000-8000-000000000515',
+      'document',
+      'application/pdf',
+      'proposta.pdf.enc',
+    ),
+  ];
+
+  render(
+    <ConversationMessageSheet
+      conversation={createWhatsAppConversationFixture({ id: conversationId, messages })}
+      open
+      onOpenChange={jest.fn()}
+      isLoading={false}
+      isLoaded
+      detailError=""
+      onRetry={jest.fn()}
+      onRefresh={jest.fn()}
+      messageDraft=""
+      onMessageDraftChange={jest.fn()}
+      canSendMessage={false}
+      canTakeOver={false}
+      isTakingOver={false}
+      onTakeOver={jest.fn()}
+      isSendingMessage={false}
+      onSendMessage={jest.fn()}
+      feedbackMessage=""
+      feedbackTone="neutral"
+    />,
+  );
+}
+
+describe('pré-visualização de mídias no chat', () => {
+  it('renderiza texto, imagem, áudio, vídeo, figurinha e PDF com nomes claros', () => {
+    renderSheet();
+
+    expect(screen.getByText('Mensagem de texto legível.')).toBeInTheDocument();
+    expect(screen.getByAltText('foto.jpg')).toBeInTheDocument();
+    expect(screen.getByLabelText('audio.m4a')).toBeInTheDocument();
+    expect(screen.getByLabelText('video.mp4')).toBeInTheDocument();
+    expect(screen.getByAltText('Figurinha recebida')).toBeInTheDocument();
+    expect(screen.getByText('proposta.pdf')).toBeInTheDocument();
+    expect(screen.getByText(/Documento PDF/)).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Baixar' })).toHaveLength(5);
+    expect(document.body).not.toHaveTextContent('.enc');
+    expect(document.body).not.toHaveTextContent('[vídeo]');
+    expect(document.body).not.toHaveTextContent('[documento]');
+  });
+
+  it('informa claramente quando uma mídia histórica não pode mais ser carregada', () => {
+    renderSheet();
+
+    fireEvent.error(screen.getByAltText('foto.jpg'));
+
+    expect(screen.getByText(/arquivo não está mais disponível/i)).toBeInTheDocument();
+    expect(screen.queryByAltText('foto.jpg')).not.toBeInTheDocument();
+  });
+});

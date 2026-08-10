@@ -50,7 +50,7 @@ produção e é recusado em `production`.
 O painel envia `expectedVersion` em toda escrita e nunca calcula estados de
 destino. A matriz e o isolamento por `companyId` permanecem sob autoridade da
 Tenant API. Em conflito 409, o frontend recarrega a conversa antes de permitir
-uma nova tentativa. O frontend nunca chama n8n, Redis, Evolution ou o edge
+uma nova tentativa. O frontend nunca chama cache, Evolution ou o edge
 diretamente.
 
 ## Shell, tema e estados de carregamento
@@ -169,7 +169,7 @@ painel gera um `batchId` técnico e a Server Action envia, em todos os comandos,
 a mesma lista ordenada `batchDocumentIds` obtida após os uploads. A Tenant API
 valida e congela exatamente esses documentos; uploads órfãos ou concorrentes
 não entram no lote. O navegador não decide se o lote terminou. Upload e
-confirmação passam por Server Actions: o navegador nunca chama n8n ou Evolution
+confirmação passam por Server Actions: o navegador nunca chama Evolution
 e nunca decide o próximo estado da conversa. Um PDF persistido pode ser
 reutilizado após falha do envio; `batchId`, `batchDocumentIds` e `commandId`
 permanecem estáveis durante a mesma tentativa lógica. A atribuição automática ao atendente que enviou a

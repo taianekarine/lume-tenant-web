@@ -119,3 +119,12 @@ export function sendHumanWhatsAppMessageForDashboard(
     sendHumanWhatsAppMessage(repository, conversationId, command),
   );
 }
+
+export function downloadWhatsAppMessageContentForDashboard(
+  conversationId: string,
+  messageId: string,
+) {
+  return executeAuthenticatedWhatsAppRequest((repository) =>
+    repository.downloadMessageContent(conversationId, messageId),
+  );
+}

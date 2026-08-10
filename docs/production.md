@@ -2,7 +2,7 @@
 
 O Tenant Web é um frontend server-side do tenant. Ele acessa somente a
 `LUME_TENANT_API_URL`; navegador, Route Handlers e Server Actions nunca chamam
-n8n, Evolution, Control ou Edge diretamente.
+automações externas, Evolution, Control ou Edge diretamente.
 
 ## Artefato
 

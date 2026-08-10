@@ -2,6 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
@@ -22,6 +23,7 @@ import { loginSchema, type LoginFormData } from '../lib/login-schema';
 import { loginPageStyles } from './login-page.styles';
 
 export function LoginPage({ passwordChanged = false }: { readonly passwordChanged?: boolean }) {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<LoginActionFailure | null>(null);
   const [passwordSetupChallenge, setPasswordSetupChallenge] =
@@ -57,6 +59,12 @@ export function LoginPage({ passwordChanged = false }: { readonly passwordChange
         password: values.password,
         remember: values.remember,
       });
+
+      if (result.success) {
+        router.replace(result.destination);
+        router.refresh();
+        return;
+      }
 
       const setupChallenge = result.passwordSetupChallenge ?? null;
       setPasswordSetupChallenge(setupChallenge);

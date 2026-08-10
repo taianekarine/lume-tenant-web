@@ -1,7 +1,5 @@
 'use server';
 
-import { redirect } from 'next/navigation';
-
 import {
   AuthenticationGatewayError,
   saveAuthenticatedSession,
@@ -30,7 +28,12 @@ export type LoginActionFailure = AuthFailureFeedback & {
   readonly passwordSetupChallenge?: PasswordSetupChallenge;
 };
 
-export type LoginActionResult = LoginActionFailure;
+export type LoginActionSuccess = {
+  readonly success: true;
+  readonly destination: '/dashboard' | '/documents';
+};
+
+export type LoginActionResult = LoginActionFailure | LoginActionSuccess;
 
 const INVALID_CREDENTIALS_MESSAGE =
   'Usuário ou senha inválidos. Se o problema persistir, contate o administrador.';
@@ -172,7 +175,13 @@ export async function loginAction(input: unknown): Promise<LoginActionResult> {
     };
   }
 
-  redirect(session.user.documentAccessMode === 'document-portal' ? '/documents' : '/dashboard');
+  return {
+    success: true,
+    destination:
+      session.user.documentAccessMode === 'document-portal'
+        ? '/documents'
+        : '/dashboard',
+  };
 }
 
 export async function completePasswordChangeAction(input: {

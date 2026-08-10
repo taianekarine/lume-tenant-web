@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { completePasswordChangeAction, loginAction } from '../actions/login-action';
@@ -30,6 +30,7 @@ jest.mock('next/navigation', () => ({
 
 describe('LoginPage', () => {
   beforeEach(() => {
+    toastAdd.mockReset();
     mockedLoginAction.mockResolvedValue({
       success: false,
       message: 'Login simulado indisponível.',
@@ -171,9 +172,28 @@ describe('LoginPage', () => {
       remember: true,
     });
 
-    expect(toastAdd).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'error', description: 'Login simulado indisponível.' }),
+    await waitFor(() =>
+      expect(toastAdd).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'error', description: 'Login simulado indisponível.' }),
+      ),
     );
+  });
+
+  it('navega após o login concluído sem exibir um falso erro de acesso', async () => {
+    const user = userEvent.setup();
+    mockedLoginAction.mockResolvedValue({
+      success: true,
+      destination: '/dashboard',
+    });
+    render(<LoginPage />);
+
+    await user.type(screen.getByLabelText('Usuário ou e-mail'), 'taiane.karine');
+    await user.type(screen.getByLabelText('Senha'), 'SenhaForte@2026');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+
+    expect(replace).toHaveBeenCalledWith('/dashboard');
+    expect(refresh).toHaveBeenCalled();
+    expect(toastAdd).not.toHaveBeenCalled();
   });
 
   it('opens the first-access dialog and changes the password without creating a session', async () => {

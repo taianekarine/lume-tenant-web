@@ -8,6 +8,8 @@ import {
   type Permission,
 } from '@/features/auth/domain';
 import { getCurrentAuthenticatedSession } from '@/features/auth/server';
+import { QuoteProposalRepositoryError } from '@/features/quote-proposals/application';
+import { getPendingQuoteProposalsForDashboard } from '@/features/quote-proposals/server';
 
 import Page from './page';
 
@@ -26,6 +28,7 @@ jest.mock('@/features/quote-proposals/server', () => ({
 
 const mockedSession = jest.mocked(getCurrentAuthenticatedSession);
 const mockedRedirect = jest.mocked(redirect);
+const mockedPending = jest.mocked(getPendingQuoteProposalsForDashboard);
 
 function createSession(
   permissions: readonly Permission[],
@@ -89,5 +92,20 @@ describe('quote proposals parent route', () => {
     expect(result.props.initialTab).toBe('approved');
     expect(result.props.pendingTotal).toBe(2);
     expect(mockedRedirect).not.toHaveBeenCalled();
+  });
+
+  it('não entrega detalhes técnicos à fila quando a consulta falha', async () => {
+    mockedSession.mockResolvedValue(createSession(['whatsapp-conversations:manage']));
+    mockedPending.mockRejectedValueOnce(
+      new QuoteProposalRepositoryError(
+        'service-unavailable',
+        'A Tenant API recebeu HTTP 503 do n8n.',
+      ),
+    );
+
+    const result = await Page({ searchParams: Promise.resolve({}) });
+
+    expect(result.props.errors.pending).toBe('Não foi possível carregar os orçamentos pendentes.');
+    expect(result.props.errors.pending).not.toMatch(/Tenant API|HTTP 503|n8n/i);
   });
 });

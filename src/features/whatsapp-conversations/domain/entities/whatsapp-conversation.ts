@@ -296,30 +296,6 @@ export function canCloseWhatsAppConversationAfterRejection(
   return conversation.conversationState !== 'closed' && conversation.requestStatus === 'rejected';
 }
 
-/**
- * Política reservada para uma etapa posterior do produto.
- *
- * No MVP, uma proposta aprovada não impede o encerramento manual. A Tenant API
- * continua sendo a autoridade final e pode recusar o comando por outra regra
- * de negócio. Manter a chave explícita evita perder a política já desenhada e
- * permite reativá-la junto com o contrato autoritativo do backend.
- */
-export const BLOCK_APPROVED_QUOTE_CONVERSATION_CLOSE = false;
-
-function isBlockedByApprovedQuote(conversation: WhatsAppConversation): boolean {
-  if (!BLOCK_APPROVED_QUOTE_CONVERSATION_CLOSE) {
-    return false;
-  }
-
-  return conversation.hasApprovedQuoteRequest === true;
-}
-
 export function canCloseWhatsAppConversation(conversation: WhatsAppConversation): boolean {
-  return (
-    conversation.conversationState !== 'closed' &&
-    !isBlockedByApprovedQuote(conversation) &&
-    !['collecting-information', 'waiting-for-customer', 'under-review'].includes(
-      conversation.requestStatus,
-    )
-  );
+  return conversation.conversationState !== 'closed';
 }

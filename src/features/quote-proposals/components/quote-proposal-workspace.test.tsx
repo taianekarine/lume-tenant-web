@@ -134,6 +134,7 @@ describe('QuoteProposalWorkspace', () => {
     ]);
     expect(await screen.findByText(/Proposta registrada para envio/)).toBeInTheDocument();
     expect(screen.getByText('Envio em processamento pelo WhatsApp.')).toBeInTheDocument();
+    await waitFor(() => expect(mockedRefreshQueue).toHaveBeenCalled());
   });
 
   it('rejects a forged file and keeps the send action disabled', async () => {
