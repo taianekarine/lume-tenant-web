@@ -144,6 +144,7 @@ export const TENANT_DEPARTMENTS = [
   'maintenance',
   'monitoring',
   'operations',
+  'information-technology',
 ] as const;
 
 export const TENANT_DEPARTMENT_LABELS: Readonly<Record<string, string>> = {
@@ -160,7 +161,7 @@ export const TENANT_DEPARTMENT_LABELS: Readonly<Record<string, string>> = {
   'human-resources': 'Recursos Humanos',
   controlling: 'Controladoria',
   cleaning: 'Limpeza',
-  'information-technology': 'Tecnologia da Informação',
+  'information-technology': 'Tecnologia da Informação (TI)',
 };
 
 export function getTenantDepartmentLabel(department: string): string {

@@ -1276,6 +1276,7 @@ export function UsersManagement({
   canCreate,
   canEdit,
   canManageAccess,
+  canManageLifecycle = canManageAccess,
   filters = {},
 }: {
   readonly users: TenantUserList;
@@ -1283,6 +1284,7 @@ export function UsersManagement({
   readonly canCreate: boolean;
   readonly canEdit: boolean;
   readonly canManageAccess: boolean;
+  readonly canManageLifecycle?: boolean;
   readonly filters?: UserListFilters;
 }) {
   const hasFilters = Boolean(
@@ -1414,10 +1416,10 @@ export function UsersManagement({
                                 ? 'Editar dados e acessos'
                                 : 'Editar dados documentais'}
                             </Button>
-                            {canManageAccess ? <PasswordResetButton userId={user.id} /> : null}
+                            {canManageLifecycle ? <PasswordResetButton userId={user.id} /> : null}
                           </>
                         ) : null}
-                        {canManageAccess ? <UserStatusActions user={user} /> : null}
+                        {canManageLifecycle ? <UserStatusActions user={user} /> : null}
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">Somente consulta</span>

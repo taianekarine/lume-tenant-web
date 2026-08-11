@@ -324,6 +324,50 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     );
   });
 
+  it('maps an oversized retained message without exposing a broken content URL', async () => {
+    const oversizedVideo = apiMessage({
+      direction: 'inbound',
+      deliveryStatus: 'received',
+      kind: 'video',
+      text: null,
+      media: {
+        mimeType: 'video/mp4',
+        size: 52_428_801,
+        fileName: 'video-grande.mp4',
+        retentionStatus: 'too-large',
+      },
+      attempts: [],
+    });
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(apiConversation()))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [oversizedVideo],
+          meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [],
+          meta: { page: 1, pageSize: 100, total: 0, totalPages: 0 },
+        }),
+      );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'https://tenant.example/api/v1',
+      'token',
+      fetcher,
+    );
+
+    const conversation = await repository.getConversationById(conversationId);
+
+    expect(conversation?.messages[0]?.attachment).toMatchObject({
+      fileName: 'video-grande.mp4',
+      retentionStatus: 'too-large',
+      url: null,
+    });
+  });
+
   it('does not expose internal dispatch claims or transition persistence fields', async () => {
     const message = apiMessage();
     const transition = apiTransition();

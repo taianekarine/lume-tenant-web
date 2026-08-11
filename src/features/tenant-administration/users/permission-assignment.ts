@@ -27,6 +27,7 @@ const RELATED_PERMISSION_RESOURCES: Readonly<Record<string, readonly string[]>> 
     'trips',
     'service-requests',
   ],
+  'information-technology': ['users', 'ai-agents', 'manuals', 'reports', 'settings'],
 };
 
 export function permissionResource(permission: string): string {

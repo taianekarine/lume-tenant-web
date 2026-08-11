@@ -157,13 +157,17 @@ function MessageAttachmentPreview({
   const details = `${formatLabel} · ${formatFileSize(attachment.size)}`;
 
   if (!attachment.url || contentUnavailable) {
+    const unavailableReason =
+      attachment.retentionStatus === 'too-large'
+        ? 'arquivo acima do limite permitido'
+        : 'arquivo não está mais disponível';
     return (
       <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
         <Paperclip aria-hidden="true" className="size-4 shrink-0" />
         <span className="min-w-0 flex-1">
           <strong className="block truncate text-xs">{label}</strong>
           <small className="block text-muted-foreground">
-            {details} · arquivo não está mais disponível
+            {details} · {unavailableReason}
           </small>
         </span>
       </div>

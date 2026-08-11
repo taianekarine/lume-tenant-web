@@ -12,6 +12,7 @@ export const DEPARTMENTS = [
   'maintenance',
   'monitoring',
   'operations',
+  'information-technology',
 ] as const;
 
 export type Department = string;

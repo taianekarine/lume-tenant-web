@@ -42,7 +42,9 @@ export async function requirePeopleOperationsTenantSession(
   if (
     session.user.type !== 'employee' ||
     !session.user.departments.some((department) =>
-      ['management', 'personnel-department', 'human-resources'].includes(department),
+      ['management', 'personnel-department', 'human-resources', 'information-technology'].includes(
+        department,
+      ),
     )
   ) {
     redirect('/dashboard');

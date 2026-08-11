@@ -5,7 +5,7 @@ import {
 } from './tenant-administration';
 
 describe('tenant department catalog', () => {
-  it('exposes only the nine assignable departments with PT-BR labels', () => {
+  it('exposes all assignable departments with PT-BR labels', () => {
     expect(TENANT_DEPARTMENTS).toEqual([
       'commercial',
       'purchasing',
@@ -16,6 +16,7 @@ describe('tenant department catalog', () => {
       'maintenance',
       'monitoring',
       'operations',
+      'information-technology',
     ]);
     expect(TENANT_DEPARTMENTS.map((department) => TENANT_DEPARTMENT_LABELS[department])).toEqual([
       'Comercial',
@@ -27,6 +28,7 @@ describe('tenant department catalog', () => {
       'Manutenção',
       'Monitoramento',
       'Operacional',
+      'Tecnologia da Informação (TI)',
     ]);
   });
 

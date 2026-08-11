@@ -265,13 +265,21 @@ function mapAttachment(message: ApiMessage): WhatsAppMessageAttachment | null {
   if (message.kind === 'text') return null;
 
   const media = message.media ?? {};
+  const retentionStatus =
+    media.retentionStatus === 'pending' ||
+    media.retentionStatus === 'stored' ||
+    media.retentionStatus === 'unavailable' ||
+    media.retentionStatus === 'too-large'
+      ? media.retentionStatus
+      : null;
   const secureUrl = `/api/whatsapp-conversations/${encodeURIComponent(message.conversationId)}/messages/${encodeURIComponent(message.id)}/content`;
 
   return {
     mimeType: typeof media.mimeType === 'string' ? media.mimeType : null,
     size: typeof media.size === 'number' ? media.size : null,
-    url: secureUrl,
+    url: retentionStatus === 'unavailable' || retentionStatus === 'too-large' ? null : secureUrl,
     fileName: typeof media.fileName === 'string' ? media.fileName : null,
+    retentionStatus,
     metadata: media,
   };
 }

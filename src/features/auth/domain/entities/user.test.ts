@@ -28,6 +28,7 @@ describe('user authorization contracts', () => {
       'maintenance',
       'monitoring',
       'operations',
+      'information-technology',
     ]);
   });
 

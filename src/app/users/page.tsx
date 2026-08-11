@@ -1,5 +1,9 @@
 import { AuthenticatedShell } from '@/features/navigation';
-import { type UserListFilters, UsersManagement } from '@/features/tenant-administration/users';
+import {
+  type UserListFilters,
+  UsersManagement,
+  withoutLicenseManagement,
+} from '@/features/tenant-administration/users';
 import type {
   PermissionCatalog,
   TenantUserList,
@@ -51,15 +55,22 @@ export default async function UsersRoute({
     status,
   };
   const page = Math.max(1, Number.parseInt(query.page ?? '1', 10) || 1);
+  const canManageAccess =
+    session.user.isAdministrator === true ||
+    (session.user.type === 'employee' &&
+      session.user.departments.includes('information-technology'));
 
   try {
-    if (session.user.isAdministrator) {
+    if (canManageAccess) {
       [users, permissionCatalog] = await executeAuthenticatedTenantRequest((gateway) =>
         Promise.all([
           gateway.listUsers({ ...filters, page, pageSize: 20 }),
           gateway.listPermissions(),
         ]),
       );
+      if (!session.user.isAdministrator) {
+        permissionCatalog = withoutLicenseManagement(permissionCatalog);
+      }
     } else {
       users = await executeAuthenticatedTenantRequest((gateway) =>
         gateway.listUsers({ ...filters, page, pageSize: 20 }),
@@ -82,7 +93,8 @@ export default async function UsersRoute({
             session.user.permissions.includes('users:create') ||
             session.user.permissions.includes('users:update')
           }
-          canManageAccess={session.user.isAdministrator === true}
+          canManageAccess={canManageAccess}
+          canManageLifecycle={canManageAccess}
           filters={filters}
         />
       </div>

@@ -147,6 +147,24 @@ describe('users management permissions', () => {
     expect(screen.queryByRole('button', { name: 'Recuperar senha' })).not.toBeInTheDocument();
   });
 
+  it('keeps access editing available when lifecycle management is restricted', () => {
+    render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate
+        canEdit
+        canManageAccess
+        canManageLifecycle={false}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Editar dados e acessos' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Recuperar senha' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Desativar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Suspender' })).not.toBeInTheDocument();
+  });
+
   it('limits people operations to editing documentary data', () => {
     render(
       <UsersManagement

@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { TenantAdministrationError } from '@/features/tenant-administration/application';
 import type { PermissionCatalog, TenantUser } from '@/features/tenant-administration/domain';
-import { UserEditorForm } from '@/features/tenant-administration/users';
+import { UserEditorForm, withoutLicenseManagement } from '@/features/tenant-administration/users';
 import {
   executeAuthenticatedTenantRequest,
   requirePeopleOperationsTenantSession,
@@ -31,12 +31,19 @@ export default async function UserEditorRoute({
     permissionsByDepartment: {},
     implicitPermissions: [],
   };
+  const canManageAccess =
+    session.user.isAdministrator === true ||
+    (session.user.type === 'employee' &&
+      session.user.departments.includes('information-technology'));
 
   try {
-    if (session.user.isAdministrator) {
+    if (canManageAccess) {
       [user, permissionCatalog] = await executeAuthenticatedTenantRequest((gateway) =>
         Promise.all([gateway.getUser(userId), gateway.listPermissions()]),
       );
+      if (!session.user.isAdministrator) {
+        permissionCatalog = withoutLicenseManagement(permissionCatalog);
+      }
     } else {
       user = await executeAuthenticatedTenantRequest((gateway) => gateway.getUser(userId));
     }
@@ -55,7 +62,7 @@ export default async function UserEditorRoute({
           <p className="text-sm font-medium text-primary-emphasis">Administração local</p>
           <h1 className="text-3xl font-bold tracking-tight">Editar {user.name}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            {session.user.isAdministrator
+            {canManageAccess
               ? 'Revise os dados, departamentos e permissões individuais.'
               : 'Revise os dados pessoais e o perfil usado nas exigências documentais.'}
           </p>
@@ -64,7 +71,7 @@ export default async function UserEditorRoute({
         <UserEditorForm
           user={user}
           permissionCatalog={permissionCatalog}
-          canManageAccess={session.user.isAdministrator === true}
+          canManageAccess={canManageAccess}
         />
       </div>
     </AuthenticatedShell>

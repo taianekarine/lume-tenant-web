@@ -31,6 +31,25 @@ function mediaMessage(
   };
 }
 
+function oversizedVideoMessage(): WhatsAppMessage {
+  return {
+    ...mediaMessage(
+      '00000000-0000-4000-8000-000000000516',
+      'video',
+      'video/mp4',
+      'video-grande.mp4',
+    ),
+    attachment: {
+      mimeType: 'video/mp4',
+      size: 52_428_801,
+      url: null,
+      fileName: 'video-grande.mp4',
+      retentionStatus: 'too-large',
+      metadata: { retentionStatus: 'too-large' },
+    },
+  };
+}
+
 function renderSheet() {
   const messages: readonly WhatsAppMessage[] = [
     {
@@ -54,6 +73,7 @@ function renderSheet() {
       'application/pdf',
       'proposta.pdf.enc',
     ),
+    oversizedVideoMessage(),
   ];
 
   render(
@@ -104,5 +124,12 @@ describe('pré-visualização de mídias no chat', () => {
 
     expect(screen.getByText(/arquivo não está mais disponível/i)).toBeInTheDocument();
     expect(screen.queryByAltText('foto.jpg')).not.toBeInTheDocument();
+  });
+
+  it('mantém a mensagem visível quando a mídia excede o limite de retenção', () => {
+    renderSheet();
+
+    expect(screen.getByText('video-grande.mp4')).toBeInTheDocument();
+    expect(screen.getByText(/arquivo acima do limite permitido/i)).toBeInTheDocument();
   });
 });

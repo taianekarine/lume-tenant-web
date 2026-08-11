@@ -111,6 +111,7 @@ export interface WhatsAppMessageAttachment {
   readonly size: number | null;
   readonly url: string | null;
   readonly fileName: string | null;
+  readonly retentionStatus?: 'pending' | 'stored' | 'unavailable' | 'too-large' | null;
   readonly metadata: Readonly<Record<string, unknown>>;
 }
 

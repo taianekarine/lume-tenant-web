@@ -80,4 +80,16 @@ describe('management tenant page security', () => {
       administrator,
     );
   });
+
+  it('allows information technology to access user management with an explicit permission', async () => {
+    const informationTechnology = session(
+      ['information-technology'],
+      ['users:view', 'users:manage'],
+    );
+    mockedSession.mockResolvedValue(informationTechnology);
+
+    await expect(requirePeopleOperationsTenantSession(['users:view'])).resolves.toBe(
+      informationTechnology,
+    );
+  });
 });
