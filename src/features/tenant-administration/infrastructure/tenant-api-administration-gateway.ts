@@ -66,6 +66,7 @@ const userListSchema = z.object({
     totalPages: z.number().int().nonnegative(),
   }),
 });
+const deleteUserResultSchema = z.object({ deleted: z.literal(true) });
 const permissionCatalogSchema = z.object({
   resources: z.array(z.string()),
   actions: z.array(z.string()),
@@ -261,6 +262,15 @@ export class TenantApiAdministrationGateway implements TenantAdministrationGatew
       await this.request(`/users/${encodeURIComponent(userId)}/status`, {
         method: 'PATCH',
         body: input,
+      }),
+    );
+  }
+
+  async deleteUser(userId: string) {
+    return parseApiResponse(
+      deleteUserResultSchema,
+      await this.request(`/users/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
       }),
     );
   }

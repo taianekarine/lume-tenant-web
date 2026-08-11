@@ -55,6 +55,7 @@ export interface TenantAdministrationGateway {
   createUser(input: CreateTenantUserInput): Promise<TenantUser>;
   updateUser(userId: string, input: UpdateTenantUserInput): Promise<TenantUser>;
   updateUserStatus(userId: string, input: UpdateTenantUserStatusInput): Promise<TenantUser>;
+  deleteUser(userId: string): Promise<{ readonly deleted: true }>;
   requestPasswordReset(userId: string): Promise<{
     readonly requested: true;
     readonly recipient: string;

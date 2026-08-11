@@ -3,18 +3,60 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { Check } from 'lucide-react';
 import { Popover } from '@base-ui/react/popover';
+import colors from 'tailwindcss/colors';
 
 import { cn } from '@/shared/lib/utils';
 
-const ACCENT_OPTIONS = [
-  { value: 'amber', label: 'Âmbar', color: '#f59e0b' },
-  { value: 'copper', label: 'Cobre', color: '#ea580c' },
-  { value: 'emerald', label: 'Esmeralda', color: '#10b981' },
-  { value: 'teal', label: 'Verde-azulado', color: '#14b8a6' },
-  { value: 'rose', label: 'Rosa', color: '#f43f5e' },
+export const TAILWIND_ACCENT_NAMES = [
+  'slate',
+  'gray',
+  'zinc',
+  'neutral',
+  'stone',
+  'mauve',
+  'olive',
+  'mist',
+  'taupe',
+  'red',
+  'orange',
+  'amber',
+  'yellow',
+  'lime',
+  'green',
+  'emerald',
+  'teal',
+  'cyan',
+  'sky',
+  'blue',
+  'indigo',
+  'violet',
+  'purple',
+  'fuchsia',
+  'pink',
+  'rose',
 ] as const;
 
-type AccentColor = (typeof ACCENT_OPTIONS)[number]['value'];
+type AccentColor = (typeof TAILWIND_ACCENT_NAMES)[number];
+
+const DARK_FOREGROUND_ACCENTS = new Set<AccentColor>([
+  'orange',
+  'amber',
+  'yellow',
+  'lime',
+  'green',
+  'emerald',
+  'teal',
+  'cyan',
+  'sky',
+]);
+
+export const ACCENT_OPTIONS = TAILWIND_ACCENT_NAMES.map((value) => ({
+  value,
+  label: value,
+  color: colors[value][600],
+  foreground: DARK_FOREGROUND_ACCENTS.has(value) ? '#1c1b18' : '#faf9f6',
+}));
+
 const ACCENT_CHANGE_EVENT = 'lume:accent-color-change';
 
 function storageKey(userId: string): string {
@@ -26,7 +68,10 @@ function isAccentColor(value: string | null): value is AccentColor {
 }
 
 function applyAccent(value: AccentColor) {
+  const option = ACCENT_OPTIONS.find((candidate) => candidate.value === value)!;
   document.documentElement.dataset.accent = value;
+  document.documentElement.style.setProperty('--lume-accent-color', option.color);
+  document.documentElement.style.setProperty('--lume-accent-foreground', option.foreground);
 }
 
 function readAccent(userId: string): AccentColor {
@@ -53,6 +98,8 @@ export function AccentColorPreferenceSync({ userId }: { readonly userId: string 
     return () => {
       unsubscribe();
       delete document.documentElement.dataset.accent;
+      document.documentElement.style.removeProperty('--lume-accent-color');
+      document.documentElement.style.removeProperty('--lume-accent-foreground');
     };
   }, [userId]);
 
@@ -83,13 +130,13 @@ export function AccentColorPicker({ userId }: { readonly userId: string }) {
       />
       <Popover.Portal>
         <Popover.Positioner side="right" align="end" sideOffset={10} className="z-50">
-          <Popover.Popup className="w-64 rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95">
+          <Popover.Popup className="w-80 rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95">
             <Popover.Title className="font-semibold">Cor de destaque</Popover.Title>
             <Popover.Description className="mt-1 text-xs text-muted-foreground">
-              Escolha a cor usada em botões, links e itens ativos.
+              Cores do Tailwind Colors, sempre na tonalidade 600.
             </Popover.Description>
             <div
-              className="mt-3 grid grid-cols-5 gap-2"
+              className="mt-3 grid grid-cols-7 gap-2"
               role="radiogroup"
               aria-label="Cores disponíveis"
             >

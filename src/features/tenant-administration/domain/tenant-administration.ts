@@ -103,6 +103,7 @@ export interface CreateTenantUserInput {
   readonly password: string;
   readonly isAdministrator: boolean;
   readonly documentAccessMode?: 'standard' | 'document-portal';
+  readonly requestDocuments?: boolean;
   readonly jobTitle?: string;
   readonly maritalStatus?: NonNullable<TenantUser['maritalStatus']>;
   readonly militaryDocumentStatus?: TenantUser['militaryDocumentStatus'];

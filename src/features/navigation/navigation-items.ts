@@ -65,7 +65,7 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
     label: 'Usuários',
     href: '/users',
     permission: 'users:view',
-    alternativePermissions: ['users:manage'],
+    alternativePermissions: ['users:create', 'users:update', 'users:manage'],
     icon: Users,
     group: 'people-operations',
   },
@@ -101,6 +101,7 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
 
 function hasOrganizationalScope(user: User, item: InternalNavigationItem): boolean {
   if (user.isAdministrator === true) return true;
+  if (item.href === '/users') return true;
   if (item.group === 'commercial') return hasCommercialScope(user);
   if (item.group === 'people-operations') {
     return (
