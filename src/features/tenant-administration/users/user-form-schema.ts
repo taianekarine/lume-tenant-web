@@ -49,6 +49,22 @@ function requireDepartmentForStandardUser(
   }
 }
 
+function requireDocumentsForCandidate(
+  input: {
+    readonly documentAccessMode?: 'standard' | 'document-portal';
+    readonly requestDocuments: boolean;
+  },
+  context: z.RefinementCtx,
+) {
+  if (input.documentAccessMode === 'document-portal' && !input.requestDocuments) {
+    context.addIssue({
+      code: 'custom',
+      message: 'A solicitação de documentação é obrigatória para candidatos.',
+      path: ['requestDocuments'],
+    });
+  }
+}
+
 export const userFormSchema = z
   .object({
     ...userAssignmentFields,
@@ -71,13 +87,17 @@ export const userFormSchema = z
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/,
         'Inclua maiúscula, minúscula, número e símbolo.',
       ),
+    requestDocuments: z.boolean().default(false),
     // Compatibilidade de entrada com clientes anteriores; a seleção fixa não é mais usada.
     initialDocumentChecklistCode: z
       .enum(['admission-general', 'admission-administrative', 'admission-driver'])
       .optional(),
   })
   .strict()
-  .superRefine(requireDepartmentForStandardUser);
+  .superRefine((input, context) => {
+    requireDepartmentForStandardUser(input, context);
+    requireDocumentsForCandidate(input, context);
+  });
 
 export const userEditorFormSchema = z
   .object(userAssignmentFields)

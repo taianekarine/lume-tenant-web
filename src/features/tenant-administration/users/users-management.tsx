@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   ShieldCheck,
+  Trash2,
   UserRound,
   UserRoundCheck,
   UserRoundX,
@@ -40,6 +41,7 @@ import {
 
 import {
   createTenantUserFormAction,
+  deleteTenantUserAction,
   requestTenantUserPasswordResetAction,
   updateTenantUserStatusAction,
 } from '@/features/tenant-administration/actions';
@@ -346,6 +348,7 @@ function CreateUserDialog({
       password: '',
       isAdministrator: false,
       documentAccessMode: canManageAccess ? 'standard' : 'document-portal',
+      requestDocuments: !canManageAccess,
       departments: [],
       permissionCodes: [],
       jobTitle: 'Geral',
@@ -356,6 +359,10 @@ function CreateUserDialog({
   });
   const dependents = useFieldArray({ control: form.control, name: 'dependents' });
   const departments = useWatch({ control: form.control, name: 'departments' });
+  const documentAccessMode = useWatch({
+    control: form.control,
+    name: 'documentAccessMode',
+  });
   useWatch({ control: form.control });
   const preview = documentPreview(form.getValues());
   const standardPermissions = useMemo(
@@ -375,6 +382,7 @@ function CreateUserDialog({
         'username',
         'email',
         'password',
+        'requestDocuments',
         'jobTitle',
         'maritalStatus',
         'militaryDocumentStatus',
@@ -403,6 +411,7 @@ function CreateUserDialog({
               ...values,
               isAdministrator: false,
               documentAccessMode: 'document-portal',
+              requestDocuments: true,
               departments: [],
               permissionCodes: [],
             },
@@ -533,7 +542,17 @@ function CreateUserDialog({
                     control={form.control}
                     name="documentAccessMode"
                     render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select
+                        value={field.value}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          if (value === 'document-portal') {
+                            form.setValue('requestDocuments', true, {
+                              shouldValidate: true,
+                            });
+                          }
+                        }}
+                      >
                         <SelectTrigger id="new-user-document-access" className="h-11 w-full">
                           <SelectValue>
                             {field.value === 'document-portal'
@@ -563,6 +582,36 @@ function CreateUserDialog({
                   </p>
                 </div>
               )}
+              <Field data-invalid={Boolean(form.formState.errors.requestDocuments)}>
+                <FieldLabel htmlFor="new-user-request-documents">
+                  Solicitar documentação?
+                </FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="requestDocuments"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ? 'yes' : 'no'}
+                      onValueChange={(value) => field.onChange(value === 'yes')}
+                      disabled={documentAccessMode === 'document-portal'}
+                    >
+                      <SelectTrigger id="new-user-request-documents" className="h-11 w-full">
+                        <SelectValue>{field.value ? 'Sim' : 'Não'}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Sim</SelectItem>
+                        <SelectItem value="no">Não</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <FieldDescription>
+                  {documentAccessMode === 'document-portal'
+                    ? 'Obrigatório para candidatos.'
+                    : 'Para colaboradores, escolha se a solicitação deve ser criada agora.'}
+                </FieldDescription>
+                <FieldError errors={[form.formState.errors.requestDocuments]} />
+              </Field>
               <Field data-invalid={Boolean(form.formState.errors.jobTitle)}>
                 <FieldLabel htmlFor="new-user-job-title">Classificação do usuário</FieldLabel>
                 <Controller
@@ -783,6 +832,52 @@ function PasswordResetButton({ userId }: { readonly userId: string }) {
       {isPending ? <LoaderCircle className="animate-spin" /> : <KeyRound />}
       Recuperar senha
     </Button>
+  );
+}
+
+function DeleteUserButton({ user }: { readonly user: TenantUser }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  const remove = () => {
+    startTransition(async () => {
+      const result = await deleteTenantUserAction(user.id);
+      toast.add({
+        title: result.success ? 'Usuário excluído' : 'Exclusão não concluída',
+        description: formatActionResultDescription(result),
+        type: result.success ? 'success' : 'error',
+      });
+      if (result.success) {
+        setOpen(false);
+        router.refresh();
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button type="button" size="sm" variant="destructive" />}>
+        <Trash2 />
+        Excluir
+      </DialogTrigger>
+      <DialogContent showCloseButton={false} className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Excluir {user.name}?</DialogTitle>
+          <DialogDescription>
+            O acesso será removido e os históricos da empresa serão preservados. Esta ação é
+            exclusiva de administradores.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
+          <Button type="button" variant="destructive" disabled={isPending} onClick={remove}>
+            {isPending ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
+            Confirmar exclusão
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1277,6 +1372,8 @@ export function UsersManagement({
   canEdit,
   canManageAccess,
   canManageLifecycle = canManageAccess,
+  canDelete = false,
+  currentUserId,
   filters = {},
 }: {
   readonly users: TenantUserList;
@@ -1285,6 +1382,8 @@ export function UsersManagement({
   readonly canEdit: boolean;
   readonly canManageAccess: boolean;
   readonly canManageLifecycle?: boolean;
+  readonly canDelete?: boolean;
+  readonly currentUserId?: string;
   readonly filters?: UserListFilters;
 }) {
   const hasFilters = Boolean(
@@ -1420,6 +1519,9 @@ export function UsersManagement({
                           </>
                         ) : null}
                         {canManageLifecycle ? <UserStatusActions user={user} /> : null}
+                        {canDelete && user.id !== currentUserId ? (
+                          <DeleteUserButton user={user} />
+                        ) : null}
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">Somente consulta</span>

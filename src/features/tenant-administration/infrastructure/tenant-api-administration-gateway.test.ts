@@ -218,6 +218,22 @@ describe('TenantApiAdministrationGateway', () => {
     );
   });
 
+  it('deletes a user through the authenticated API contract', async () => {
+    const fetcher = jest.fn().mockResolvedValue(jsonResponse({ deleted: true }));
+    const gateway = new TenantApiAdministrationGateway(
+      'https://tenant.example/api/v1',
+      'access-token',
+      fetcher,
+    );
+    const userId = '00000000-0000-4000-8000-000000000001';
+
+    await expect(gateway.deleteUser(userId)).resolves.toEqual({ deleted: true });
+    expect(fetcher).toHaveBeenCalledWith(
+      `https://tenant.example/api/v1/users/${userId}`,
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
   it('reads department-scoped notifications from the authenticated Tenant API', async () => {
     const notifications = {
       items: [

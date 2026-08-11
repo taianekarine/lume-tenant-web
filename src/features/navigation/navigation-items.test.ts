@@ -40,11 +40,11 @@ describe('getAuthorizedNavigationItems', () => {
     expect(items.map((item) => item.label)).toContain('Licença');
   });
 
-  it.each(['users:view', 'users:manage'] as const)(
-    'shows Users inside Management with %s',
+  it.each(['users:view', 'users:create', 'users:update', 'users:manage'] as const)(
+    'shows Users with any related permission: %s',
     (permission) => {
       const items = getAuthorizedNavigationItems(
-        createEmployee([permission], true, ['management']),
+        createEmployee([permission], true, ['commercial']),
       );
 
       expect(items.map((item) => item.label)).toContain('Usuários');
@@ -109,7 +109,7 @@ describe('getAuthorizedNavigationItems', () => {
       createEmployee(['dashboard:view', 'whatsapp-conversations:manage'], true, ['operations']),
     );
 
-    expect(commercialAdministrator.map((item) => item.label)).not.toContain('Usuários');
+    expect(commercialAdministrator.map((item) => item.label)).toContain('Usuários');
     expect(commercialAdministrator.map((item) => item.label)).not.toContain('Licença');
     expect(operationsWithWhatsAppPermission.map((item) => item.label)).not.toContain(
       'Painel WhatsApp',

@@ -88,6 +88,7 @@ describe('userFormSchema', () => {
         jobTitle: 'Geral',
         isAdministrator: false,
         documentAccessMode: 'document-portal',
+        requestDocuments: true,
         initialDocumentChecklistCode: 'admission-general',
         departments: [],
         permissionCodes: [],
