@@ -313,22 +313,35 @@ export async function updateTenantUserFormAction(
   return { success: true, message: 'Dados e permissões atualizados com sucesso.' };
 }
 
-export async function deleteTenantUserAction(userId: string): Promise<TenantUserFormResult> {
-  if (!z.string().uuid().safeParse(userId).success) {
+const deleteTenantUserSchema = z.object({
+  userId: z.string().uuid(),
+  password: z.string().min(1).max(72),
+});
+
+export async function deleteTenantUserAction(
+  userId: string,
+  password: string,
+): Promise<TenantUserFormResult> {
+  const parsed = deleteTenantUserSchema.safeParse({ userId, password });
+  if (!parsed.success) {
     return {
       success: false,
-      message: 'Usuário inválido.',
+      message: 'Informe sua senha administrativa para confirmar a exclusão.',
       errorCode: 'VALIDATION_ERROR',
     };
   }
 
   try {
-    await executeAuthenticatedTenantMutation((gateway) => gateway.deleteUser(userId));
+    await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.deleteUser(parsed.data.userId, parsed.data.password),
+    );
   } catch (error) {
     return tenantUserActionResult(error, 'Não foi possível excluir o usuário.');
   }
 
   revalidatePath('/users');
+  revalidatePath('/document-management');
+  revalidatePath('/administration');
   return { success: true, message: 'Usuário excluído com sucesso.' };
 }
 

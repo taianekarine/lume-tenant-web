@@ -328,6 +328,15 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
     return this.parse(z.object({ request: requestDetailSchema }), body).request;
   }
 
+  async uploadAndComplete(requestItemId: string, formData: FormData) {
+    const body = await this.requestJson(
+      `/document-management/items/${encodeURIComponent(requestItemId)}/submissions/complete`,
+      { method: 'POST', body: formData },
+      this.reviewTimeoutMs,
+    );
+    return this.parse(z.object({ request: requestDetailSchema }), body).request;
+  }
+
   async completeSubmission(submissionId: string) {
     const body = await this.requestJson(
       `/document-management/submissions/${encodeURIComponent(submissionId)}/complete`,

@@ -168,8 +168,17 @@ describe('users management permissions', () => {
     );
 
     await interaction.click(screen.getByRole('button', { name: 'Excluir' }));
+    await interaction.type(
+      screen.getByLabelText('Sua senha administrativa'),
+      'SenhaAdministrativa@2026',
+    );
     await interaction.click(screen.getByRole('button', { name: 'Confirmar exclusão' }));
-    await waitFor(() => expect(deleteTenantUserAction).toHaveBeenCalledWith(tenantUser.id));
+    await waitFor(() =>
+      expect(deleteTenantUserAction).toHaveBeenCalledWith(
+        tenantUser.id,
+        'SenhaAdministrativa@2026',
+      ),
+    );
 
     view.rerender(
       <UsersManagement

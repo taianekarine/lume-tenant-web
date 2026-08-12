@@ -218,12 +218,14 @@ export function BatchDocumentRequestForm({
         <Textarea name="notes" maxLength={2000} />
       </label>
 
-      <div className="flex justify-end">
+      <div className="flex justify-stretch sm:justify-end">
         <Button
           type="submit"
           disabled={selectedUserIds.length === 0 || selectedDocumentTypeIds.length === 0}
         >
-          Criar {selectedUserIds.length || ''} solicitação(ões)
+          {selectedUserIds.length === 1
+            ? 'Criar solicitação'
+            : `Criar ${selectedUserIds.length || ''} solicitações`}
         </Button>
       </div>
     </form>

@@ -151,12 +151,14 @@ describe('tenant administration user actions', () => {
 
   it('deletes a user only through the dedicated authenticated action', async () => {
     const userId = '00000000-0000-4000-8000-000000000001';
-    await expect(deleteTenantUserAction(userId)).resolves.toEqual({
+    await expect(deleteTenantUserAction(userId, 'SenhaAdministrativa@2026')).resolves.toEqual({
       success: true,
       message: 'Usuário excluído com sucesso.',
     });
-    expect(deleteUser).toHaveBeenCalledWith(userId);
+    expect(deleteUser).toHaveBeenCalledWith(userId, 'SenhaAdministrativa@2026');
     expect(revalidatePath).toHaveBeenCalledWith('/users');
+    expect(revalidatePath).toHaveBeenCalledWith('/document-management');
+    expect(revalidatePath).toHaveBeenCalledWith('/administration');
   });
 
   it('preserves explicit department assignments without mutating administrator authority', async () => {

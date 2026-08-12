@@ -80,7 +80,10 @@ Os itens são organizados em três grupos:
 - **Geral:** Dashboard, Agentes de IA e Suporte, sujeitos às respectivas
   permissões e com conteúdo filtrado pelo departamento;
 - **Comercial:** Painel WhatsApp e Orçamentos, somente para vínculo Comercial;
-- **Administração:** Usuários e Licença, somente para vínculo Gerência e a
+- **Administração:** Painel administrativo exclusivo de administradores, além de
+  Usuários e Licença conforme as permissões e o vínculo organizacional. O painel
+  apresenta volume, bytes, duração, resultados, usuários e ações humanizadas;
+  nunca exibe rotas ou conteúdo das requisições.
   permissão individual correspondente.
 
 O tema usa `next-themes` e os tokens semânticos de `globals.css`; componentes

@@ -67,6 +67,67 @@ const userListSchema = z.object({
   }),
 });
 const deleteUserResultSchema = z.object({ deleted: z.literal(true) });
+const apiUsageSummarySchema = z.object({
+  period: z.object({ from: isoDate, to: isoDate }),
+  totals: z.object({
+    requests: z.number().int().nonnegative(),
+    requestBytes: z.number().int().nonnegative(),
+    responseBytes: z.number().int().nonnegative(),
+    averageDurationMs: z.number().int().nonnegative(),
+    errors: z.number().int().nonnegative(),
+    activeUsers: z.number().int().nonnegative(),
+  }),
+  daily: z.array(
+    z.object({
+      day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      requests: z.number().int().nonnegative(),
+      bytes: z.number().int().nonnegative(),
+    }),
+  ),
+  users: z.array(
+    z.object({
+      id: z.string().uuid(),
+      name: z.string().min(1),
+      email: z.string().email().nullable(),
+      requests: z.number().int().nonnegative(),
+      bytes: z.number().int().nonnegative(),
+      averageDurationMs: z.number().int().nonnegative(),
+    }),
+  ),
+  actions: z.array(
+    z.object({
+      action: z.string().min(1),
+      requests: z.number().int().nonnegative(),
+      bytes: z.number().int().nonnegative(),
+      averageDurationMs: z.number().int().nonnegative(),
+    }),
+  ),
+});
+const apiUsageRequestListSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.string().uuid(),
+      action: z.string().min(1),
+      result: z.string().min(1),
+      statusCode: z.number().int(),
+      requestBytes: z.number().int().nonnegative(),
+      responseBytes: z.number().int().nonnegative(),
+      durationMs: z.number().int().nonnegative(),
+      createdAt: isoDate,
+      user: z.object({
+        id: z.string().uuid(),
+        name: z.string().min(1),
+        email: z.string().email().nullable(),
+      }),
+    }),
+  ),
+  meta: z.object({
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    totalPages: z.number().int().nonnegative(),
+  }),
+});
 const permissionCatalogSchema = z.object({
   resources: z.array(z.string()),
   actions: z.array(z.string()),
@@ -266,11 +327,12 @@ export class TenantApiAdministrationGateway implements TenantAdministrationGatew
     );
   }
 
-  async deleteUser(userId: string) {
+  async deleteUser(userId: string, password: string) {
     return parseApiResponse(
       deleteUserResultSchema,
       await this.request(`/users/${encodeURIComponent(userId)}`, {
         method: 'DELETE',
+        body: { password },
       }),
     );
   }
@@ -285,6 +347,40 @@ export class TenantApiAdministrationGateway implements TenantAdministrationGatew
       await this.request(`/users/${encodeURIComponent(userId)}/password-reset`, {
         method: 'POST',
       }),
+    );
+  }
+
+  async getApiUsageSummary(query: { from?: string; to?: string } = {}) {
+    return parseApiResponse(
+      apiUsageSummarySchema,
+      await this.request(
+        `/administration/usage/summary${searchParams({ from: query.from, to: query.to })}`,
+      ),
+    );
+  }
+
+  async listApiUsageRequests(
+    query: {
+      from?: string;
+      to?: string;
+      page?: number;
+      pageSize?: number;
+      userId?: string;
+      status?: 'success' | 'client-error' | 'server-error';
+    } = {},
+  ) {
+    return parseApiResponse(
+      apiUsageRequestListSchema,
+      await this.request(
+        `/administration/usage/requests${searchParams({
+          from: query.from,
+          to: query.to,
+          page: query.page ?? 1,
+          pageSize: query.pageSize ?? 25,
+          userId: query.userId,
+          status: query.status,
+        })}`,
+      ),
     );
   }
 

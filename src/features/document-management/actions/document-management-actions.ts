@@ -138,15 +138,9 @@ export async function uploadDocumentSubmissionAction(
 ): Promise<void> {
   const uploadFormData = buildDocumentUploadFormData(formData, randomUUID());
   try {
-    const request = await executeAuthenticatedDocumentMutation((gateway) =>
-      gateway.upload(requestItemId, uploadFormData),
+    await executeAuthenticatedDocumentMutation((gateway) =>
+      gateway.uploadAndComplete(requestItemId, uploadFormData),
     );
-    const submission = request.items.find((item) => item.id === requestItemId)?.submissions.at(0);
-    if (submission) {
-      await executeAuthenticatedDocumentMutation((gateway) =>
-        gateway.completeSubmission(submission.id),
-      );
-    }
   } catch (error) {
     failure(returnPath, error);
   }

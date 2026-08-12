@@ -838,11 +838,12 @@ function PasswordResetButton({ userId }: { readonly userId: string }) {
 function DeleteUserButton({ user }: { readonly user: TenantUser }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
   const [isPending, startTransition] = useTransition();
 
   const remove = () => {
     startTransition(async () => {
-      const result = await deleteTenantUserAction(user.id);
+      const result = await deleteTenantUserAction(user.id, password);
       toast.add({
         title: result.success ? 'Usuário excluído' : 'Exclusão não concluída',
         description: formatActionResultDescription(result),
@@ -850,13 +851,20 @@ function DeleteUserButton({ user }: { readonly user: TenantUser }) {
       });
       if (result.success) {
         setOpen(false);
+        setPassword('');
         router.refresh();
       }
     });
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setPassword('');
+      }}
+    >
       <DialogTrigger render={<Button type="button" size="sm" variant="destructive" />}>
         <Trash2 />
         Excluir
@@ -869,9 +877,32 @@ function DeleteUserButton({ user }: { readonly user: TenantUser }) {
             exclusiva de administradores.
           </DialogDescription>
         </DialogHeader>
+        <div className="grid gap-2">
+          <FieldLabel htmlFor={`delete-user-password-${user.id}`}>
+            Sua senha administrativa
+          </FieldLabel>
+          <Input
+            id={`delete-user-password-${user.id}`}
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && password && !isPending) remove();
+            }}
+          />
+          <FieldDescription>
+            Confirme com a senha da conta administrativa conectada.
+          </FieldDescription>
+        </div>
         <DialogFooter>
           <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
-          <Button type="button" variant="destructive" disabled={isPending} onClick={remove}>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={isPending || !password}
+            onClick={remove}
+          >
             {isPending ? <LoaderCircle className="animate-spin" /> : <Trash2 />}
             Confirmar exclusão
           </Button>
