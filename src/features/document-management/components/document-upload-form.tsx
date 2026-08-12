@@ -9,9 +9,6 @@ import { buildDocumentUploadFormData } from '../actions/document-upload-form-dat
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
 
-const MAX_FILE_BYTES = 25 * 1024 * 1024;
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-
 function SubmitButton({
   enabled,
   replace,
@@ -98,7 +95,7 @@ function FileSlot({
           id={`${id}-camera`}
           name={name}
           type="file"
-          accept="image/jpeg,image/png"
+          accept="image/*"
           capture="environment"
           className="sr-only"
           onChange={(event) => update(event.currentTarget, pickerRef)}
@@ -119,6 +116,8 @@ export function DocumentUploadForm({
   repeatableByDependent,
   allowsMultiplePages,
   replace,
+  initiallyExpanded = false,
+  successUrl,
 }: {
   readonly uploadUrl: string;
   readonly itemId: string;
@@ -127,9 +126,11 @@ export function DocumentUploadForm({
   readonly repeatableByDependent: boolean;
   readonly allowsMultiplePages: boolean;
   readonly replace: boolean;
+  readonly initiallyExpanded?: boolean;
+  readonly successUrl?: string;
 }) {
   const router = useRouter();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [pending, setPending] = useState(false);
   const [resetVersion, setResetVersion] = useState(0);
   const [feedback, setFeedback] = useState<{
@@ -187,15 +188,6 @@ export function DocumentUploadForm({
       setFeedback({ kind: 'error', message: 'Selecione ao menos um arquivo.' });
       return;
     }
-    if (files.some((file) => file.size > MAX_FILE_BYTES)) {
-      setFeedback({ kind: 'error', message: 'Cada arquivo deve possuir no máximo 25 MB.' });
-      return;
-    }
-    if (files.reduce((total, file) => total + file.size, 0) > MAX_UPLOAD_BYTES) {
-      setFeedback({ kind: 'error', message: 'O envio deve possuir no máximo 50 MB no total.' });
-      return;
-    }
-
     setPending(true);
     try {
       const response = await fetch(uploadUrl, { method: 'POST', body: upload });
@@ -214,8 +206,12 @@ export function DocumentUploadForm({
 
       form.reset();
       clearSelection();
-      setFeedback({ kind: 'success', message: 'Documento enviado para revisão.' });
-      router.refresh();
+      if (successUrl) {
+        router.replace(successUrl);
+      } else {
+        setFeedback({ kind: 'success', message: 'Documento enviado para revisão.' });
+        router.refresh();
+      }
     } catch {
       setFeedback({
         kind: 'error',

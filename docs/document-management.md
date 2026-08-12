@@ -33,9 +33,12 @@ quantidade de dependentes. Antes da confirmação, a etapa de
 prévia mostra a lista personalizada que será criada pela API. Não se solicita o
 mesmo arquivo duas ou quatro vezes: a foto 3x4 digital é um único item.
 
-Depois do upload, a Server Action conclui a pré-validação e a tela indica revisão
-humana pendente. Aprovação, recusa ou reenvio registram motivo, validade e
-conferência do original quando aplicável.
+Para reduzir o uso de memória em celulares, o titular abre cada envio em uma
+tela mínima, sem manter o dossiê inteiro renderizado durante a câmera ou o
+seletor de arquivos. O multipart é transmitido por uma rota autenticada em
+streaming, sem um limite funcional por tamanho. Depois do upload, a API conclui
+a pré-validação e a tela indica revisão humana pendente. Aprovação, recusa ou
+reenvio registram motivo, validade e conferência do original quando aplicável.
 
 Enquanto o documento aguarda revisão, o titular pode substituir o arquivo ou
 remover o envio para tentar novamente. Depois da aprovação, a exclusão aparece
@@ -44,8 +47,9 @@ em modal, sem abrir outra aba do navegador.
 
 Na solicitação individual, RH/DP pode incluir um tipo documental e alterar cada
 item para obrigatório, opcional ou dispensado, sempre informando motivo. Arquivos
-e versões anteriores são preservados. A mesma tela oferece XLSX individual em
-quatro abas e ZIP com todos os arquivos daquele funcionário.
+e versões anteriores são preservados. A mesma tela oferece XLSX individual com
+dados consolidados, sem duplicar campos presentes em vários documentos e sem a
+aba de histórico, além do ZIP com todos os arquivos daquele funcionário.
 
 **Criar solicitação avulsa** aceita vários usuários e vários tipos documentais.
 O formulário identifica pessoas com nome, username e e-mail, oferece seleção de

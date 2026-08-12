@@ -4,13 +4,17 @@ import userEvent from '@testing-library/user-event';
 import { DocumentUploadForm } from './document-upload-form';
 
 const mockRefresh = jest.fn();
+const mockReplace = jest.fn();
 const fetchMock = jest.fn();
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ refresh: mockRefresh }),
+  useRouter: () => ({ refresh: mockRefresh, replace: mockReplace }),
 }));
 
-function renderForm(requiresFrontBack = false) {
+function renderForm(
+  requiresFrontBack = false,
+  options: { readonly initiallyExpanded?: boolean; readonly successUrl?: string } = {},
+) {
   return render(
     <DocumentUploadForm
       uploadUrl="/api/document-management/items/document-1/submissions/complete"
@@ -20,6 +24,8 @@ function renderForm(requiresFrontBack = false) {
       repeatableByDependent={false}
       allowsMultiplePages={false}
       replace={false}
+      initiallyExpanded={options.initiallyExpanded}
+      successUrl={options.successUrl}
     />,
   );
 }
@@ -28,6 +34,7 @@ describe('DocumentUploadForm', () => {
   beforeEach(() => {
     jest.restoreAllMocks();
     mockRefresh.mockReset();
+    mockReplace.mockReset();
     fetchMock.mockReset();
     Object.defineProperty(globalThis, 'fetch', {
       configurable: true,
@@ -48,7 +55,7 @@ describe('DocumentUploadForm', () => {
     expect(inputs[0]).not.toHaveAttribute('capture');
     expect(inputs[0]).toHaveAttribute('accept', 'application/pdf,image/jpeg,image/png');
     expect(inputs[1]).toHaveAttribute('capture', 'environment');
-    expect(inputs[1]).toHaveAttribute('accept', 'image/jpeg,image/png');
+    expect(inputs[1]).toHaveAttribute('accept', 'image/*');
   });
 
   it('envia o multipart pela rota autenticada sem usar Server Action', async () => {
@@ -73,8 +80,9 @@ describe('DocumentUploadForm', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Documento enviado para revisão.');
   });
 
-  it('bloqueia o envio antes da rede quando um arquivo excede 25 MB', async () => {
+  it('não aplica um limite arbitrário ao tamanho escolhido pelo usuário', async () => {
     const interaction = userEvent.setup();
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ request: {} }), { status: 200 }));
     const { container } = renderForm();
 
     fireEvent.click(screen.getByRole('button', { name: 'Selecionar arquivo' }));
@@ -84,9 +92,24 @@ describe('DocumentUploadForm', () => {
     await interaction.upload(picker, oversized);
     await interaction.click(screen.getByRole('button', { name: 'Enviar documento' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Cada arquivo deve possuir no máximo 25 MB.',
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('retorna ao dossiê após concluir o envio na tela leve', async () => {
+    const interaction = userEvent.setup();
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ request: {} }), { status: 200 }));
+    const { container } = renderForm(false, {
+      initiallyExpanded: true,
+      successUrl: '/documents/request-1?success=Documento%20enviado',
+    });
+
+    const picker = container.querySelector('#document-1-single-picker') as HTMLInputElement;
+    await interaction.upload(picker, new File(['pdf'], 'ctps.pdf', { type: 'application/pdf' }));
+    await interaction.click(screen.getByRole('button', { name: 'Enviar documento' }));
+
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/documents/request-1?success=Documento%20enviado'),
     );
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockRefresh).not.toHaveBeenCalled();
   });
 });
