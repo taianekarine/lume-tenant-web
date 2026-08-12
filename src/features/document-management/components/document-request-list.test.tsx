@@ -65,7 +65,7 @@ describe('DocumentRequestList', () => {
     expect(pendingTab.parentElement).toHaveClass('grid', 'w-full', 'grid-cols-3');
     fireEvent.click(screen.getByRole('button', { name: /Revisar documentos de Ana Candidata/ }));
     expect(screen.getAllByText('Todos')).toHaveLength(2);
-    expect(screen.getByRole('dialog')).toHaveClass('w-[96vw]', 'sm:max-w-[1500px]');
+    expect(screen.getByRole('dialog')).toHaveClass('w-screen', 'sm:w-[96vw]', 'sm:max-w-[1500px]');
     expect(screen.getByTitle(/Revisão documental de Ana Candidata/)).toHaveAttribute(
       'src',
       `/document-management/${request.id}?embedded=1`,

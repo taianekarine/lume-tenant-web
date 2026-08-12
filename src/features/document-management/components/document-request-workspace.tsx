@@ -101,13 +101,15 @@ export function DocumentRequestWorkspace({
           {DOCUMENT_CONTEXT_LABELS[request.context]}
         </p>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{request.checklist.name}</h1>
+          <div className="min-w-0">
+            <h1 className="break-words font-heading text-xl font-bold tracking-tight sm:text-2xl">
+              {request.checklist.name}
+            </h1>
             <p className="text-sm text-muted-foreground">
               Titular: {request.subject.name} · {DOCUMENT_STATUS_LABELS[request.status]}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             {canReview ? (
               <>
                 <Button
@@ -116,6 +118,7 @@ export function DocumentRequestWorkspace({
                   }
                   nativeButton={false}
                   variant="outline"
+                  className="w-full sm:w-auto"
                 >
                   Baixar dados XLSX
                 </Button>
@@ -125,6 +128,7 @@ export function DocumentRequestWorkspace({
                   }
                   nativeButton={false}
                   variant="outline"
+                  className="w-full sm:w-auto"
                 >
                   Baixar todos os arquivos
                 </Button>
@@ -356,7 +360,7 @@ export function DocumentRequestWorkspace({
                       className="flex flex-wrap items-end gap-2 rounded-lg border border-destructive/30 p-3"
                     >
                       {item.status === 'approved' ? (
-                        <label className="min-w-64 flex-1 space-y-1 text-sm font-medium">
+                        <label className="min-w-0 flex-1 basis-full space-y-1 text-sm font-medium sm:min-w-64 sm:basis-auto">
                           <span>Motivo da exclusão do documento aprovado</span>
                           <Input name="reason" minLength={3} maxLength={1000} required />
                         </label>

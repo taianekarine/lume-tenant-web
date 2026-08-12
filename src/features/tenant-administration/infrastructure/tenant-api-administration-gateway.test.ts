@@ -227,10 +227,15 @@ describe('TenantApiAdministrationGateway', () => {
     );
     const userId = '00000000-0000-4000-8000-000000000001';
 
-    await expect(gateway.deleteUser(userId)).resolves.toEqual({ deleted: true });
+    await expect(gateway.deleteUser(userId, 'SenhaAdministrativa@2026')).resolves.toEqual({
+      deleted: true,
+    });
     expect(fetcher).toHaveBeenCalledWith(
       `https://tenant.example/api/v1/users/${userId}`,
-      expect.objectContaining({ method: 'DELETE' }),
+      expect.objectContaining({
+        method: 'DELETE',
+        body: JSON.stringify({ password: 'SenhaAdministrativa@2026' }),
+      }),
     );
   });
 

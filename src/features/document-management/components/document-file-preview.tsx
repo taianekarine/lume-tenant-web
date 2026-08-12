@@ -23,11 +23,17 @@ export function DocumentFilePreview({
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-auto max-w-full whitespace-normal break-all"
+        onClick={() => setOpen(true)}
+      >
         {fileName} · {side}
       </Button>
-      <DialogContent className="h-[96dvh] w-[96vw] max-w-none grid-rows-[auto_1fr] overflow-hidden p-0 sm:max-w-[96vw] lg:max-w-[min(96vw,100rem)]">
-        <DialogHeader className="border-b p-4 pr-12">
+      <DialogContent className="h-dvh w-screen max-w-none grid-rows-[auto_1fr] overflow-hidden rounded-none p-0 sm:h-[96dvh] sm:w-[96vw] sm:max-w-[96vw] sm:rounded-xl lg:max-w-[min(96vw,100rem)]">
+        <DialogHeader className="border-b p-3 pr-12 sm:p-4 sm:pr-12">
           <DialogTitle>{fileName}</DialogTitle>
           <DialogDescription>Visualização segura do arquivo enviado.</DialogDescription>
         </DialogHeader>

@@ -83,6 +83,7 @@ export interface DocumentManagementGateway {
     input: { policy: 'required' | 'optional' | 'waived'; reason: string },
   ): Promise<DocumentRequestDetail>;
   upload(requestItemId: string, formData: FormData): Promise<DocumentRequestDetail>;
+  uploadAndComplete(requestItemId: string, formData: FormData): Promise<DocumentRequestDetail>;
   completeSubmission(submissionId: string): Promise<DocumentRequestDetail>;
   deleteSubmission(
     submissionId: string,

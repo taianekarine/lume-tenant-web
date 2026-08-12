@@ -1,5 +1,6 @@
 import {
   BadgeCheck,
+  ChartNoAxesCombined,
   Bot,
   ClipboardCheck,
   FileClock,
@@ -29,6 +30,7 @@ export interface InternalNavigationItem {
   readonly alternativePermissions?: readonly Permission[];
   readonly icon: LucideIcon;
   readonly group?: NavigationGroup;
+  readonly administratorOnly?: boolean;
 }
 
 export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
@@ -68,6 +70,14 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
     alternativePermissions: ['users:create', 'users:update', 'users:manage'],
     icon: Users,
     group: 'people-operations',
+  },
+  {
+    label: 'Painel administrativo',
+    href: '/administration',
+    permission: 'settings:view',
+    icon: ChartNoAxesCombined,
+    group: 'administration',
+    administratorOnly: true,
   },
   {
     label: 'Licença',
@@ -134,6 +144,7 @@ export function getAuthorizedNavigationItems(
   return items.filter(
     (item) =>
       hasNavigationPermission(user, item) &&
+      (!item.administratorOnly || user.isAdministrator === true) &&
       hasOrganizationalScope(user, item) &&
       (item.href !== '/license' || canAccessLicense(user)),
   );

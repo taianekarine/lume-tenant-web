@@ -61,10 +61,13 @@ function FileSlot({
   return (
     <div className="rounded-xl border bg-background p-3">
       <p className="text-sm font-semibold">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <label
           htmlFor={`${id}-picker`}
-          className={cn(buttonVariants({ size: 'lg' }), 'cursor-pointer shadow-sm')}
+          className={cn(
+            buttonVariants({ size: 'lg' }),
+            'w-full cursor-pointer shadow-sm sm:w-auto',
+          )}
         >
           <FileUp aria-hidden="true" />
           Selecionar arquivo
@@ -81,7 +84,10 @@ function FileSlot({
         />
         <label
           htmlFor={`${id}-camera`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'cursor-pointer')}
+          className={cn(
+            buttonVariants({ variant: 'outline', size: 'lg' }),
+            'w-full cursor-pointer sm:w-auto',
+          )}
         >
           <Camera aria-hidden="true" />
           Usar câmera
@@ -130,7 +136,7 @@ export function DocumentUploadForm({
   const accept = accepts.join(',');
 
   return (
-    <form action={action} className="space-y-3 rounded-xl border border-dashed p-4">
+    <form action={action} className="min-w-0 space-y-3 rounded-xl border border-dashed p-3 sm:p-4">
       {requiresFrontBack ? (
         <div className="grid gap-3 md:grid-cols-2">
           <FileSlot
