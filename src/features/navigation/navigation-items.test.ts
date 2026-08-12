@@ -29,7 +29,7 @@ describe('getAuthorizedNavigationItems', () => {
     const items = getAuthorizedNavigationItems(createEmployee(['dashboard:view']));
 
     expect(items.map((item) => item.label)).toEqual(['Dashboard']);
-    expect(INTERNAL_NAVIGATION_ITEMS).toHaveLength(9);
+    expect(INTERNAL_NAVIGATION_ITEMS).toHaveLength(10);
   });
 
   it('shows License only with its explicit permission inside Management', () => {
@@ -40,11 +40,11 @@ describe('getAuthorizedNavigationItems', () => {
     expect(items.map((item) => item.label)).toContain('Licença');
   });
 
-  it.each(['users:view', 'users:manage'] as const)(
-    'shows Users inside Management with %s',
+  it.each(['users:view', 'users:create', 'users:update', 'users:manage'] as const)(
+    'shows Users with any related permission: %s',
     (permission) => {
       const items = getAuthorizedNavigationItems(
-        createEmployee([permission], true, ['management']),
+        createEmployee([permission], true, ['commercial']),
       );
 
       expect(items.map((item) => item.label)).toContain('Usuários');
@@ -59,6 +59,18 @@ describe('getAuthorizedNavigationItems', () => {
 
     expect(getAuthorizedNavigationItems(administrator).map((item) => item.label)).toContain(
       'Usuários',
+    );
+  });
+
+  it('shows the administration dashboard only to administrators', () => {
+    const regularUser = createEmployee(['settings:view'], true, ['management']);
+    const administrator = { ...regularUser, isAdministrator: true };
+
+    expect(getAuthorizedNavigationItems(regularUser).map((item) => item.label)).not.toContain(
+      'Painel administrativo',
+    );
+    expect(getAuthorizedNavigationItems(administrator).map((item) => item.label)).toContain(
+      'Painel administrativo',
     );
   });
 
@@ -109,7 +121,7 @@ describe('getAuthorizedNavigationItems', () => {
       createEmployee(['dashboard:view', 'whatsapp-conversations:manage'], true, ['operations']),
     );
 
-    expect(commercialAdministrator.map((item) => item.label)).not.toContain('Usuários');
+    expect(commercialAdministrator.map((item) => item.label)).toContain('Usuários');
     expect(commercialAdministrator.map((item) => item.label)).not.toContain('Licença');
     expect(operationsWithWhatsAppPermission.map((item) => item.label)).not.toContain(
       'Painel WhatsApp',

@@ -44,57 +44,69 @@ function FileSlot({
   readonly multiple: boolean;
   readonly onFilesChange: (files: readonly string[]) => void;
 }) {
-  const pickerRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [names, setNames] = useState<readonly string[]>([]);
 
-  const update = (source: 'picker' | 'camera') => {
-    const active = source === 'picker' ? pickerRef.current : cameraRef.current;
-    const inactive = source === 'picker' ? cameraRef.current : pickerRef.current;
-    if (!active) return;
-    if (inactive) inactive.value = '';
-    const next = selectedNames(active);
+  const update = () => {
+    if (!inputRef.current) return;
+    const next = selectedNames(inputRef.current);
     setNames(next);
     onFilesChange(next);
+  };
+
+  const open = (source: 'picker' | 'camera') => {
+    const input = inputRef.current;
+    if (!input) return;
+
+    if (source === 'camera') {
+      input.accept = 'image/jpeg,image/png';
+      input.multiple = false;
+      input.setAttribute('capture', 'environment');
+    } else {
+      input.accept = accept;
+      input.multiple = multiple;
+      input.removeAttribute('capture');
+    }
+
+    if (typeof input.showPicker === 'function') input.showPicker();
+    else input.click();
   };
 
   return (
     <div className="rounded-xl border bg-background p-3">
       <p className="text-sm font-semibold">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <label
-          htmlFor={`${id}-picker`}
-          className={cn(buttonVariants({ size: 'lg' }), 'cursor-pointer shadow-sm')}
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <button
+          type="button"
+          onClick={() => open('picker')}
+          className={cn(
+            buttonVariants({ size: 'lg' }),
+            'w-full cursor-pointer shadow-sm sm:w-auto',
+          )}
         >
           <FileUp aria-hidden="true" />
           Selecionar arquivo
-        </label>
+        </button>
+        <button
+          type="button"
+          onClick={() => open('camera')}
+          className={cn(
+            buttonVariants({ variant: 'outline', size: 'lg' }),
+            'w-full cursor-pointer sm:w-auto',
+          )}
+        >
+          <Camera aria-hidden="true" />
+          Usar câmera
+        </button>
         <input
-          ref={pickerRef}
-          id={`${id}-picker`}
+          ref={inputRef}
+          id={`${id}-file`}
           name={name}
           type="file"
           accept={accept}
           multiple={multiple}
           className="sr-only"
-          onChange={() => update('picker')}
-        />
-        <label
-          htmlFor={`${id}-camera`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'cursor-pointer')}
-        >
-          <Camera aria-hidden="true" />
-          Usar câmera
-        </label>
-        <input
-          ref={cameraRef}
-          id={`${id}-camera`}
-          name={name}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          onChange={() => update('camera')}
+          onChange={update}
         />
       </div>
       <p className="mt-2 min-h-5 text-xs text-muted-foreground" aria-live="polite">
@@ -130,7 +142,7 @@ export function DocumentUploadForm({
   const accept = accepts.join(',');
 
   return (
-    <form action={action} className="space-y-3 rounded-xl border border-dashed p-4">
+    <form action={action} className="min-w-0 space-y-3 rounded-xl border border-dashed p-3 sm:p-4">
       {requiresFrontBack ? (
         <div className="grid gap-3 md:grid-cols-2">
           <FileSlot

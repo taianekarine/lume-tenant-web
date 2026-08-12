@@ -11,7 +11,7 @@ import type {
 } from '@/features/tenant-administration/domain';
 import {
   executeAuthenticatedTenantRequest,
-  requirePeopleOperationsTenantSession,
+  requireTenantSession,
   rethrowTenantPageError,
 } from '@/features/tenant-administration/server';
 import { PageFeedbackToast } from '@/shared/page-feedback-toast';
@@ -29,7 +29,7 @@ export default async function UsersRoute({
     page?: string;
   }>;
 }) {
-  const session = await requirePeopleOperationsTenantSession([
+  const session = await requireTenantSession([
     'users:view',
     'users:create',
     'users:update',
@@ -95,6 +95,8 @@ export default async function UsersRoute({
           }
           canManageAccess={canManageAccess}
           canManageLifecycle={canManageAccess}
+          canDelete={session.user.isAdministrator === true}
+          currentUserId={session.user.id}
           filters={filters}
         />
       </div>

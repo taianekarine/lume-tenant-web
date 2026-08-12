@@ -36,6 +36,7 @@ export interface DocumentRequestSummary {
   };
   readonly progress: {
     readonly total: number;
+    readonly uploaded: number;
     readonly approved: number;
     readonly pending: number;
   };

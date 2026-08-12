@@ -75,8 +75,18 @@ const createUserSchema = z
       .min(12)
       .max(72)
       .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/),
+    requestDocuments: z.boolean().default(false),
   })
-  .superRefine(requireDepartmentForStandardUser);
+  .superRefine((input, context) => {
+    requireDepartmentForStandardUser(input, context);
+    if (input.documentAccessMode === 'document-portal' && !input.requestDocuments) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A solicitação de documentação é obrigatória para candidatos.',
+        path: ['requestDocuments'],
+      });
+    }
+  });
 
 function normalizeAdministratorAssignments<
   T extends {
@@ -148,6 +158,7 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
     username: formString(formData, 'username'),
     email: formString(formData, 'email'),
     password: formString(formData, 'password'),
+    requestDocuments: formBoolean(formData, 'requestDocuments'),
     isAdministrator: formBoolean(formData, 'isAdministrator'),
     documentAccessMode:
       formString(formData, 'documentAccessMode') === 'document-portal'
@@ -170,7 +181,7 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
     await executeAuthenticatedTenantMutation((gateway) =>
       gateway.createUser({
         ...normalizeAdministratorAssignments(parsed.data),
-        initialDocumentRequestCommandId: randomUUID(),
+        ...(parsed.data.requestDocuments ? { initialDocumentRequestCommandId: randomUUID() } : {}),
       }),
     );
   } catch (error) {
@@ -262,7 +273,7 @@ export async function createTenantUserFormAction(input: unknown): Promise<Tenant
     await executeAuthenticatedTenantMutation((gateway) =>
       gateway.createUser({
         ...normalizeAdministratorAssignments(parsed.data),
-        initialDocumentRequestCommandId: randomUUID(),
+        ...(parsed.data.requestDocuments ? { initialDocumentRequestCommandId: randomUUID() } : {}),
       }),
     );
   } catch (error) {
@@ -300,6 +311,38 @@ export async function updateTenantUserFormAction(
   revalidatePath('/users');
   revalidatePath(`/users/${userId}`);
   return { success: true, message: 'Dados e permissões atualizados com sucesso.' };
+}
+
+const deleteTenantUserSchema = z.object({
+  userId: z.string().uuid(),
+  password: z.string().min(1).max(72),
+});
+
+export async function deleteTenantUserAction(
+  userId: string,
+  password: string,
+): Promise<TenantUserFormResult> {
+  const parsed = deleteTenantUserSchema.safeParse({ userId, password });
+  if (!parsed.success) {
+    return {
+      success: false,
+      message: 'Informe sua senha administrativa para confirmar a exclusão.',
+      errorCode: 'VALIDATION_ERROR',
+    };
+  }
+
+  try {
+    await executeAuthenticatedTenantMutation((gateway) =>
+      gateway.deleteUser(parsed.data.userId, parsed.data.password),
+    );
+  } catch (error) {
+    return tenantUserActionResult(error, 'Não foi possível excluir o usuário.');
+  }
+
+  revalidatePath('/users');
+  revalidatePath('/document-management');
+  revalidatePath('/administration');
+  return { success: true, message: 'Usuário excluído com sucesso.' };
 }
 
 const updateUserStatusSchema = z

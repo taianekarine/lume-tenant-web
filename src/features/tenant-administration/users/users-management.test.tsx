@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 
 import {
   createTenantUserFormAction,
+  deleteTenantUserAction,
   updateTenantUserFormAction,
   updateTenantUserStatusAction,
 } from '@/features/tenant-administration/actions';
@@ -27,6 +28,10 @@ jest.mock('@/features/tenant-administration/actions', () => ({
   createTenantUserFormAction: jest.fn().mockResolvedValue({
     success: true,
     message: 'Usuário criado.',
+  }),
+  deleteTenantUserAction: jest.fn().mockResolvedValue({
+    success: true,
+    message: 'Usuário excluído.',
   }),
   requestTenantUserPasswordResetAction: jest.fn().mockResolvedValue({
     success: true,
@@ -145,6 +150,48 @@ describe('users management permissions', () => {
     expect(screen.queryByRole('button', { name: 'Novo usuário' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Editar acessos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Recuperar senha' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Excluir' })).not.toBeInTheDocument();
+  });
+
+  it('shows deletion only to administrators and never for their own account', async () => {
+    const interaction = userEvent.setup();
+    const view = render(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate={false}
+        canEdit
+        canManageAccess
+        canDelete
+        currentUserId="00000000-0000-4000-8000-000000000099"
+      />,
+    );
+
+    await interaction.click(screen.getByRole('button', { name: 'Excluir' }));
+    await interaction.type(
+      screen.getByLabelText('Sua senha administrativa'),
+      'SenhaAdministrativa@2026',
+    );
+    await interaction.click(screen.getByRole('button', { name: 'Confirmar exclusão' }));
+    await waitFor(() =>
+      expect(deleteTenantUserAction).toHaveBeenCalledWith(
+        tenantUser.id,
+        'SenhaAdministrativa@2026',
+      ),
+    );
+
+    view.rerender(
+      <UsersManagement
+        users={users}
+        permissionCatalog={permissionCatalog}
+        canCreate={false}
+        canEdit
+        canManageAccess
+        canDelete
+        currentUserId={tenantUser.id}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Excluir' })).not.toBeInTheDocument();
   });
 
   it('keeps access editing available when lifecycle management is restricted', () => {

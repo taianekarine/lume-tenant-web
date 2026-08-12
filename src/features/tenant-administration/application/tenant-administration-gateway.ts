@@ -10,6 +10,9 @@ import type {
   TenantUserStatus,
   UpdateTenantUserInput,
   UpdateTenantUserStatusInput,
+  ApiUsageSummary,
+  ApiUsageRequestList,
+  ApiUsageResultFilter,
 } from '../domain';
 
 export type TenantAdministrationErrorCode =
@@ -55,6 +58,16 @@ export interface TenantAdministrationGateway {
   createUser(input: CreateTenantUserInput): Promise<TenantUser>;
   updateUser(userId: string, input: UpdateTenantUserInput): Promise<TenantUser>;
   updateUserStatus(userId: string, input: UpdateTenantUserStatusInput): Promise<TenantUser>;
+  deleteUser(userId: string, password: string): Promise<{ readonly deleted: true }>;
+  getApiUsageSummary(query?: { from?: string; to?: string }): Promise<ApiUsageSummary>;
+  listApiUsageRequests(query?: {
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+    userId?: string;
+    status?: ApiUsageResultFilter;
+  }): Promise<ApiUsageRequestList>;
   requestPasswordReset(userId: string): Promise<{
     readonly requested: true;
     readonly recipient: string;

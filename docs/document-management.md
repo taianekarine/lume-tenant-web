@@ -68,6 +68,14 @@ arquivos. O snapshot registra quais dependentes se aplicam: vacinação para
 menores de 7 anos, atestado escolar para maiores de 7 até 16 anos e os demais
 documentos de filhos para todos os dependentes cadastrados.
 
+O envio usa uma única chamada ao contrato combinado da API para persistir e
+iniciar a pré-validação. Repetições idênticas aguardando revisão são
+reaproveitadas, evitando nova análise. O download consolidado gera uma pasta do
+funcionário e da data, contendo `documentos_vN` com todos os arquivos.
+
+Titulares excluídos deixam de aparecer na gestão documental; históricos seguem
+preservados na API para auditoria.
+
 ## Teste manual
 
 1. execute migration e bootstrap da Tenant API;

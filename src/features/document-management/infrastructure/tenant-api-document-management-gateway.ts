@@ -91,6 +91,7 @@ const requestSummarySchema = z.object({
   checklist: checklistReferenceSchema,
   progress: z.object({
     total: z.number().int().nonnegative(),
+    uploaded: z.number().int().nonnegative(),
     approved: z.number().int().nonnegative(),
     pending: z.number().int().nonnegative(),
   }),
@@ -324,6 +325,15 @@ export class TenantApiDocumentManagementGateway implements DocumentManagementGat
     const body = await this.requestJson(
       `/document-management/items/${encodeURIComponent(requestItemId)}/submissions`,
       { method: 'POST', body: formData },
+    );
+    return this.parse(z.object({ request: requestDetailSchema }), body).request;
+  }
+
+  async uploadAndComplete(requestItemId: string, formData: FormData) {
+    const body = await this.requestJson(
+      `/document-management/items/${encodeURIComponent(requestItemId)}/submissions/complete`,
+      { method: 'POST', body: formData },
+      this.reviewTimeoutMs,
     );
     return this.parse(z.object({ request: requestDetailSchema }), body).request;
   }

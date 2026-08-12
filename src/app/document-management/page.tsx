@@ -70,11 +70,11 @@ export default async function DocumentManagementPage({
 
   return (
     <AuthenticatedShell user={session.user}>
-      <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
+      <div className="mx-auto w-full max-w-[1600px] space-y-5 p-3 sm:p-4 md:space-y-6 md:p-6">
         <header>
           <div>
             <p className="text-sm font-medium text-primary-emphasis">RH e Departamento Pessoal</p>
-            <h1 className="text-2xl font-bold tracking-tight">Gestão documental</h1>
+            <h1 className="font-heading text-2xl font-bold tracking-tight">Gestão documental</h1>
             <p className="text-sm text-muted-foreground">
               Solicite, acompanhe, revise e renove documentos sem aprovação automática.
             </p>
@@ -115,7 +115,7 @@ export default async function DocumentManagementPage({
 
         <Card>
           <Collapsible className="group/document-batch">
-            <CollapsibleTrigger className="flex w-full items-center justify-between gap-4 rounded-xl p-6 text-left transition-colors duration-200 hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none">
+            <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-xl p-4 text-left transition-colors duration-200 hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none sm:p-6">
               <span>
                 <span className="block font-semibold">Criar solicitação avulsa</span>
                 <span className="block text-sm text-muted-foreground">

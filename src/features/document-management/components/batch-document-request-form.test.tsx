@@ -69,7 +69,7 @@ describe('BatchDocumentRequestForm', () => {
 
     expect(container.querySelectorAll('input[name="subjectUserIds"]')).toHaveLength(2);
     expect(container.querySelectorAll('input[name="documentTypeIds"]')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Criar 2 solicitação(ões)' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Criar 2 solicitações' })).toBeEnabled();
     expect(screen.getByText(/Ana Silva · ana · ana@example.com/)).toBeInTheDocument();
     expect(screen.getByText(/Ana Souza · anas · ana.souza@example.com/)).toBeInTheDocument();
   });

@@ -4,6 +4,7 @@ import { TenantAdministrationError, type TenantAdministrationGateway } from '../
 import { executeAuthenticatedTenantMutation } from '../server';
 import {
   createTenantUserFormAction,
+  deleteTenantUserAction,
   updateTenantUserFormAction,
 } from './tenant-administration-actions';
 
@@ -21,15 +22,18 @@ jest.mock('../server', () => ({
 
 describe('tenant administration user actions', () => {
   const createUser = jest.fn();
+  const deleteUser = jest.fn();
   const updateUser = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
     createUser.mockResolvedValue({});
+    deleteUser.mockResolvedValue({ deleted: true });
     updateUser.mockResolvedValue({});
     jest.mocked(executeAuthenticatedTenantMutation).mockImplementation(async (operation) =>
       operation({
         createUser,
+        deleteUser,
         updateUser,
       } as unknown as TenantAdministrationGateway),
     );
@@ -100,6 +104,61 @@ describe('tenant administration user actions', () => {
       message: 'Você não possui permissão para cadastrar este usuário.',
       errorCode: 'FORBIDDEN',
     });
+  });
+
+  it('creates documentation only when a collaborator explicitly requests it', async () => {
+    const baseInput = {
+      name: 'Usuário Comercial',
+      username: 'usuario.comercial',
+      email: 'comercial@example.com',
+      password: 'SenhaForte@2026',
+      isAdministrator: false,
+      documentAccessMode: 'standard' as const,
+      departments: ['commercial'],
+      permissionCodes: ['commercial:view'],
+    };
+
+    await createTenantUserFormAction({ ...baseInput, requestDocuments: false });
+    expect(createUser).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ initialDocumentRequestCommandId: expect.anything() }),
+    );
+
+    await createTenantUserFormAction({ ...baseInput, requestDocuments: true });
+    expect(createUser).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        requestDocuments: true,
+        initialDocumentRequestCommandId: expect.any(String),
+      }),
+    );
+  });
+
+  it('requires documentation for candidates', async () => {
+    await expect(
+      createTenantUserFormAction({
+        name: 'Novo Candidato',
+        username: 'novo.candidato',
+        email: 'candidato@example.com',
+        password: 'SenhaForte@2026',
+        isAdministrator: false,
+        documentAccessMode: 'document-portal',
+        requestDocuments: false,
+        departments: [],
+        permissionCodes: [],
+      }),
+    ).resolves.toMatchObject({ success: false, errorCode: 'VALIDATION_ERROR' });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('deletes a user only through the dedicated authenticated action', async () => {
+    const userId = '00000000-0000-4000-8000-000000000001';
+    await expect(deleteTenantUserAction(userId, 'SenhaAdministrativa@2026')).resolves.toEqual({
+      success: true,
+      message: 'Usuário excluído com sucesso.',
+    });
+    expect(deleteUser).toHaveBeenCalledWith(userId, 'SenhaAdministrativa@2026');
+    expect(revalidatePath).toHaveBeenCalledWith('/users');
+    expect(revalidatePath).toHaveBeenCalledWith('/document-management');
+    expect(revalidatePath).toHaveBeenCalledWith('/administration');
   });
 
   it('preserves explicit department assignments without mutating administrator authority', async () => {
