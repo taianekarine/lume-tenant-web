@@ -31,9 +31,15 @@ const statusPriority: Readonly<Record<string, number>> = {
   approved: 2,
 };
 
-function progressOf(request: DocumentRequestSummary): number {
+function approvedProgressOf(request: DocumentRequestSummary): number {
   return request.progress.total
     ? Math.round((request.progress.approved / request.progress.total) * 100)
+    : 0;
+}
+
+function uploadedProgressOf(request: DocumentRequestSummary): number {
+  return request.progress.total
+    ? Math.round((request.progress.uploaded / request.progress.total) * 100)
     : 0;
 }
 
@@ -46,19 +52,38 @@ function RequestCard({
   readonly management: boolean;
   readonly onOpen?: (request: DocumentRequestSummary) => void;
 }) {
-  const progress = progressOf(request);
+  const uploadedProgress = uploadedProgressOf(request);
+  const approvedProgress = approvedProgressOf(request);
   const content = (
     <Card className="h-full transition-colors hover:bg-muted/30">
       <CardHeader>
         <CardTitle>{management ? request.subject.name : 'Meu dossiê documental'}</CardTitle>
         <CardDescription>{DOCUMENT_CONTEXT_LABELS[request.context]}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <span>{DOCUMENT_STATUS_LABELS[request.status]}</span>
-          <strong>{progress}%</strong>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span>Arquivos enviados</span>
+            <strong>{uploadedProgress}%</strong>
+          </div>
+          <Progress
+            value={uploadedProgress}
+            aria-label={`${uploadedProgress}% dos arquivos enviados`}
+          />
         </div>
-        <Progress value={progress} aria-label={`${progress}% dos documentos aprovados`} />
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span>Arquivos aprovados</span>
+            <strong>{approvedProgress}%</strong>
+          </div>
+          <Progress
+            value={approvedProgress}
+            aria-label={`${approvedProgress}% dos arquivos aprovados`}
+          />
+        </div>
+        <p className="text-xs font-medium text-muted-foreground">
+          {DOCUMENT_STATUS_LABELS[request.status]}
+        </p>
         <p className="text-xs text-muted-foreground">
           {request.deadline
             ? `Prazo: ${new Date(request.deadline).toLocaleDateString('pt-BR')}`

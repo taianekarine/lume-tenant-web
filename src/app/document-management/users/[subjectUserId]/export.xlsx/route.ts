@@ -23,7 +23,7 @@ export async function GET(
     headers.set(
       'Content-Disposition',
       upstream.headers.get('content-disposition') ??
-        `attachment; filename="dados-documentais-${subjectUserId}.xlsx"`,
+        'attachment; filename="dados-documentais.xlsx"',
     );
     headers.set('Cache-Control', 'private, no-store');
     return new Response(upstream.body, { status: 200, headers });

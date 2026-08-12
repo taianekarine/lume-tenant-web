@@ -14,27 +14,27 @@ describe('accent color preference', () => {
     document.documentElement.style.removeProperty('--lume-accent-color');
   });
 
-  it('offers every Tailwind color family that has shade 600', () => {
+  it('offers every Tailwind color family that has shade 500', () => {
     const tailwindFamilies = Object.keys(colors).filter((name) => {
       const family: unknown = colors[name as keyof typeof colors];
-      return typeof family === 'object' && family !== null && '600' in family;
+      return typeof family === 'object' && family !== null && '500' in family;
     });
 
     expect(TAILWIND_ACCENT_NAMES).toEqual(tailwindFamilies);
     expect(ACCENT_OPTIONS).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ value: 'amber', color: colors.amber[600] }),
-        expect.objectContaining({ value: 'blue', color: colors.blue[600] }),
-        expect.objectContaining({ value: 'rose', color: colors.rose[600] }),
+        expect.objectContaining({ value: 'amber', color: colors.amber[500] }),
+        expect.objectContaining({ value: 'blue', color: colors.blue[500] }),
+        expect.objectContaining({ value: 'rose', color: colors.rose[500] }),
       ]),
     );
   });
 
-  it('uses amber 600 by default and restores the preference for each user', async () => {
+  it('uses amber 500 by default and restores the preference for each user', async () => {
     const first = render(<AccentColorPreferenceSync userId="user-1" />);
     await waitFor(() => expect(document.documentElement.dataset.accent).toBe('amber'));
     expect(document.documentElement.style.getPropertyValue('--lume-accent-color')).toBe(
-      colors.amber[600],
+      colors.amber[500],
     );
     first.unmount();
 
@@ -42,7 +42,7 @@ describe('accent color preference', () => {
     render(<AccentColorPreferenceSync userId="user-2" />);
     await waitFor(() => expect(document.documentElement.dataset.accent).toBe('blue'));
     expect(document.documentElement.style.getPropertyValue('--lume-accent-color')).toBe(
-      colors.blue[600],
+      colors.blue[500],
     );
   });
 });

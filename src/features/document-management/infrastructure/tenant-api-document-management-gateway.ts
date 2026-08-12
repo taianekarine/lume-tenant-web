@@ -91,6 +91,7 @@ const requestSummarySchema = z.object({
   checklist: checklistReferenceSchema,
   progress: z.object({
     total: z.number().int().nonnegative(),
+    uploaded: z.number().int().nonnegative(),
     approved: z.number().int().nonnegative(),
     pending: z.number().int().nonnegative(),
   }),

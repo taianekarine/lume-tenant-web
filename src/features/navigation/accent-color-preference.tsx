@@ -53,7 +53,7 @@ const DARK_FOREGROUND_ACCENTS = new Set<AccentColor>([
 export const ACCENT_OPTIONS = TAILWIND_ACCENT_NAMES.map((value) => ({
   value,
   label: value,
-  color: colors[value][600],
+  color: colors[value][500],
   foreground: DARK_FOREGROUND_ACCENTS.has(value) ? '#1c1b18' : '#faf9f6',
 }));
 
@@ -133,7 +133,7 @@ export function AccentColorPicker({ userId }: { readonly userId: string }) {
           <Popover.Popup className="w-80 rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95">
             <Popover.Title className="font-semibold">Cor de destaque</Popover.Title>
             <Popover.Description className="mt-1 text-xs text-muted-foreground">
-              Cores do Tailwind Colors, sempre na tonalidade 600.
+              Cores do Tailwind Colors, sempre na tonalidade 500.
             </Popover.Description>
             <div
               className="mt-3 grid grid-cols-7 gap-2"

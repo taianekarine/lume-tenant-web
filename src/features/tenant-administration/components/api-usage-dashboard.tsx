@@ -51,6 +51,32 @@ function queryString(filters: ApiUsageDashboardFilters, page: number): string {
   return query.toString();
 }
 
+type PaginationItem = number | 'ellipsis-start' | 'ellipsis-end';
+
+export function paginationItems(
+  currentPage: number,
+  totalPages: number,
+): readonly PaginationItem[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const visiblePages = [...new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])]
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((left, right) => left - right);
+  const result: PaginationItem[] = [];
+
+  for (const page of visiblePages) {
+    const previous = result.at(-1);
+    if (typeof previous === 'number' && page - previous > 1) {
+      result.push(previous === 1 ? 'ellipsis-start' : 'ellipsis-end');
+    }
+    result.push(page);
+  }
+
+  return result;
+}
+
 export function ApiUsageDashboard({
   summary,
   requests,
@@ -297,7 +323,7 @@ export function ApiUsageDashboard({
           {requests.meta.totalPages > 1 && (
             <nav
               aria-label="Paginação da atividade"
-              className="mt-4 flex items-center justify-end gap-2"
+              className="mt-4 flex flex-wrap items-center justify-center gap-1.5 sm:justify-end"
             >
               <Button
                 render={
@@ -310,9 +336,37 @@ export function ApiUsageDashboard({
               >
                 Anterior
               </Button>
-              <span className="text-sm">
-                Página {filters.page} de {requests.meta.totalPages}
-              </span>
+              <div
+                className="flex flex-wrap items-center justify-center gap-1"
+                aria-label="Páginas"
+              >
+                {paginationItems(filters.page, requests.meta.totalPages).map((item) =>
+                  typeof item === 'number' ? (
+                    <Button
+                      key={item}
+                      render={
+                        <Link
+                          href={`/administration?${queryString(filters, item)}`}
+                          aria-label={`Ir para a página ${item}`}
+                        />
+                      }
+                      variant={item === filters.page ? 'default' : 'outline'}
+                      size="icon-sm"
+                      aria-current={item === filters.page ? 'page' : undefined}
+                    >
+                      {item}
+                    </Button>
+                  ) : (
+                    <span
+                      key={item}
+                      className="px-1 text-sm text-muted-foreground"
+                      aria-hidden="true"
+                    >
+                      …
+                    </span>
+                  ),
+                )}
+              </div>
               <Button
                 render={
                   <Link
