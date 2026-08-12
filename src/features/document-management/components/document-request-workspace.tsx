@@ -19,6 +19,7 @@ import {
   AccordionTrigger,
 } from '@/shared/ui/accordion';
 import { Button } from '@/shared/ui/button';
+import { buttonVariants } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Input } from '@/shared/ui/input';
@@ -381,7 +382,7 @@ export function DocumentRequestWorkspace({
                     </div>
                   ) : null}
 
-                  {canUpload ? (
+                  {canUpload && canReview ? (
                     <DocumentUploadForm
                       uploadUrl={`/api/document-management/items/${item.id}/submissions/complete`}
                       itemId={item.id}
@@ -391,6 +392,25 @@ export function DocumentRequestWorkspace({
                       allowsMultiplePages={item.config.allowsMultiplePages === true}
                       replace={item.status === 'pending-human-review'}
                     />
+                  ) : null}
+
+                  {canUpload && !canReview ? (
+                    <div className="rounded-xl border border-dashed p-3 sm:p-4">
+                      <Link
+                        href={`/documents/${request.id}/upload/${item.id}`}
+                        prefetch={false}
+                        className={buttonVariants({ variant: 'outline', size: 'lg' })}
+                      >
+                        {item.status === 'pending-human-review'
+                          ? 'Substituir arquivo enviado'
+                          : requiresFrontBack
+                            ? 'Adicionar frente e verso'
+                            : 'Selecionar arquivo'}
+                      </Link>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        A seleção será aberta em uma tela leve, adequada para celulares.
+                      </p>
+                    </div>
                   ) : null}
 
                   {latest &&
