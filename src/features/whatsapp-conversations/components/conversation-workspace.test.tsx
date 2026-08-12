@@ -93,7 +93,13 @@ describe('ConversationWorkspace', () => {
     expect(identityRow).toHaveClass('flex', 'flex-col', 'items-start');
     expect(detailHeader).toHaveClass('px-4', 'py-2', 'bg-primary/8');
     const conversationList = screen.getByRole('button', { name: /Taiane Karine/ }).parentElement;
-    expect(conversationList).toHaveClass('h-[min(28rem,55dvh)]', 'xl:h-auto', 'xl:flex-1');
+    expect(conversationList).toHaveClass('max-h-[58dvh]', 'xl:max-h-none', 'xl:flex-1');
+    const inbox = conversationList?.closest('aside');
+    expect(inbox).toHaveClass('flex');
+    fireEvent.click(screen.getByRole('button', { name: /Taiane Karine/ }));
+    expect(inbox).toHaveClass('hidden', 'xl:flex');
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar para a caixa de entrada' }));
+    expect(inbox).toHaveClass('flex');
     expect(screen.getAllByText('553496305110')).toHaveLength(2);
     expect(screen.getByText(/Última interação: 29\/07\/2026, 16:50/)).toBeInTheDocument();
   });

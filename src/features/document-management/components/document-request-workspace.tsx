@@ -26,6 +26,26 @@ import { Progress } from '@/shared/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
 
+const REQUIREMENT_LABELS: Readonly<Record<string, string>> = {
+  required: 'Obrigatório',
+  optional: 'Opcional',
+  conditional: 'Condicional',
+  waived: 'Dispensado',
+};
+
+const REVIEW_DECISION_LABELS: Readonly<Record<string, string>> = {
+  approved: 'Aprovar',
+  'resubmission-required': 'Solicitar reenvio',
+  rejected: 'Recusar',
+};
+
+const ORIGINAL_CHECK_LABELS: Readonly<Record<string, string>> = {
+  'not-required': 'Não exigido',
+  pending: 'Pendente',
+  confirmed: 'Original conferido',
+  divergent: 'Divergência encontrada',
+};
+
 function latestReason(item: DocumentRequestDetail['items'][number]): string | null {
   return item.submissions[0]?.reviews[0]?.reason ?? null;
 }
@@ -92,7 +112,15 @@ export function DocumentRequestWorkspace({
   const approved = request.items.filter((item) =>
     ['approved', 'waived'].includes(item.status),
   ).length;
-  const progress = request.items.length ? Math.round((approved / request.items.length) * 100) : 0;
+  const uploaded = request.items.filter(
+    (item) => item.currentVersion > 0 && item.status !== 'pending-upload',
+  ).length;
+  const uploadedProgress = request.items.length
+    ? Math.round((uploaded / request.items.length) * 100)
+    : 0;
+  const approvedProgress = request.items.length
+    ? Math.round((approved / request.items.length) * 100)
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -135,11 +163,32 @@ export function DocumentRequestWorkspace({
               </>
             ) : null}
             <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary-emphasis">
-              {progress}% concluído
+              {DOCUMENT_STATUS_LABELS[request.status]}
             </span>
           </div>
         </div>
-        <Progress value={progress} aria-label={`${progress}% da solicitação concluída`} />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span>Arquivos enviados</span>
+              <strong>{uploadedProgress}%</strong>
+            </div>
+            <Progress
+              value={uploadedProgress}
+              aria-label={`${uploadedProgress}% dos arquivos enviados`}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span>Arquivos aprovados</span>
+              <strong>{approvedProgress}%</strong>
+            </div>
+            <Progress
+              value={approvedProgress}
+              aria-label={`${approvedProgress}% dos arquivos aprovados`}
+            />
+          </div>
+        </div>
       </header>
 
       {canReview ? (
@@ -157,7 +206,11 @@ export function DocumentRequestWorkspace({
                 <span>Tipo de documento</span>
                 <Select name="documentTypeId" required>
                   <SelectTrigger id="manual-document-type" className="h-9 w-full">
-                    <SelectValue placeholder="Selecione" />
+                    <SelectValue placeholder="Selecione">
+                      {(value) =>
+                        documentTypes.find((type) => type.id === value)?.name ?? 'Selecione'
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {documentTypes
@@ -177,7 +230,9 @@ export function DocumentRequestWorkspace({
                 <span>Exigência</span>
                 <Select name="requirement" defaultValue="required">
                   <SelectTrigger id="manual-document-requirement" className="h-9 w-full">
-                    <SelectValue />
+                    <SelectValue>
+                      {(value) => REQUIREMENT_LABELS[String(value)] ?? 'Selecione'}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="required">Obrigatório</SelectItem>
@@ -282,7 +337,9 @@ export function DocumentRequestWorkspace({
                           className="h-9 w-full"
                           aria-label={`Exigência de ${item.documentType.name}`}
                         >
-                          <SelectValue />
+                          <SelectValue>
+                            {(value) => REQUIREMENT_LABELS[String(value)] ?? 'Selecione'}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="required">Obrigatório</SelectItem>
@@ -456,7 +513,9 @@ export function DocumentRequestWorkspace({
                         <span>Decisão</span>
                         <Select name="decision" defaultValue="approved">
                           <SelectTrigger id={`decision-${item.id}`} className="h-9 w-full">
-                            <SelectValue />
+                            <SelectValue>
+                              {(value) => REVIEW_DECISION_LABELS[String(value)] ?? 'Selecione'}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="approved">Aprovar</SelectItem>
@@ -483,7 +542,9 @@ export function DocumentRequestWorkspace({
                           defaultValue={requiresOriginal ? 'pending' : 'not-required'}
                         >
                           <SelectTrigger id={`original-status-${item.id}`} className="h-9 w-full">
-                            <SelectValue />
+                            <SelectValue>
+                              {(value) => ORIGINAL_CHECK_LABELS[String(value)] ?? 'Selecione'}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="not-required">Não exigido</SelectItem>

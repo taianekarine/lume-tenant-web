@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import {
   AlertCircle,
+  ArrowLeft,
   Bot,
   Building2,
   CircleStop,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
+import { cn } from '@/shared/lib/utils';
 import { Button } from '@/shared/ui/button';
 import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import {
@@ -269,6 +271,7 @@ export function ConversationWorkspace({
   const [selectedConversationId, setSelectedConversationId] = useState(
     initialConversations[0]?.id ?? null,
   );
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<WhatsAppConversationDepartment | 'all'>(
     'all',
@@ -553,6 +556,7 @@ export function ConversationWorkspace({
 
   function handleConversationSelection(conversation: WhatsAppConversation) {
     setSelectedConversationId(conversation.id);
+    setMobileDetailOpen(true);
     setTargetDepartment(getDefaultTargetDepartment(conversation.department));
     setFeedbackMessage('');
     setFeedbackTone('neutral');
@@ -799,12 +803,16 @@ export function ConversationWorkspace({
           Caixa de entrada de conversas
         </h2>
 
-        <aside className={styles.sidebar()}>
+        <aside className={cn(styles.sidebar(), mobileDetailOpen ? 'hidden xl:flex' : 'flex')}>
           <div className={styles.sidebarHeader()}>
             <div className={styles.sidebarHeading()}>
               <div>
                 <p className={styles.sidebarEyebrow()}>Caixa de entrada</p>
-                <p className={styles.sidebarTitle()}>{filteredConversations.length} conversas</p>
+                <p className={styles.sidebarTitle()}>
+                  {filteredConversations.length === 1
+                    ? '1 conversa'
+                    : `${filteredConversations.length} conversas`}
+                </p>
               </div>
               <button
                 type="button"
@@ -1023,10 +1031,20 @@ export function ConversationWorkspace({
           </div>
         </aside>
 
-        <div className={styles.detail()}>
+        <div className={cn(styles.detail(), mobileDetailOpen ? 'flex' : 'hidden xl:flex')}>
           {selectedConversation !== null ? (
             <>
               <header className={styles.detailHeader()}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="xl:hidden"
+                  onClick={() => setMobileDetailOpen(false)}
+                  aria-label="Voltar para a caixa de entrada"
+                >
+                  <ArrowLeft aria-hidden="true" />
+                </Button>
                 <div className={styles.contactBlock()}>
                   <span className={styles.detailAvatar()}>
                     {getContactInitial(selectedConversation.contact.name)}
