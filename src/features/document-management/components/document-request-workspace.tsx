@@ -12,6 +12,7 @@ import type { DocumentRequestDetail, DocumentTypeSummary } from '../domain';
 import { DOCUMENT_CONTEXT_LABELS, DOCUMENT_STATUS_LABELS } from '../domain';
 import { DocumentFilePreview } from './document-file-preview';
 import { DocumentUploadForm } from './document-upload-form';
+import { HumanizedSelectValue } from './humanized-select-value';
 import {
   Accordion,
   AccordionContent,
@@ -23,7 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Input } from '@/shared/ui/input';
 import { Progress } from '@/shared/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
 
 const REQUIREMENT_LABELS: Readonly<Record<string, string>> = {
@@ -109,6 +110,9 @@ export function DocumentRequestWorkspace({
   readonly returnPath: string;
   readonly documentTypes?: readonly DocumentTypeSummary[];
 }) {
+  const documentTypeLabels = Object.fromEntries(
+    documentTypes.map((documentType) => [documentType.id, documentType.name]),
+  );
   const approved = request.items.filter((item) =>
     ['approved', 'waived'].includes(item.status),
   ).length;
@@ -206,11 +210,7 @@ export function DocumentRequestWorkspace({
                 <span>Tipo de documento</span>
                 <Select name="documentTypeId" required>
                   <SelectTrigger id="manual-document-type" className="h-9 w-full">
-                    <SelectValue placeholder="Selecione">
-                      {(value) =>
-                        documentTypes.find((type) => type.id === value)?.name ?? 'Selecione'
-                      }
-                    </SelectValue>
+                    <HumanizedSelectValue labels={documentTypeLabels} />
                   </SelectTrigger>
                   <SelectContent>
                     {documentTypes
@@ -230,9 +230,7 @@ export function DocumentRequestWorkspace({
                 <span>Exigência</span>
                 <Select name="requirement" defaultValue="required">
                   <SelectTrigger id="manual-document-requirement" className="h-9 w-full">
-                    <SelectValue>
-                      {(value) => REQUIREMENT_LABELS[String(value)] ?? 'Selecione'}
-                    </SelectValue>
+                    <HumanizedSelectValue labels={REQUIREMENT_LABELS} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="required">Obrigatório</SelectItem>
@@ -337,9 +335,7 @@ export function DocumentRequestWorkspace({
                           className="h-9 w-full"
                           aria-label={`Exigência de ${item.documentType.name}`}
                         >
-                          <SelectValue>
-                            {(value) => REQUIREMENT_LABELS[String(value)] ?? 'Selecione'}
-                          </SelectValue>
+                          <HumanizedSelectValue labels={REQUIREMENT_LABELS} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="required">Obrigatório</SelectItem>
@@ -513,9 +509,7 @@ export function DocumentRequestWorkspace({
                         <span>Decisão</span>
                         <Select name="decision" defaultValue="approved">
                           <SelectTrigger id={`decision-${item.id}`} className="h-9 w-full">
-                            <SelectValue>
-                              {(value) => REVIEW_DECISION_LABELS[String(value)] ?? 'Selecione'}
-                            </SelectValue>
+                            <HumanizedSelectValue labels={REVIEW_DECISION_LABELS} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="approved">Aprovar</SelectItem>
@@ -542,9 +536,7 @@ export function DocumentRequestWorkspace({
                           defaultValue={requiresOriginal ? 'pending' : 'not-required'}
                         >
                           <SelectTrigger id={`original-status-${item.id}`} className="h-9 w-full">
-                            <SelectValue>
-                              {(value) => ORIGINAL_CHECK_LABELS[String(value)] ?? 'Selecione'}
-                            </SelectValue>
+                            <HumanizedSelectValue labels={ORIGINAL_CHECK_LABELS} />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="not-required">Não exigido</SelectItem>
