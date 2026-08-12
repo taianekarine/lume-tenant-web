@@ -8,7 +8,6 @@ import { z } from 'zod';
 
 import { DocumentManagementError } from '../application';
 import { executeAuthenticatedDocumentMutation } from '../server';
-import { buildDocumentUploadFormData } from './document-upload-form-data';
 
 function value(formData: FormData, name: string): string {
   const entry = formData.get(name);
@@ -128,25 +127,6 @@ export async function createDocumentRequestAction(formData: FormData): Promise<v
   revalidatePath('/document-management');
   revalidatePath('/documents');
   redirect(`/document-management/${requestId}?success=Solicitação criada.`);
-}
-
-export async function uploadDocumentSubmissionAction(
-  requestId: string,
-  requestItemId: string,
-  returnPath: string,
-  formData: FormData,
-): Promise<void> {
-  const uploadFormData = buildDocumentUploadFormData(formData, randomUUID());
-  try {
-    await executeAuthenticatedDocumentMutation((gateway) =>
-      gateway.uploadAndComplete(requestItemId, uploadFormData),
-    );
-  } catch (error) {
-    failure(returnPath, error);
-  }
-  revalidatePath(`/documents/${requestId}`);
-  revalidatePath(`/document-management/${requestId}`);
-  redirect(feedbackPath(returnPath, 'success', 'Documento enviado para revisão.'));
 }
 
 export async function reviewDocumentSubmissionAction(

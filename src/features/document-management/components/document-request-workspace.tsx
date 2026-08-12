@@ -6,7 +6,6 @@ import {
   deleteDocumentSubmissionAction,
   reviewDocumentSubmissionAction,
   setDocumentRequestItemPolicyAction,
-  uploadDocumentSubmissionAction,
 } from '../actions';
 import type { DocumentRequestDetail, DocumentTypeSummary } from '../domain';
 import { DOCUMENT_CONTEXT_LABELS, DOCUMENT_STATUS_LABELS } from '../domain';
@@ -288,12 +287,6 @@ export function DocumentRequestWorkspace({
                   (entry): entry is string => typeof entry === 'string',
                 )
               : ['application/pdf', 'image/jpeg', 'image/png'];
-            const uploadAction = uploadDocumentSubmissionAction.bind(
-              null,
-              request.id,
-              item.id,
-              returnPath,
-            );
             const configuredExtractionFields = extractionFields(item.config);
 
             const itemCard = (
@@ -390,7 +383,7 @@ export function DocumentRequestWorkspace({
 
                   {canUpload ? (
                     <DocumentUploadForm
-                      action={uploadAction}
+                      uploadUrl={`/api/document-management/items/${item.id}/submissions/complete`}
                       itemId={item.id}
                       accepts={accepts}
                       requiresFrontBack={requiresFrontBack}
