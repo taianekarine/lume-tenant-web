@@ -16,7 +16,7 @@ import { DocumentManagementError, type DocumentManagementGateway } from '../appl
 import { createDocumentManagementGateway } from '../infrastructure';
 
 async function execute<T>(
-  operation: (gateway: DocumentManagementGateway) => Promise<T>,
+  operation: (gateway: DocumentManagementGateway, accessToken: string) => Promise<T>,
   canRefreshCookies: boolean,
 ): Promise<T> {
   const [sessionStorage, tokenStorage] = await Promise.all([
@@ -57,24 +57,24 @@ async function execute<T>(
   }
 
   try {
-    return await operation(createDocumentManagementGateway(tokens.accessToken));
+    return await operation(createDocumentManagementGateway(tokens.accessToken), tokens.accessToken);
   } catch (error) {
     if (!(error instanceof DocumentManagementError) || error.code !== 'unauthorized') throw error;
     if (!canRefreshCookies) throw error;
   }
 
   await refresh();
-  return operation(createDocumentManagementGateway(tokens.accessToken));
+  return operation(createDocumentManagementGateway(tokens.accessToken), tokens.accessToken);
 }
 
 export function executeAuthenticatedDocumentRequest<T>(
-  operation: (gateway: DocumentManagementGateway) => Promise<T>,
+  operation: (gateway: DocumentManagementGateway, accessToken: string) => Promise<T>,
 ): Promise<T> {
   return execute(operation, false);
 }
 
 export function executeAuthenticatedDocumentMutation<T>(
-  operation: (gateway: DocumentManagementGateway) => Promise<T>,
+  operation: (gateway: DocumentManagementGateway, accessToken: string) => Promise<T>,
 ): Promise<T> {
   return execute(operation, true);
 }

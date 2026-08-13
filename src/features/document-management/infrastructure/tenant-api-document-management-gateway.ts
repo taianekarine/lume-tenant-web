@@ -509,3 +509,49 @@ export function createDocumentManagementGateway(accessToken: string) {
     reviewTimeoutMs,
   );
 }
+
+export async function proxyDocumentUploadRequest(
+  accessToken: string,
+  requestItemId: string,
+  request: Request,
+  fetcher: Fetcher = fetch,
+): Promise<Response> {
+  const baseUrl = process.env.LUME_TENANT_API_URL;
+  if (!baseUrl) throw new Error('LUME_TENANT_API_URL is required.');
+  const contentType = request.headers.get('content-type');
+  if (!contentType?.toLowerCase().startsWith('multipart/form-data;') || request.body === null) {
+    throw new DocumentManagementError('validation', 'Envie um arquivo válido.');
+  }
+
+  const configuredReviewTimeout = Number(
+    process.env.LUME_TENANT_API_DOCUMENT_REVIEW_TIMEOUT_MS ?? 300_000,
+  );
+  const reviewTimeoutMs =
+    Number.isInteger(configuredReviewTimeout) && configuredReviewTimeout >= 30_000
+      ? configuredReviewTimeout
+      : 300_000;
+
+  try {
+    const init: RequestInit & { duplex: 'half' } = {
+      method: 'POST',
+      body: request.body,
+      duplex: 'half',
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': contentType,
+      },
+      signal: AbortSignal.timeout(reviewTimeoutMs),
+    };
+    return await fetcher(
+      `${normalizeBaseUrl(baseUrl)}/document-management/items/${encodeURIComponent(requestItemId)}/submissions/complete`,
+      init,
+    );
+  } catch {
+    throw new DocumentManagementError(
+      'service-unavailable',
+      'Não foi possível enviar o documento. Tente novamente.',
+    );
+  }
+}
