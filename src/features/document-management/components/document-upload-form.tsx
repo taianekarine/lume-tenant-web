@@ -1,11 +1,12 @@
 'use client';
 
-import { useRef, useState, type FormEvent, type RefObject } from 'react';
-import { Camera, FileUp, LoaderCircle } from 'lucide-react';
+import { useCallback, useRef, useState, type FormEvent } from 'react';
+import { FileUp, LoaderCircle } from 'lucide-react';
 import { flushSync } from 'react-dom';
 import { useRouter } from 'next/navigation';
 
 import { buildDocumentUploadFormData } from '../actions/document-upload-form-data';
+import { InlineDocumentCamera } from './inline-document-camera';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
 
@@ -37,6 +38,8 @@ function FileSlot({
   accept,
   multiple,
   onFilesChange,
+  cameraDisabled,
+  onCameraSessionChange,
 }: {
   readonly id: string;
   readonly name: string;
@@ -44,22 +47,36 @@ function FileSlot({
   readonly accept: string;
   readonly multiple: boolean;
   readonly onFilesChange: (files: readonly File[]) => void;
+  readonly cameraDisabled: boolean;
+  readonly onCameraSessionChange: (active: boolean) => void;
 }) {
   const pickerRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const [names, setNames] = useState<readonly string[]>([]);
+  const [files, setFiles] = useState<readonly File[]>([]);
 
-  const update = (selected: HTMLInputElement, alternate: RefObject<HTMLInputElement | null>) => {
-    if (alternate.current) alternate.current.value = '';
+  const update = (selected: HTMLInputElement) => {
     const next = selectedFiles(selected);
-    setNames(next.map((file) => file.name));
+    setFiles(next);
+    onFilesChange(next);
+  };
+
+  const useCameraPhoto = (file: File) => {
+    if (pickerRef.current) pickerRef.current.value = '';
+    const next = multiple ? [...files, file] : [file];
+    setFiles(next);
     onFilesChange(next);
   };
 
   return (
     <div className="rounded-xl border bg-background p-3">
       <p className="text-sm font-semibold">{label}</p>
-      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
+        <InlineDocumentCamera
+          id={id}
+          label={label}
+          disabled={cameraDisabled}
+          onUsePhoto={useCameraPhoto}
+          onSessionChange={onCameraSessionChange}
+        />
         <label
           htmlFor={`${id}-picker`}
           className={cn(
@@ -68,17 +85,7 @@ function FileSlot({
           )}
         >
           <FileUp aria-hidden="true" />
-          Selecionar arquivo
-        </label>
-        <label
-          htmlFor={`${id}-camera`}
-          className={cn(
-            buttonVariants({ variant: 'outline', size: 'lg' }),
-            'w-full cursor-pointer sm:w-auto',
-          )}
-        >
-          <Camera aria-hidden="true" />
-          Usar câmera
+          Escolher arquivo
         </label>
         <input
           ref={pickerRef}
@@ -88,21 +95,13 @@ function FileSlot({
           accept={accept}
           multiple={multiple}
           className="sr-only"
-          onChange={(event) => update(event.currentTarget, cameraRef)}
-        />
-        <input
-          ref={cameraRef}
-          id={`${id}-camera`}
-          name={name}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          onChange={(event) => update(event.currentTarget, pickerRef)}
+          onChange={(event) => update(event.currentTarget)}
         />
       </div>
       <p className="mt-2 min-h-5 text-xs text-muted-foreground" aria-live="polite">
-        {names.length > 0 ? names.join(', ') : 'Nenhum arquivo selecionado.'}
+        {files.length > 0
+          ? files.map((file) => file.name).join(', ')
+          : 'Nenhum arquivo selecionado.'}
       </p>
     </div>
   );
@@ -140,10 +139,16 @@ export function DocumentUploadForm({
   const [singleFiles, setSingleFiles] = useState<readonly File[]>([]);
   const [frontFiles, setFrontFiles] = useState<readonly File[]>([]);
   const [backFiles, setBackFiles] = useState<readonly File[]>([]);
+  const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
   const frontBackReady =
     frontFiles.length > 0 && backFiles.length > 0 && frontFiles.length === backFiles.length;
   const ready = requiresFrontBack ? frontBackReady : singleFiles.length > 0;
   const accept = accepts.join(',');
+  const cameraSession = useCallback(
+    (cameraId: string) => (active: boolean) =>
+      setActiveCameraId((current) => (active ? cameraId : current === cameraId ? null : current)),
+    [],
+  );
 
   const activate = () => {
     flushSync(() => setExpanded(true));
@@ -251,6 +256,8 @@ export function DocumentUploadForm({
             accept={accept}
             multiple={repeatableByDependent}
             onFilesChange={setFrontFiles}
+            cameraDisabled={activeCameraId !== null && activeCameraId !== `${itemId}-front`}
+            onCameraSessionChange={cameraSession(`${itemId}-front`)}
           />
           <FileSlot
             key={`back-${resetVersion}`}
@@ -260,6 +267,8 @@ export function DocumentUploadForm({
             accept={accept}
             multiple={repeatableByDependent}
             onFilesChange={setBackFiles}
+            cameraDisabled={activeCameraId !== null && activeCameraId !== `${itemId}-back`}
+            onCameraSessionChange={cameraSession(`${itemId}-back`)}
           />
         </div>
       ) : (
@@ -271,6 +280,8 @@ export function DocumentUploadForm({
           accept={accept}
           multiple={repeatableByDependent || allowsMultiplePages}
           onFilesChange={setSingleFiles}
+          cameraDisabled={activeCameraId !== null && activeCameraId !== `${itemId}-single`}
+          onCameraSessionChange={cameraSession(`${itemId}-single`)}
         />
       )}
       <input type="hidden" name="requiresFrontBack" value={requiresFrontBack ? 'true' : 'false'} />
