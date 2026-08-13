@@ -40,6 +40,14 @@ streaming, sem um limite funcional por tamanho. Depois do upload, a API conclui
 a pré-validação e a tela indica revisão humana pendente. Aprovação, recusa ou
 reenvio registram motivo, validade e conferência do original quando aplicável.
 
+A captura não utiliza o atributo HTML `capture`, que pode trocar o Chrome pela
+Activity externa da câmera e perder a página em Android com pouca memória. A
+câmera abre dentro do Lume com `getUserMedia`, preferência pela lente traseira e
+resolução ideal de 1280 × 960. Cada frame é limitado a 1,2 megapixel, convertido
+para JPEG com qualidade 0,82 e tem o stream encerrado imediatamente. A prévia
+usa somente o arquivo otimizado e sua URL temporária é revogada ao confirmar,
+refazer, cancelar ou sair da tela.
+
 Enquanto o documento aguarda revisão, o titular pode substituir o arquivo ou
 remover o envio para tentar novamente. Depois da aprovação, a exclusão aparece
 somente para quem gerencia documentos e exige motivo. Arquivos são visualizados
