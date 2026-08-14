@@ -151,6 +151,7 @@ function MessageAttachmentPreview({
   readonly attachment: WhatsAppMessageAttachment;
 }) {
   const [contentUnavailable, setContentUnavailable] = useState(false);
+  const [contentRequested, setContentRequested] = useState(false);
   const label = normalizeAttachmentLabel(kind, attachment);
   const formatLabel =
     attachment.mimeType === 'application/pdf' ? 'Documento PDF' : MESSAGE_KIND_LABELS[kind];
@@ -175,6 +176,23 @@ function MessageAttachmentPreview({
   }
 
   const contentUrl = attachment.url;
+  const requiresExplicitLoad =
+    kind === 'image' || kind === 'sticker' || kind === 'video' || kind === 'audio';
+
+  if (requiresExplicitLoad && !contentRequested) {
+    return (
+      <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-background/70 p-2 text-foreground">
+        <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <strong className="block truncate text-xs">{label}</strong>
+          <small className="block text-muted-foreground">{details}</small>
+        </span>
+        <Button type="button" variant="outline" size="sm" onClick={() => setContentRequested(true)}>
+          Carregar mídia
+        </Button>
+      </div>
+    );
+  }
 
   if (kind === 'image' || kind === 'sticker') {
     return (
@@ -265,6 +283,8 @@ export interface ConversationMessageSheetProps {
   readonly isLoaded: boolean;
   readonly detailError: string;
   readonly onRetry: () => void;
+  readonly onLoadOlder: () => void;
+  readonly isLoadingOlder: boolean;
   readonly onRefresh: () => void;
   readonly messageDraft: string;
   readonly onMessageDraftChange: (value: string) => void;
@@ -286,6 +306,8 @@ export function ConversationMessageSheet({
   isLoaded,
   detailError,
   onRetry,
+  onLoadOlder,
+  isLoadingOlder,
   onRefresh,
   messageDraft,
   onMessageDraftChange,
@@ -416,7 +438,7 @@ export function ConversationMessageSheet({
         <span className="sr-only">Mensagens e anexos — </span>
         Abrir chat
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          {conversation.messages.length}
+          {conversation.messageHistory?.total ?? conversation.messages.length}
         </span>
       </SheetTrigger>
 
@@ -464,6 +486,22 @@ export function ConversationMessageSheet({
             </div>
           ) : conversation.messages.length > 0 ? (
             <div className="space-y-5">
+              {conversation.messageHistory &&
+              conversation.messageHistory.page < conversation.messageHistory.totalPages ? (
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isLoadingOlder}
+                    onClick={onLoadOlder}
+                  >
+                    {isLoadingOlder
+                      ? 'Carregando mensagens anteriores...'
+                      : 'Carregar mensagens anteriores'}
+                  </Button>
+                </div>
+              ) : null}
               {conversation.messages.map((message) => {
                 const isOutbound = message.direction === 'outbound';
                 const failedAttempt = [...message.attempts]

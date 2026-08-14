@@ -29,11 +29,15 @@ export async function GET(request: Request) {
     );
   }
 
-  const conversationId = new URL(request.url).searchParams.get('conversationId')?.trim();
+  const searchParams = new URL(request.url).searchParams;
+  const conversationId = searchParams.get('conversationId')?.trim();
+  const rawMessagePage = Number.parseInt(searchParams.get('messagePage') ?? '1', 10);
+  const messagePage =
+    Number.isSafeInteger(rawMessagePage) && rawMessagePage > 0 ? rawMessagePage : 1;
 
   try {
     if (conversationId) {
-      const conversation = await pollWhatsAppConversationForDashboard(conversationId);
+      const conversation = await pollWhatsAppConversationForDashboard(conversationId, messagePage);
 
       if (conversation === null) {
         return NextResponse.json({ message: 'Conversa não encontrada.' }, { status: 404 });

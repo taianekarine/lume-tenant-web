@@ -85,6 +85,8 @@ function renderSheet() {
       isLoaded
       detailError=""
       onRetry={jest.fn()}
+      onLoadOlder={jest.fn()}
+      isLoadingOlder={false}
       onRefresh={jest.fn()}
       messageDraft=""
       onMessageDraftChange={jest.fn()}
@@ -105,6 +107,10 @@ describe('pré-visualização de mídias no chat', () => {
     renderSheet();
 
     expect(screen.getByText('Mensagem de texto legível.')).toBeInTheDocument();
+    expect(screen.queryByAltText('foto.jpg')).not.toBeInTheDocument();
+    screen.getAllByRole('button', { name: 'Carregar mídia' }).forEach((button) => {
+      fireEvent.click(button);
+    });
     expect(screen.getByAltText('foto.jpg')).toBeInTheDocument();
     expect(screen.getByLabelText('audio.m4a')).toBeInTheDocument();
     expect(screen.getByLabelText('video.mp4')).toBeInTheDocument();
@@ -120,6 +126,7 @@ describe('pré-visualização de mídias no chat', () => {
   it('informa claramente quando uma mídia histórica não pode mais ser carregada', () => {
     renderSheet();
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'Carregar mídia' })[0]);
     fireEvent.error(screen.getByAltText('foto.jpg'));
 
     expect(screen.getByText(/arquivo não está mais disponível/i)).toBeInTheDocument();

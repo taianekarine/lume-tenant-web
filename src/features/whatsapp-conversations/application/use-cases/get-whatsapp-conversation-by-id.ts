@@ -3,6 +3,7 @@ import type { WhatsAppConversationRepository } from '../contracts';
 export function getWhatsAppConversationById(
   repository: WhatsAppConversationRepository,
   conversationId: unknown,
+  messagePage: unknown = 1,
 ) {
   if (typeof conversationId !== 'string') {
     return Promise.resolve(null);
@@ -14,5 +15,10 @@ export function getWhatsAppConversationById(
     return Promise.resolve(null);
   }
 
-  return repository.getConversationById(normalizedConversationId);
+  const normalizedMessagePage =
+    typeof messagePage === 'number' && Number.isSafeInteger(messagePage) && messagePage > 0
+      ? messagePage
+      : 1;
+
+  return repository.getConversationById(normalizedConversationId, normalizedMessagePage);
 }

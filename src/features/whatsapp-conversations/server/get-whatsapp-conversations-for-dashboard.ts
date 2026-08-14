@@ -44,9 +44,12 @@ export function getWhatsAppConversationForDashboard(conversationId: unknown) {
   );
 }
 
-export function pollWhatsAppConversationForDashboard(conversationId: unknown) {
+export function pollWhatsAppConversationForDashboard(
+  conversationId: unknown,
+  messagePage: unknown = 1,
+) {
   return executeAuthenticatedWhatsAppMutation((repository) =>
-    getWhatsAppConversationById(repository, conversationId),
+    getWhatsAppConversationById(repository, conversationId, messagePage),
   );
 }
 

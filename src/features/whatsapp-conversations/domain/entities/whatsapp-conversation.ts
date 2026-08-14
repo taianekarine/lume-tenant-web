@@ -138,6 +138,13 @@ export interface WhatsAppMessage {
   readonly attempts: readonly WhatsAppMessageAttempt[];
 }
 
+export interface WhatsAppMessageHistory {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly total: number;
+  readonly totalPages: number;
+}
+
 export interface WhatsAppConversationSnapshot {
   readonly department: WhatsAppConversationDepartment;
   readonly conversationState: WhatsAppConversationState;
@@ -214,6 +221,7 @@ export interface WhatsAppConversation {
   readonly currentQuoteRequest: WhatsAppQuoteRequest | null;
   readonly hasApprovedQuoteRequest: boolean;
   readonly messages: readonly WhatsAppMessage[];
+  readonly messageHistory?: WhatsAppMessageHistory;
   readonly transitions: readonly WhatsAppConversationTransition[];
 }
 

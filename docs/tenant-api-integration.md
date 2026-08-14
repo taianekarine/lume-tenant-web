@@ -141,9 +141,10 @@ As quatro dimensões canônicas consumidas são:
   Comercial.
 
 O adapter agrega todas as páginas da lista de conversas, evitando limitar as
-filas aos primeiros 100 registros. O detalhe também agrega todas as páginas de
-mensagens (100 itens por página), incluindo
-metadados de anexos HTTPS, `deliveryStatus`, tentativas e motivo de falha. A
+filas aos primeiros 100 registros. O detalhe carrega as 100 mensagens mais
+recentes e permite buscar páginas anteriores sob demanda, preservando a posição
+de leitura e evitando renderizar milhares de registros de uma vez. Cada página inclui
+metadados de anexos, `deliveryStatus`, tentativas e motivo de falha. A
 solicitação atual é exibida com campos estruturados e sua própria versão.
 Campos operacionais internos da API, como identificadores e leases de claim do
 dispatcher, hashes ou chaves de persistência das transições, são descartados
@@ -273,12 +274,18 @@ O histórico de mensagens e o compositor ficam no painel lateral aberto por
 para distinguir mensagens recebidas e enviadas, mostrar o estado de entrega e
 listar anexos. O rodapé de uma mensagem enviada exibe a data, a hora e
 `sentBy.name`, publicado pela Tenant API; quando esse campo não existe em um
-registro antigo, a atribuição atual é usada somente como fallback visual. O
-renderer usa `kind` e `media`: imagem e figurinha são exibidas, áudio e vídeo
+registro antigo, a atribuição atual é usada somente como fallback visual.
+
+O conteúdo binário de imagem, áudio e vídeo é solicitado apenas quando o usuário
+seleciona **Carregar mídia**; referências históricas sem retenção ficam
+identificadas como indisponíveis e não disparam requisições automáticas.
+
+O renderer usa `kind` e `media`: imagem e figurinha são exibidas, áudio e vídeo
 possuem controles nativos e documentos mantêm o link de abertura. Sem URL
 HTTPS fornecida pelo provedor, o chat conserva os metadados e sinaliza que o
 conteúdo não está disponível, sem inventar ou buscar o arquivo no navegador.
-compositor envia por clique, `Enter` ou `NumpadEnter`; `Shift+Enter` preserva a
+
+O compositor envia por clique, `Enter` ou `NumpadEnter`; `Shift+Enter` preserva a
 quebra de linha. Uma conversa ainda sem responsável pode ser assumida dentro
 do próprio painel lateral. O painel usa toda a largura do mobile e, no desktop,
 possui limite de 84 rem, o dobro do limite anterior de 42 rem, sem rolagem
