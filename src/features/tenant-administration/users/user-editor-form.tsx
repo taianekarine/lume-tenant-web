@@ -234,6 +234,10 @@ export function UserEditorForm({
   const dependents = useFieldArray({ control: form.control, name: 'dependents' });
   const isAdministrator = user.isAdministrator;
   const departments = useWatch({ control: form.control, name: 'departments' });
+  const documentAccessMode = useWatch({
+    control: form.control,
+    name: 'documentAccessMode',
+  });
   const standardPermissions = useMemo(
     () => compatiblePermissionCodes(permissionCatalog, departments),
     [departments, permissionCatalog],
@@ -339,6 +343,43 @@ export function UserEditorForm({
               />
               <FieldDescription>O identificador de acesso não é alterado.</FieldDescription>
             </Field>
+
+            {canManageAccess ? (
+              <Field data-invalid={Boolean(form.formState.errors.documentAccessMode)}>
+                <FieldLabel htmlFor="edit-user-access-mode">Modo de acesso</FieldLabel>
+                <Controller
+                  control={form.control}
+                  name="documentAccessMode"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={isAdministrator}
+                    >
+                      <SelectTrigger id="edit-user-access-mode" className="w-full">
+                        <SelectValue>
+                          {field.value === 'document-portal'
+                            ? 'Candidato — somente documentos'
+                            : 'Colaborador — painel autorizado'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Colaborador — painel autorizado</SelectItem>
+                        <SelectItem value="document-portal">
+                          Candidato — somente documentos
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <FieldDescription>
+                  {documentAccessMode === 'document-portal'
+                    ? 'O candidato acessa somente o portal documental.'
+                    : 'O colaborador acessa as áreas liberadas abaixo.'}
+                </FieldDescription>
+                <FieldError errors={[form.formState.errors.documentAccessMode]} />
+              </Field>
+            ) : null}
           </div>
 
           <FieldSet>
@@ -481,7 +522,9 @@ export function UserEditorForm({
               <FieldDescription>
                 {isAdministrator
                   ? 'Todos os departamentos estão incluídos automaticamente.'
-                  : 'O usuário deve permanecer vinculado a ao menos um departamento.'}
+                  : documentAccessMode === 'document-portal'
+                    ? 'O departamento pode ser preparado agora ou definido ao promover o candidato.'
+                    : 'O colaborador deve permanecer vinculado a ao menos um departamento.'}
               </FieldDescription>
               <DepartmentCheckboxes control={form.control} disabled={isAdministrator} />
               <FieldError errors={[form.formState.errors.departments]} />

@@ -866,7 +866,9 @@ export function ConversationMessageSheet({
                     <DropdownMenuLabel>Adicionar</DropdownMenuLabel>
                     <DropdownMenuItem
                       onClick={() =>
-                        openAttachmentPicker('application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv')
+                        openAttachmentPicker(
+                          'application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z,application/zip,application/x-zip-compressed,application/vnd.rar,application/x-rar-compressed,application/x-7z-compressed',
+                        )
                       }
                     >
                       <FileText aria-hidden="true" /> Documento
@@ -1031,7 +1033,11 @@ export function ConversationMessageSheet({
                   {isTakingOver ? (
                     <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
                   ) : null}
-                  {isTakingOver ? 'Assumindo...' : 'Assumir atendimento'}
+                  {isTakingOver
+                    ? 'Iniciando...'
+                    : conversation.conversationState === 'closed'
+                      ? 'Iniciar atendimento'
+                      : 'Assumir atendimento'}
                 </Button>
               ) : null}
               <Button

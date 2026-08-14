@@ -62,6 +62,7 @@ export interface WhatsAppMediaContent {
 }
 
 export interface WhatsAppConversationRepository {
+  startConversation(phone: string): Promise<WhatsAppConversation>;
   getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]>;

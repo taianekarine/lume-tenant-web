@@ -469,6 +469,45 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     expect(requests.every(([, body]) => /^[0-9a-f-]{36}$/.test(body.commandId))).toBe(true);
   });
 
+  it('starts a canonical human conversation by phone', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse(
+        apiConversation({
+          conversationState: 'human-active',
+          flowStep: 'human-service',
+          assignedTo: {
+            id: '00000000-0000-4000-8000-000000000801',
+            name: 'Atendente Comercial',
+          },
+        }),
+      ),
+    );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'https://tenant.example/api/v1',
+      'token',
+      fetcher,
+    );
+
+    await expect(repository.startConversation('5534987654321')).resolves.toMatchObject({
+      id: conversationId,
+      conversationState: 'human-active',
+      assignedTo: { name: 'Atendente Comercial' },
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://tenant.example/api/v1/whatsapp/conversations',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(String),
+      }),
+    );
+    const requestBody = JSON.parse(
+      (fetcher.mock.calls[0]?.[1] as RequestInit).body as string,
+    ) as Record<string, unknown>;
+    expect(requestBody).toMatchObject({ phone: '5534987654321' });
+    expect(requestBody.commandId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it('maps HTTP 409 and details.currentVersion to a typed conflict', async () => {
     const fetcher = jest.fn().mockResolvedValue(
       jsonResponse(

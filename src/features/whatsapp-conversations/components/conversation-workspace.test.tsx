@@ -7,6 +7,7 @@ import {
   markWhatsAppConversationAsReadAction,
   returnWhatsAppConversationToBotAction,
   sendHumanWhatsAppMessageAction,
+  startWhatsAppConversationAction,
   takeOverWhatsAppConversationAction,
 } from '../actions';
 import type { WhatsAppConversation } from '../domain';
@@ -27,6 +28,7 @@ jest.mock('../actions', () => ({
   markWhatsAppConversationAsReadAction: jest.fn(),
   returnWhatsAppConversationToBotAction: jest.fn(),
   sendHumanWhatsAppMessageAction: jest.fn(),
+  startWhatsAppConversationAction: jest.fn(),
   takeOverWhatsAppConversationAction: jest.fn(),
 }));
 
@@ -35,6 +37,7 @@ const mockedClose = jest.mocked(closeWhatsAppConversationAction);
 const mockedMarkAsRead = jest.mocked(markWhatsAppConversationAsReadAction);
 const mockedReturnToBot = jest.mocked(returnWhatsAppConversationToBotAction);
 const mockedSendMessage = jest.mocked(sendHumanWhatsAppMessageAction);
+const mockedStartConversation = jest.mocked(startWhatsAppConversationAction);
 const mockedTakeOver = jest.mocked(takeOverWhatsAppConversationAction);
 const originalFetch = global.fetch;
 
@@ -67,6 +70,72 @@ describe('ConversationWorkspace', () => {
       configurable: true,
       value: 'visible',
     });
+  });
+
+  it('inicia uma conversa pelo telefone e seleciona o atendimento criado', async () => {
+    const current = createWhatsAppConversationFixture({ unreadCount: 0 });
+    const started = createWhatsAppConversationFixture({
+      id: '00000000-0000-4000-8000-000000000777',
+      contact: {
+        id: '00000000-0000-4000-8000-000000000778',
+        name: '5534987654321',
+        phone: '5534987654321',
+        profilePictureUrl: null,
+      },
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      assignedTo: { id: 'employee-001', name: 'Usuário Comercial' },
+      unreadCount: 0,
+    });
+    mockFetchDetail(started);
+    mockedStartConversation.mockResolvedValue({ success: true, conversation: started });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[current]} currentUserId="employee-001" />);
+
+    await user.click(screen.getByRole('button', { name: 'Nova conversa' }));
+    await user.type(screen.getByLabelText('Número do WhatsApp'), '(34) 98765-4321');
+    await user.click(screen.getByRole('button', { name: 'Iniciar atendimento' }));
+
+    await waitFor(() =>
+      expect(mockedStartConversation).toHaveBeenCalledWith({ phone: '(34) 98765-4321' }),
+    );
+    expect(await screen.findAllByText('5534987654321')).not.toHaveLength(0);
+  });
+
+  it('reinicia atendimento humano na conversa encerrada existente', async () => {
+    const closed = createWhatsAppConversationFixture({
+      conversationState: 'closed',
+      flowStep: 'closed',
+      assignedTo: null,
+      closedAt: '2026-08-14T12:00:00.000Z',
+      version: 8,
+      unreadCount: 0,
+    });
+    const reopened = createWhatsAppConversationFixture({
+      ...closed,
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      assignedTo: { id: 'employee-001', name: 'Usuário Comercial' },
+      closedAt: null,
+      version: 9,
+    });
+    mockFetchDetail(closed);
+    mockedTakeOver.mockResolvedValue({ success: true, conversation: reopened });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[closed]} currentUserId="employee-001" />);
+
+    const startButton = screen.getByRole('button', { name: 'Iniciar atendimento' });
+    expect(startButton).toBeEnabled();
+    await user.click(startButton);
+
+    await waitFor(() =>
+      expect(mockedTakeOver).toHaveBeenCalledWith({
+        conversationId: closed.id,
+        expectedVersion: 8,
+      }),
+    );
   });
 
   it('preserves loaded pagination metadata during list polling', () => {

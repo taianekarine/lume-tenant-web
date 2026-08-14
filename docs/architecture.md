@@ -74,9 +74,10 @@ página usam espaçamento compacto para preservar a área útil antes das filas,
 gráficos e catálogos.
 
 A foto do usuário é sincronizada no shell pelo
-`CurrentUserProfilePictureProvider`. Depois que a Tenant API confirma uma
-alteração em **Meu perfil**, a página publica o novo `dataUrl` para todas as
-representações montadas do usuário. A sidebar já consome
+`CurrentUserProfilePictureProvider`. Ao montar o shell, a Route Handler
+autenticada `/api/current-user/profile-picture` recupera a foto persistida na
+Tenant API; depois que a API confirma uma alteração em **Meu perfil**, a página
+publica o novo `dataUrl` para todas as representações montadas do usuário. A sidebar já consome
 `CurrentUserAvatar`; o mesmo componente é reutilizável em mensagens e outros
 contextos sem alterar os componentes base do shadcn/ui. A cópia local é
 separada por `userId` e serve somente para atualização visual imediata: a

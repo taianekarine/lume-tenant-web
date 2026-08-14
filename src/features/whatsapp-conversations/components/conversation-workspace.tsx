@@ -16,6 +16,7 @@ import {
   History,
   Inbox,
   MessageCircle,
+  MessageSquarePlus,
   Phone,
   RefreshCw,
   RotateCcw,
@@ -40,6 +41,7 @@ import {
 } from '@/shared/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
+import { Input } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 
 import {
@@ -48,6 +50,7 @@ import {
   markWhatsAppConversationAsReadAction,
   returnWhatsAppConversationToBotAction,
   sendHumanWhatsAppMessageAction,
+  startWhatsAppConversationAction,
   takeOverWhatsAppConversationAction,
   type SendHumanWhatsAppMessageActionResult,
   type WhatsAppConversationActionResult,
@@ -308,6 +311,8 @@ export function ConversationWorkspace({
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [isStartConversationDialogOpen, setIsStartConversationDialogOpen] = useState(false);
+  const [newConversationPhone, setNewConversationPhone] = useState('');
   const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
@@ -659,6 +664,38 @@ export function ConversationWorkspace({
     });
   }
 
+  function handleStartConversation() {
+    setFeedbackMessage('');
+    setFeedbackTone('neutral');
+
+    startConversationTransition(async () => {
+      const result = await startWhatsAppConversationAction({ phone: newConversationPhone });
+      if (!result.success) {
+        setFeedbackMessage(result.message);
+        setFeedbackTone('error');
+        return;
+      }
+
+      const conversation = result.conversation;
+      setConversations((current) => [
+        conversation,
+        ...current.filter((candidate) => candidate.id !== conversation.id),
+      ]);
+      setLoadedConversationIds((current) => {
+        const next = new Set(current);
+        next.delete(conversation.id);
+        return next;
+      });
+      setSelectedConversationId(conversation.id);
+      setMobileDetailOpen(true);
+      setTargetDepartment(getDefaultTargetDepartment(conversation.department));
+      setNewConversationPhone('');
+      setIsStartConversationDialogOpen(false);
+      setFeedbackMessage('Atendimento iniciado com sucesso.');
+      setFeedbackTone('success');
+    });
+  }
+
   function handleForward() {
     if (!selectedConversation) return;
     setFeedbackMessage('');
@@ -922,7 +959,11 @@ export function ConversationWorkspace({
 
   return (
     <>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <Button type="button" onClick={() => setIsStartConversationDialogOpen(true)}>
+          <MessageSquarePlus aria-hidden="true" />
+          Nova conversa
+        </Button>
         <Link
           href="/whatsapp-conversations/import"
           className={buttonVariants({ variant: 'outline' })}
@@ -931,6 +972,43 @@ export function ConversationWorkspace({
           Importar históricos
         </Link>
       </div>
+      <Dialog open={isStartConversationDialogOpen} onOpenChange={setIsStartConversationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Iniciar nova conversa</DialogTitle>
+            <DialogDescription>
+              Informe o número com DDD. O canal e o atendimento serão preparados automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label htmlFor="new-whatsapp-conversation-phone" className="text-sm font-medium">
+              Número do WhatsApp
+            </label>
+            <Input
+              id="new-whatsapp-conversation-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              value={newConversationPhone}
+              onChange={(event) => setNewConversationPhone(event.target.value)}
+              placeholder="(34) 99999-9999"
+              disabled={isUpdatingConversation}
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
+            <Button
+              type="button"
+              onClick={handleStartConversation}
+              disabled={
+                isUpdatingConversation || newConversationPhone.replace(/\D/g, '').length < 10
+              }
+            >
+              {isUpdatingConversation ? 'Iniciando...' : 'Iniciar atendimento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <ConversationMetricsCards conversations={conversations} className="mt-4" />
       <section aria-labelledby="conversation-workspace-title" className={styles.section()}>
         <h2 id="conversation-workspace-title" className={styles.visuallyHidden()}>
@@ -1349,6 +1427,7 @@ export function ConversationWorkspace({
                       }
                       disabled={
                         isUpdatingConversation ||
+                        selectedConversation.conversationState === 'closed' ||
                         !canTakeOverWhatsAppConversation(selectedConversation)
                       }
                       className={styles.actionButton({ action: 'human' })}
@@ -1375,15 +1454,30 @@ export function ConversationWorkspace({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setIsCloseDialogOpen(true)}
+                      onClick={() =>
+                        selectedConversation.conversationState === 'closed'
+                          ? handleVersionedAction(
+                              takeOverWhatsAppConversationAction,
+                              'Atendimento iniciado com sucesso.',
+                            )
+                          : setIsCloseDialogOpen(true)
+                      }
                       disabled={
                         isUpdatingConversation ||
-                        !canCloseWhatsAppConversation(selectedConversation)
+                        (selectedConversation.conversationState === 'closed'
+                          ? !canTakeOverWhatsAppConversation(selectedConversation)
+                          : !canCloseWhatsAppConversation(selectedConversation))
                       }
                       className={styles.actionButton({ action: 'close' })}
                     >
-                      <CircleStop aria-hidden="true" />
-                      Encerrar atendimento
+                      {selectedConversation.conversationState === 'closed' ? (
+                        <Headset aria-hidden="true" />
+                      ) : (
+                        <CircleStop aria-hidden="true" />
+                      )}
+                      {selectedConversation.conversationState === 'closed'
+                        ? 'Iniciar atendimento'
+                        : 'Encerrar atendimento'}
                     </button>
                   </div>
                   <div className={styles.actions()}>

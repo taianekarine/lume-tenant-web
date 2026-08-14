@@ -70,6 +70,28 @@ export function CurrentUserProfilePictureProvider({
 
   React.useEffect(() => {
     const hydrateId = window.setTimeout(() => setPictureDataUrl(readStoredPicture(userId)), 0);
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch('/api/current-user/profile-picture', {
+          cache: 'no-store',
+        });
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as { profilePictureDataUrl?: unknown };
+        const picture =
+          typeof payload.profilePictureDataUrl === 'string' &&
+          payload.profilePictureDataUrl.startsWith('data:image/')
+            ? payload.profilePictureDataUrl
+            : null;
+        if (cancelled) return;
+        persistPicture(userId, picture);
+        setPictureDataUrl(picture);
+      } catch {
+        // A foto em cache continua disponível quando a atualização remota falha.
+      }
+    })();
 
     const receivePicture = (event: Event) => {
       const detail = (event as CustomEvent<ProfilePictureEventDetail>).detail;
@@ -78,6 +100,7 @@ export function CurrentUserProfilePictureProvider({
 
     window.addEventListener(PROFILE_PICTURE_EVENT, receivePicture);
     return () => {
+      cancelled = true;
       window.clearTimeout(hydrateId);
       window.removeEventListener(PROFILE_PICTURE_EVENT, receivePicture);
     };

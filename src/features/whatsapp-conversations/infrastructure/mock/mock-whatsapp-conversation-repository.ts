@@ -58,6 +58,52 @@ function updateConversation(
 }
 
 export class MockWhatsAppConversationRepository implements WhatsAppConversationRepository {
+  async startConversation(phone: string): Promise<WhatsAppConversation> {
+    const existing = mockConversations.find(
+      (conversation) => conversation.contact.phone.replace(/\D/g, '') === phone.replace(/\D/g, ''),
+    );
+    if (existing) {
+      return updateConversation(existing.id, existing.version, {
+        conversationState: 'human-active',
+        flowStep: 'human-service',
+        assignedTo: { id: 'mock-user', name: 'Usuário de teste' },
+        closedAt: null,
+      });
+    }
+
+    const template = structuredClone(INITIAL_MOCK_WHATSAPP_CONVERSATIONS[0]);
+    const now = new Date().toISOString();
+    const conversation: WhatsAppConversation = {
+      ...template,
+      id: globalThis.crypto.randomUUID(),
+      contact: {
+        id: globalThis.crypto.randomUUID(),
+        name: phone,
+        phone,
+        profilePictureUrl: null,
+      },
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      requestStatus: 'not-started',
+      assignedTo: { id: 'mock-user', name: 'Usuário de teste' },
+      unreadCount: 0,
+      version: 2,
+      lastInboundAt: null,
+      lastOutboundAt: null,
+      lastMessagePreview: '',
+      lastMessageAt: now,
+      closedAt: null,
+      createdAt: now,
+      updatedAt: now,
+      currentQuoteRequest: null,
+      hasApprovedQuoteRequest: false,
+      messages: [],
+      transitions: [],
+    };
+    mockConversations = [conversation, ...mockConversations];
+    return cloneConversation(conversation);
+  }
+
   async getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]> {
