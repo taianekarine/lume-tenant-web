@@ -11,6 +11,7 @@ import {
   returnWhatsAppConversationToBot,
   searchWhatsAppMessages,
   sendHumanWhatsAppMessage,
+  startWhatsAppConversation,
   takeOverWhatsAppConversation,
   type GetWhatsAppConversationsFilters,
 } from '../application';
@@ -22,6 +23,12 @@ import {
 export function getWhatsAppConversationsForDashboard(filters?: GetWhatsAppConversationsFilters) {
   return executeAuthenticatedWhatsAppRequest((repository) =>
     getWhatsAppConversations(repository, filters),
+  );
+}
+
+export function startWhatsAppConversationForDashboard(phone: unknown) {
+  return executeAuthenticatedWhatsAppMutation((repository) =>
+    startWhatsAppConversation(repository, phone),
   );
 }
 

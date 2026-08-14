@@ -398,6 +398,17 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
     this.baseUrl = normalizeBaseUrl(baseUrl);
   }
 
+  async startConversation(phone: string): Promise<WhatsAppConversation> {
+    const response = parseResponse(
+      conversationSchema,
+      await this.request('/whatsapp/conversations', {
+        method: 'POST',
+        body: { commandId: randomUUID(), phone },
+      }),
+    );
+    return mapConversation(response);
+  }
+
   async getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]> {

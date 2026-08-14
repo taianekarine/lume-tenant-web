@@ -18,6 +18,7 @@ import {
   pollWhatsAppConversationForDashboard,
   returnWhatsAppConversationToBotForDashboard,
   sendHumanWhatsAppMessageForDashboard,
+  startWhatsAppConversationForDashboard,
   takeOverWhatsAppConversationForDashboard,
 } from '../server';
 import { createWhatsAppConversationFixture } from '../testing/whatsapp-conversation-fixture';
@@ -28,6 +29,7 @@ import {
   markWhatsAppConversationAsReadAction,
   returnWhatsAppConversationToBotAction,
   sendHumanWhatsAppMessageAction,
+  startWhatsAppConversationAction,
   takeOverWhatsAppConversationAction,
 } from './whatsapp-conversation-actions';
 
@@ -43,6 +45,7 @@ jest.mock('../server', () => ({
   pollWhatsAppConversationForDashboard: jest.fn(),
   returnWhatsAppConversationToBotForDashboard: jest.fn(),
   sendHumanWhatsAppMessageForDashboard: jest.fn(),
+  startWhatsAppConversationForDashboard: jest.fn(),
   takeOverWhatsAppConversationForDashboard: jest.fn(),
 }));
 
@@ -54,6 +57,7 @@ const mockedReturn = jest.mocked(returnWhatsAppConversationToBotForDashboard);
 const mockedForward = jest.mocked(forwardWhatsAppConversationForDashboard);
 const mockedMarkRead = jest.mocked(markWhatsAppConversationAsReadForDashboard);
 const mockedSendMessage = jest.mocked(sendHumanWhatsAppMessageForDashboard);
+const mockedStartConversation = jest.mocked(startWhatsAppConversationForDashboard);
 const mockedPoll = jest.mocked(pollWhatsAppConversationForDashboard);
 
 function createSession(permissions: readonly Permission[]): AuthenticatedSession {
@@ -82,6 +86,22 @@ describe('WhatsApp conversation server actions', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('starts a human conversation for an authorized user', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+    });
+    mockedStartConversation.mockResolvedValue(conversation);
+
+    await expect(startWhatsAppConversationAction({ phone: '(34) 98765-4321' })).resolves.toEqual({
+      success: true,
+      conversation,
+    });
+
+    expect(mockedStartConversation).toHaveBeenCalledWith('(34) 98765-4321');
+    expect(revalidatePath).toHaveBeenCalledWith('/whatsapp-conversations');
   });
 
   it('enforces whatsapp-conversations:manage before every write', async () => {

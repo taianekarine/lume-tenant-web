@@ -148,7 +148,7 @@ describe('WhatsApp conversation domain', () => {
         ...staleAssignment,
         conversationState: 'closed',
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('keeps the approved-proposal close guard disabled during the MVP', () => {

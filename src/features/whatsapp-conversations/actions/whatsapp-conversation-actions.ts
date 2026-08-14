@@ -16,6 +16,7 @@ import {
   pollWhatsAppConversationForDashboard,
   returnWhatsAppConversationToBotForDashboard,
   sendHumanWhatsAppMessageForDashboard,
+  startWhatsAppConversationForDashboard,
   takeOverWhatsAppConversationForDashboard,
 } from '../server';
 import { hasPermission } from '@/features/auth/domain';
@@ -76,6 +77,32 @@ export type SendHumanWhatsAppMessageActionResult =
       readonly message: string;
       readonly conversation?: WhatsAppConversation;
     };
+
+export async function startWhatsAppConversationAction(input: {
+  readonly phone: unknown;
+}): Promise<WhatsAppConversationActionResult> {
+  if (!(await isAuthorized())) {
+    return {
+      success: false,
+      code: 'forbidden',
+      message: 'Você não tem permissão para iniciar uma conversa.',
+    };
+  }
+
+  try {
+    const conversation = await startWhatsAppConversationForDashboard(input.phone);
+    if (conversation === null) {
+      return {
+        success: false,
+        code: 'validation',
+        message: 'Informe um número de WhatsApp válido com DDD.',
+      };
+    }
+    return completeAction(conversation);
+  } catch (error) {
+    return standardActionFailure(error);
+  }
+}
 
 async function isAuthorized(): Promise<boolean> {
   const session = await getCurrentAuthenticatedSession();
