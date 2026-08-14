@@ -147,4 +147,47 @@ describe('pré-visualização de mídias no chat', () => {
     expect(screen.getByText('video-grande.mp4')).toBeInTheDocument();
     expect(screen.getByText(/arquivo acima do limite permitido/i)).toBeInTheDocument();
   });
+
+  it('insere emoji e identifica figurinha WebP antes do envio', async () => {
+    const onMessageDraftChange = jest.fn();
+    const onSelectedAttachmentChange = jest.fn();
+    render(
+      <ConversationMessageSheet
+        conversation={createWhatsAppConversationFixture({ id: conversationId })}
+        open
+        onOpenChange={jest.fn()}
+        isLoading={false}
+        isLoaded
+        detailError=""
+        onRetry={jest.fn()}
+        onLoadOlder={jest.fn()}
+        isLoadingOlder={false}
+        onRefresh={jest.fn()}
+        messageDraft="Olá "
+        onMessageDraftChange={onMessageDraftChange}
+        selectedAttachment={null}
+        onSelectedAttachmentChange={onSelectedAttachmentChange}
+        canSendMessage
+        canTakeOver={false}
+        isTakingOver={false}
+        onTakeOver={jest.fn()}
+        isSendingMessage={false}
+        onSendMessage={jest.fn()}
+        feedbackMessage=""
+        feedbackTone="neutral"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar emoji' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Inserir sorriso feliz' }));
+    expect(onMessageDraftChange).toHaveBeenCalledWith('Olá 😀');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar anexo' }));
+    fireEvent.click(await screen.findByText('Figurinha WebP'));
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input?.accept).toBe('image/webp,.webp');
+    const sticker = new File(['webp'], 'figurinha.webp', { type: 'image/webp' });
+    fireEvent.change(input!, { target: { files: [sticker] } });
+    expect(onSelectedAttachmentChange).toHaveBeenCalledWith(sticker, 'sticker');
+  });
 });

@@ -6,4 +6,5 @@ export * from './get-whatsapp-conversations';
 export * from './mark-whatsapp-conversation-as-read';
 export * from './return-whatsapp-conversation-to-bot';
 export * from './send-human-whatsapp-message';
+export * from './search-whatsapp-messages';
 export * from './take-over-whatsapp-conversation';

@@ -1,16 +1,25 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Popover } from '@base-ui/react/popover';
 
 import {
   AlertCircle,
+  Contact,
   Download,
   ExternalLink,
+  FileText,
+  Image as ImageIcon,
+  ImagePlay,
   LoaderCircle,
   MessageCircleMore,
+  Music,
   Paperclip,
   RefreshCw,
+  Search,
   Send,
+  Smile,
+  Sticker,
   X,
 } from 'lucide-react';
 
@@ -18,6 +27,15 @@ import { CurrentUserAvatar } from '@/shared/current-user-avatar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Bubble, BubbleContent } from '@/shared/ui/bubble';
 import { Button } from '@/shared/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu';
+import { Input } from '@/shared/ui/input';
 import {
   Message,
   MessageAvatar,
@@ -78,6 +96,41 @@ const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
   'video/webm': '.webm',
   'video/quicktime': '.mov',
 };
+
+const EMOJI_OPTIONS = [
+  ['😀', 'sorriso feliz'],
+  ['😂', 'rindo lágrimas'],
+  ['🥰', 'apaixonado carinho'],
+  ['😍', 'amor olhos'],
+  ['😊', 'feliz tímido'],
+  ['😉', 'piscando'],
+  ['😎', 'óculos legal'],
+  ['🥳', 'festa'],
+  ['😢', 'triste choro'],
+  ['😭', 'chorando'],
+  ['😡', 'bravo'],
+  ['🤔', 'pensando'],
+  ['👍', 'positivo gostei'],
+  ['👎', 'negativo'],
+  ['👏', 'palmas'],
+  ['🙏', 'obrigado por favor'],
+  ['🤝', 'acordo'],
+  ['💪', 'força'],
+  ['❤️', 'coração amor'],
+  ['💚', 'coração verde'],
+  ['✨', 'brilho'],
+  ['✅', 'confirmado certo'],
+  ['❌', 'errado cancelar'],
+  ['⚠️', 'atenção'],
+  ['🎉', 'comemoração'],
+  ['🚐', 'van transporte'],
+  ['🚌', 'ônibus transporte'],
+  ['📍', 'localização'],
+  ['📎', 'anexo'],
+  ['📄', 'documento'],
+] as const;
+
+type AttachmentPickerKind = 'auto' | 'sticker';
 
 function formatDateTime(value: string): string {
   return DATE_TIME_FORMATTER.format(new Date(value));
@@ -312,7 +365,7 @@ export interface ConversationMessageSheetProps {
   readonly messageDraft: string;
   readonly onMessageDraftChange: (value: string) => void;
   readonly selectedAttachment: File | null;
-  readonly onSelectedAttachmentChange: (file: File | null) => void;
+  readonly onSelectedAttachmentChange: (file: File | null, kind?: AttachmentPickerKind) => void;
   readonly canSendMessage: boolean;
   readonly canTakeOver: boolean;
   readonly isTakingOver: boolean;
@@ -349,7 +402,15 @@ export function ConversationMessageSheet({
 }: ConversationMessageSheetProps) {
   const historyRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const attachmentPickerKindRef = useRef<AttachmentPickerKind>('auto');
   const initialScrollFrameRef = useRef<number | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMessages, setSearchMessages] = useState<WhatsAppConversation['messages']>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [emojiSearch, setEmojiSearch] = useState('');
   const previousHistoryRef = useRef({
     open: false,
     loaded: false,
@@ -362,6 +423,61 @@ export function ConversationMessageSheet({
   });
   const firstMessageId = conversation.messages[0]?.id ?? '';
   const lastMessageId = conversation.messages.at(-1)?.id ?? '';
+  const normalizedEmojiSearch = emojiSearch.trim().toLocaleLowerCase('pt-BR');
+  const visibleEmojis = EMOJI_OPTIONS.filter(([, keywords]) =>
+    normalizedEmojiSearch ? keywords.includes(normalizedEmojiSearch) : true,
+  );
+
+  const openAttachmentPicker = useCallback(
+    (accept: string, kind: AttachmentPickerKind = 'auto') => {
+      const input = attachmentInputRef.current;
+      if (!input) return;
+      attachmentPickerKindRef.current = kind;
+      input.accept = accept;
+      input.click();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!open || !searchOpen) return;
+    const query = searchQuery.trim();
+    if (query.length < 2) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIsSearching(true);
+      setSearchError('');
+      try {
+        const params = new URLSearchParams({
+          conversationId: conversation.id,
+          messageSearch: query,
+        });
+        const response = await fetch(`/api/whatsapp-conversations?${params.toString()}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          messages?: WhatsAppConversation['messages'];
+          total?: number;
+          message?: string;
+        } | null;
+        if (!response.ok) throw new Error(payload?.message || 'Pesquisa indisponível.');
+        setSearchMessages(payload?.messages ?? []);
+        setSearchTotal(payload?.total ?? 0);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setSearchMessages([]);
+        setSearchTotal(0);
+        setSearchError(error instanceof Error ? error.message : 'Pesquisa indisponível.');
+      } finally {
+        if (!controller.signal.aborted) setIsSearching(false);
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [conversation.id, open, searchOpen, searchQuery]);
   const bindHistoryRef = useCallback(
     (history: HTMLDivElement | null) => {
       historyRef.current = history;
@@ -472,21 +588,97 @@ export function ConversationMessageSheet({
 
       <SheetContent className="w-full gap-0 overflow-x-hidden data-[side=right]:w-full sm:!max-w-none sm:data-[side=right]:w-[min(60rem,calc(100vw-3rem))]">
         <SheetHeader className="border-b pr-12">
-          <SheetTitle>Conversa com {conversation.contact.name}</SheetTitle>
-          <SheetDescription>
-            {conversation.contact.phone} · Mensagens e anexos salvos.
-          </SheetDescription>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-2 w-fit"
-            onClick={onRefresh}
-          >
-            <RefreshCw aria-hidden="true" />
-            Atualizar
-          </Button>
+          <div className="flex min-w-0 items-center gap-3">
+            <Avatar className="size-10 shrink-0">
+              {conversation.contact.profilePictureUrl ? (
+                <AvatarImage
+                  src={conversation.contact.profilePictureUrl}
+                  alt={`Foto de ${conversation.contact.name}`}
+                />
+              ) : null}
+              <AvatarFallback>{getInitial(conversation.contact.name)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <SheetTitle className="truncate">Conversa com {conversation.contact.name}</SheetTitle>
+              <SheetDescription>
+                {conversation.contact.phone} · Mensagens e anexos salvos.
+              </SheetDescription>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={searchOpen ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setSearchOpen((current) => !current)}
+              aria-expanded={searchOpen}
+            >
+              <Search aria-hidden="true" />
+              Pesquisar mensagens
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
+              <RefreshCw aria-hidden="true" />
+              Atualizar
+            </Button>
+          </div>
         </SheetHeader>
+
+        {searchOpen ? (
+          <section className="border-b bg-muted/10 p-3 sm:p-4" aria-label="Pesquisar mensagens">
+            <div className="flex items-center gap-2">
+              <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Pesquisar texto ou nome de arquivo"
+                maxLength={160}
+                autoFocus
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Fechar pesquisa"
+                onClick={() => setSearchOpen(false)}
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </div>
+            {searchQuery.trim().length < 2 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Digite ao menos dois caracteres para pesquisar todo o histórico.
+              </p>
+            ) : isSearching ? (
+              <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+                Pesquisando...
+              </p>
+            ) : searchError ? (
+              <p className="mt-2 text-xs text-destructive-emphasis">{searchError}</p>
+            ) : (
+              <div className="mt-2 max-h-52 space-y-1 overflow-y-auto" aria-live="polite">
+                <p className="text-xs text-muted-foreground">
+                  {searchTotal === 1
+                    ? '1 mensagem encontrada'
+                    : `${searchTotal.toLocaleString('pt-BR')} mensagens encontradas`}
+                </p>
+                {searchMessages.map((message) => (
+                  <article key={message.id} className="rounded-lg border bg-background p-2 text-sm">
+                    <p className="line-clamp-3 whitespace-pre-wrap break-words">
+                      {message.text ||
+                        message.attachment?.fileName ||
+                        MESSAGE_KIND_LABELS[message.kind]}
+                    </p>
+                    <small className="text-muted-foreground">
+                      {formatDateTime(message.occurredAt)} ·{' '}
+                      {message.direction === 'outbound' ? 'Atendimento' : conversation.contact.name}
+                    </small>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
 
         <div
           ref={bindHistoryRef}
@@ -653,6 +845,109 @@ export function ConversationMessageSheet({
               {canSendMessage ? 'Atendente ativo' : 'Envio bloqueado'}
             </span>
           </div>
+          {canSendMessage ? (
+            <div className="flex items-center gap-1" aria-label="Opções da mensagem">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Adicionar anexo"
+                      disabled={isSendingMessage}
+                    />
+                  }
+                >
+                  <Paperclip aria-hidden="true" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="start" className="w-56">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Adicionar</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        openAttachmentPicker('application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv')
+                      }
+                    >
+                      <FileText aria-hidden="true" /> Documento
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openAttachmentPicker('image/*,video/*')}>
+                      <ImageIcon aria-hidden="true" /> Fotos e vídeos
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openAttachmentPicker('audio/*')}>
+                      <Music aria-hidden="true" /> Áudio
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => openAttachmentPicker('.vcf,text/vcard,text/x-vcard')}
+                    >
+                      <Contact aria-hidden="true" /> Contato
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openAttachmentPicker('image/gif,.gif')}>
+                      <ImagePlay aria-hidden="true" /> GIF do dispositivo
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => openAttachmentPicker('image/webp,.webp', 'sticker')}
+                    >
+                      <Sticker aria-hidden="true" /> Figurinha WebP
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Popover.Root>
+                <Popover.Trigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Adicionar emoji"
+                      disabled={isSendingMessage}
+                    />
+                  }
+                >
+                  <Smile aria-hidden="true" />
+                </Popover.Trigger>
+                <Popover.Portal>
+                  <Popover.Positioner side="top" align="start" sideOffset={8} className="z-50">
+                    <Popover.Popup className="w-[min(22rem,calc(100vw-2rem))] rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg outline-none">
+                      <Popover.Title className="font-semibold">Emojis</Popover.Title>
+                      <Input
+                        value={emojiSearch}
+                        onChange={(event) => setEmojiSearch(event.target.value)}
+                        placeholder="Pesquisar emoji"
+                        className="mt-2"
+                      />
+                      <div className="mt-2 grid max-h-52 grid-cols-7 gap-1 overflow-y-auto sm:grid-cols-8">
+                        {visibleEmojis.map(([emoji, keywords]) => (
+                          <Popover.Close
+                            key={emoji}
+                            render={
+                              <button
+                                type="button"
+                                className="flex size-9 items-center justify-center rounded-md text-xl hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                aria-label={`Inserir ${keywords}`}
+                                onClick={() =>
+                                  onMessageDraftChange(
+                                    `${messageDraft}${emoji}`.slice(
+                                      0,
+                                      HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH,
+                                    ),
+                                  )
+                                }
+                              />
+                            }
+                          >
+                            {emoji}
+                          </Popover.Close>
+                        ))}
+                      </div>
+                    </Popover.Popup>
+                  </Popover.Positioner>
+                </Popover.Portal>
+              </Popover.Root>
+            </div>
+          ) : null}
           <Textarea
             id="human-message"
             value={messageDraft}
@@ -683,10 +978,12 @@ export function ConversationMessageSheet({
             ref={attachmentInputRef}
             type="file"
             className="sr-only"
-            accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.vcf,text/vcard,text/x-vcard"
             disabled={!canSendMessage || isSendingMessage}
             onChange={(event) => {
-              onSelectedAttachmentChange(event.target.files?.item(0) ?? null);
+              onSelectedAttachmentChange(
+                event.target.files?.[0] ?? null,
+                attachmentPickerKindRef.current,
+              );
               event.currentTarget.value = '';
             }}
           />
@@ -705,7 +1002,7 @@ export function ConversationMessageSheet({
                 size="icon-sm"
                 aria-label="Remover anexo"
                 disabled={isSendingMessage}
-                onClick={() => onSelectedAttachmentChange(null)}
+                onClick={() => onSelectedAttachmentChange(null, 'auto')}
               >
                 <X aria-hidden="true" />
               </Button>
@@ -723,18 +1020,6 @@ export function ConversationMessageSheet({
                   : 'grid w-full min-w-0 max-w-full grid-cols-1 overflow-x-hidden'
               }
             >
-              {canSendMessage ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full min-w-0 max-w-full gap-1 overflow-hidden px-1 text-xs sm:px-2.5 sm:text-sm"
-                  disabled={isSendingMessage}
-                  onClick={() => attachmentInputRef.current?.click()}
-                >
-                  <Paperclip aria-hidden="true" className="size-3.5" />
-                  Anexar arquivo
-                </Button>
-              ) : null}
               {!canSendMessage && canTakeOver ? (
                 <Button
                   type="button"

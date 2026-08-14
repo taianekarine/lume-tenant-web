@@ -7,6 +7,7 @@ import {
   type SendHumanWhatsAppMessageResult,
   type WhatsAppConversationRepository,
   type WhatsAppMediaContent,
+  type WhatsAppMessageSearchResult,
 } from '../../application';
 import type { WhatsAppConversation, WhatsAppConversationDepartment } from '../../domain';
 import { INITIAL_MOCK_WHATSAPP_CONVERSATIONS } from './mock-whatsapp-conversations';
@@ -87,6 +88,29 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
   async getConversationById(conversationId: string): Promise<WhatsAppConversation | null> {
     const conversation = mockConversations.find((candidate) => candidate.id === conversationId);
     return conversation ? cloneConversation(conversation) : null;
+  }
+
+  async searchMessages(
+    conversationId: string,
+    search: string,
+    page = 1,
+  ): Promise<WhatsAppMessageSearchResult> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation)
+      throw new WhatsAppConversationRepositoryError('not-found', 'Conversa não encontrada.');
+    const normalized = search.trim().toLocaleLowerCase('pt-BR');
+    const messages = conversation.messages.filter((message) =>
+      `${message.text ?? ''} ${message.attachment?.fileName ?? ''}`
+        .toLocaleLowerCase('pt-BR')
+        .includes(normalized),
+    );
+    return {
+      messages,
+      page,
+      pageSize: 50,
+      total: messages.length,
+      totalPages: messages.length > 0 ? 1 : 0,
+    };
   }
 
   async takeOverConversation(
