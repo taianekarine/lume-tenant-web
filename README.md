@@ -94,7 +94,9 @@ conversa está encerrada, projeta ali o atendente que executou o encerramento. S
 ações operacionais em duas colunas e abre encaminhamento, status comercial,
 histórico de ações e orçamentos em modais. O botão **Abrir chat** abre o painel
 lateral construído com o componente `Message` do shadcn/ui para leitura do
-histórico, anexos e envio de texto pelo atendente. No desktop, esse painel pode
+histórico completo, anexos e envio de texto ou arquivo pelo atendente. As
+mensagens anteriores são carregadas progressivamente quando o usuário chega ao
+início da lista, preservando a posição de leitura. No desktop, esse painel pode
 usar até 84 rem de largura — aproximadamente o dobro da largura anterior — e,
 no celular, ocupa a largura disponível sem criar rolagem horizontal.
 O chat apresenta imagens e figurinhas, reproduz áudio e vídeo e oferece a
@@ -103,6 +105,14 @@ conteúdos permanecem no histórico, mas nunca são enviados à IA para leitura.
 O header autenticado também concentra o sino para todos os usuários ativos; a Tenant API
 retorna somente notificações compatíveis com seus departamentos. Não há
 integração direta do navegador com cache ou Evolution.
+
+Usuários com permissão de gerenciamento podem abrir **Importar históricos** no
+Painel WhatsApp, selecionar vários backups ZIP, acompanhar falhas por arquivo,
+revisar telefone, participante, departamento e estado e aplicar uma única
+planilha consolidada. Anexos contidos nos ZIPs ficam acessíveis nas respectivas
+mensagens; somente referências realmente ausentes são marcadas como
+indisponíveis. A gravação continua sob responsabilidade do importador oficial
+da Tenant API.
 
 No MVP, uma proposta aprovada não impede o atendente de encerrar a conversa,
 desde que não exista outra proposta em coleta, aguardando cliente ou em análise.

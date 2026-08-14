@@ -9,7 +9,9 @@ import {
   getWhatsAppConversations,
   markWhatsAppConversationAsRead,
   returnWhatsAppConversationToBot,
+  searchWhatsAppMessages,
   sendHumanWhatsAppMessage,
+  startWhatsAppConversation,
   takeOverWhatsAppConversation,
   type GetWhatsAppConversationsFilters,
 } from '../application';
@@ -21,6 +23,12 @@ import {
 export function getWhatsAppConversationsForDashboard(filters?: GetWhatsAppConversationsFilters) {
   return executeAuthenticatedWhatsAppRequest((repository) =>
     getWhatsAppConversations(repository, filters),
+  );
+}
+
+export function startWhatsAppConversationForDashboard(phone: unknown) {
+  return executeAuthenticatedWhatsAppMutation((repository) =>
+    startWhatsAppConversation(repository, phone),
   );
 }
 
@@ -38,15 +46,28 @@ export function pollWhatsAppConversationsForDashboard(filters?: GetWhatsAppConve
   );
 }
 
+export function searchWhatsAppMessagesForDashboard(
+  conversationId: unknown,
+  search: unknown,
+  page: unknown = 1,
+) {
+  return executeAuthenticatedWhatsAppMutation((repository) =>
+    searchWhatsAppMessages(repository, conversationId, search, page),
+  );
+}
+
 export function getWhatsAppConversationForDashboard(conversationId: unknown) {
   return executeAuthenticatedWhatsAppRequest((repository) =>
     getWhatsAppConversationById(repository, conversationId),
   );
 }
 
-export function pollWhatsAppConversationForDashboard(conversationId: unknown) {
+export function pollWhatsAppConversationForDashboard(
+  conversationId: unknown,
+  messagePage: unknown = 1,
+) {
   return executeAuthenticatedWhatsAppMutation((repository) =>
-    getWhatsAppConversationById(repository, conversationId),
+    getWhatsAppConversationById(repository, conversationId, messagePage),
   );
 }
 

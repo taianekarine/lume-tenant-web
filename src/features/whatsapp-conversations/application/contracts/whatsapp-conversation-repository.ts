@@ -6,6 +6,14 @@ import type {
   WhatsAppRequestStatus,
 } from '../../domain';
 
+export interface WhatsAppMessageSearchResult {
+  readonly messages: readonly WhatsAppMessage[];
+  readonly page: number;
+  readonly pageSize: number;
+  readonly total: number;
+  readonly totalPages: number;
+}
+
 export interface GetWhatsAppConversationsFilters {
   readonly page?: number;
   readonly pageSize?: number;
@@ -54,13 +62,22 @@ export interface WhatsAppMediaContent {
 }
 
 export interface WhatsAppConversationRepository {
+  startConversation(phone: string): Promise<WhatsAppConversation>;
   getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]>;
   getDashboardConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]>;
-  getConversationById(conversationId: string): Promise<WhatsAppConversation | null>;
+  getConversationById(
+    conversationId: string,
+    messagePage?: number,
+  ): Promise<WhatsAppConversation | null>;
+  searchMessages(
+    conversationId: string,
+    search: string,
+    page?: number,
+  ): Promise<WhatsAppMessageSearchResult>;
   takeOverConversation(
     conversationId: string,
     expectedVersion: number,
@@ -91,8 +108,5 @@ export interface WhatsAppConversationRepository {
     conversationId: string,
     command: SendHumanWhatsAppMessageCommand,
   ): Promise<SendHumanWhatsAppMessageResult>;
-  downloadMessageContent(
-    conversationId: string,
-    messageId: string,
-  ): Promise<WhatsAppMediaContent>;
+  downloadMessageContent(conversationId: string, messageId: string): Promise<WhatsAppMediaContent>;
 }

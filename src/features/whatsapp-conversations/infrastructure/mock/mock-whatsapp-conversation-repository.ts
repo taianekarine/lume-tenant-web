@@ -7,6 +7,7 @@ import {
   type SendHumanWhatsAppMessageResult,
   type WhatsAppConversationRepository,
   type WhatsAppMediaContent,
+  type WhatsAppMessageSearchResult,
 } from '../../application';
 import type { WhatsAppConversation, WhatsAppConversationDepartment } from '../../domain';
 import { INITIAL_MOCK_WHATSAPP_CONVERSATIONS } from './mock-whatsapp-conversations';
@@ -57,6 +58,52 @@ function updateConversation(
 }
 
 export class MockWhatsAppConversationRepository implements WhatsAppConversationRepository {
+  async startConversation(phone: string): Promise<WhatsAppConversation> {
+    const existing = mockConversations.find(
+      (conversation) => conversation.contact.phone.replace(/\D/g, '') === phone.replace(/\D/g, ''),
+    );
+    if (existing) {
+      return updateConversation(existing.id, existing.version, {
+        conversationState: 'human-active',
+        flowStep: 'human-service',
+        assignedTo: { id: 'mock-user', name: 'Usuário de teste' },
+        closedAt: null,
+      });
+    }
+
+    const template = structuredClone(INITIAL_MOCK_WHATSAPP_CONVERSATIONS[0]);
+    const now = new Date().toISOString();
+    const conversation: WhatsAppConversation = {
+      ...template,
+      id: globalThis.crypto.randomUUID(),
+      contact: {
+        id: globalThis.crypto.randomUUID(),
+        name: phone,
+        phone,
+        profilePictureUrl: null,
+      },
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      requestStatus: 'not-started',
+      assignedTo: { id: 'mock-user', name: 'Usuário de teste' },
+      unreadCount: 0,
+      version: 2,
+      lastInboundAt: null,
+      lastOutboundAt: null,
+      lastMessagePreview: '',
+      lastMessageAt: now,
+      closedAt: null,
+      createdAt: now,
+      updatedAt: now,
+      currentQuoteRequest: null,
+      hasApprovedQuoteRequest: false,
+      messages: [],
+      transitions: [],
+    };
+    mockConversations = [conversation, ...mockConversations];
+    return cloneConversation(conversation);
+  }
+
   async getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]> {
@@ -87,6 +134,29 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
   async getConversationById(conversationId: string): Promise<WhatsAppConversation | null> {
     const conversation = mockConversations.find((candidate) => candidate.id === conversationId);
     return conversation ? cloneConversation(conversation) : null;
+  }
+
+  async searchMessages(
+    conversationId: string,
+    search: string,
+    page = 1,
+  ): Promise<WhatsAppMessageSearchResult> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation)
+      throw new WhatsAppConversationRepositoryError('not-found', 'Conversa não encontrada.');
+    const normalized = search.trim().toLocaleLowerCase('pt-BR');
+    const messages = conversation.messages.filter((message) =>
+      `${message.text ?? ''} ${message.attachment?.fileName ?? ''}`
+        .toLocaleLowerCase('pt-BR')
+        .includes(normalized),
+    );
+    return {
+      messages,
+      page,
+      pageSize: 50,
+      total: messages.length,
+      totalPages: messages.length > 0 ? 1 : 0,
+    };
   }
 
   async takeOverConversation(

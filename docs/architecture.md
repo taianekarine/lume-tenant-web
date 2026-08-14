@@ -53,6 +53,13 @@ Tenant API. Em conflito 409, o frontend recarrega a conversa antes de permitir
 uma nova tentativa. O frontend nunca chama cache, Evolution ou o edge
 diretamente.
 
+A rota `/whatsapp-conversations/import` prepara importações em massa sem criar
+uma segunda regra de persistência. O navegador envia um ZIP por vez a uma Route
+Handler autenticada, revisa os mapeamentos e solicita uma planilha consolidada.
+A Tenant API aplica essa planilha pelo importador oficial. O frontend não tenta
+identificar contatos por nome, não decide estados automaticamente e não guarda
+tokens ou arquivos de histórico no cliente.
+
 ## Shell, tema e estados de carregamento
 
 As rotas autenticadas compartilham `AuthenticatedShell`, montado com os
@@ -67,9 +74,10 @@ página usam espaçamento compacto para preservar a área útil antes das filas,
 gráficos e catálogos.
 
 A foto do usuário é sincronizada no shell pelo
-`CurrentUserProfilePictureProvider`. Depois que a Tenant API confirma uma
-alteração em **Meu perfil**, a página publica o novo `dataUrl` para todas as
-representações montadas do usuário. A sidebar já consome
+`CurrentUserProfilePictureProvider`. Ao montar o shell, a Route Handler
+autenticada `/api/current-user/profile-picture` recupera a foto persistida na
+Tenant API; depois que a API confirma uma alteração em **Meu perfil**, a página
+publica o novo `dataUrl` para todas as representações montadas do usuário. A sidebar já consome
 `CurrentUserAvatar`; o mesmo componente é reutilizável em mensagens e outros
 contextos sem alterar os componentes base do shadcn/ui. A cópia local é
 separada por `userId` e serve somente para atualização visual imediata: a

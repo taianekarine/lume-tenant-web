@@ -22,6 +22,7 @@ não são expostos a componentes client-side.
 | Notificações  | `GET /notifications`, `POST /notifications/:notificationId/read`                                                                |
 | Licença local | `GET /license/status`                                                                                                           |
 | WhatsApp      | `GET /whatsapp/conversations`                                                                                                   |
+| WhatsApp      | `POST /whatsapp/conversations`                                                                                                  |
 | WhatsApp      | `GET /whatsapp/conversations/dashboard`                                                                                         |
 | WhatsApp      | `GET /whatsapp/conversations/:id`                                                                                               |
 | WhatsApp      | `GET /whatsapp/conversations/:id/messages`                                                                                      |
@@ -32,6 +33,7 @@ não são expostos a componentes client-side.
 | WhatsApp      | `POST /whatsapp/conversations/:id/actions/mark-read`                                                                            |
 | WhatsApp      | `POST /whatsapp/conversations/:id/actions/close`                                                                                |
 | WhatsApp      | `POST /whatsapp/conversations/:id/messages`                                                                                     |
+| Históricos    | `GET/POST/PATCH /whatsapp/history-imports/*`                                                                                    |
 | Propostas     | `GET /whatsapp/quote-proposals?stage=pending\|sent\|approved\|cancelled&search=&createdFrom=&createdTo=`                        |
 | Propostas     | `GET /whatsapp/quote-proposals/:id`                                                                                             |
 | Propostas     | `POST /whatsapp/quote-proposals/:id/documents`                                                                                  |
@@ -42,6 +44,24 @@ não são expostos a componentes client-side.
 
 As rotas acima são relativas ao prefixo configurado, normalmente
 `http://localhost:3333/api/v1` no desenvolvimento.
+
+## Importação assistida de históricos
+
+`/api/whatsapp-history-import/*` é uma Route Handler com lista explícita de
+caminhos permitidos. Ela encaminha o corpo como stream, mantém o bearer token
+somente no servidor e preserva apenas os cabeçalhos de conteúdo necessários. A
+renovação da sessão segue o mesmo executor autenticado usado pelas ações do
+Painel WhatsApp.
+
+A tela envia os ZIPs sequencialmente. O progresso e os erros são exibidos por
+arquivo, portanto um backup inválido não interrompe os demais. Depois da revisão
+manual, o download e a aplicação usam uma única planilha consolidada. Configure
+`LUME_TENANT_API_WHATSAPP_IMPORT_TIMEOUT_MS` acima da janela esperada para um ZIP
+grande, sem remover os limites de segurança da Tenant API.
+
+Uma conversa já aplicada pode participar de um novo lote sem duplicar mensagens
+nem bloquear as demais. Arquivos realmente presentes em cada ZIP são retidos
+pela Tenant API e passam a usar a mesma rota autenticada das mídias correntes.
 
 ## Sessão e renovação
 
@@ -126,9 +146,10 @@ As quatro dimensões canônicas consumidas são:
   Comercial.
 
 O adapter agrega todas as páginas da lista de conversas, evitando limitar as
-filas aos primeiros 100 registros. O detalhe também agrega todas as páginas de
-mensagens (100 itens por página), incluindo
-metadados de anexos HTTPS, `deliveryStatus`, tentativas e motivo de falha. A
+filas aos primeiros 100 registros. O detalhe carrega as 100 mensagens mais
+recentes e permite buscar páginas anteriores sob demanda, preservando a posição
+de leitura e evitando renderizar milhares de registros de uma vez. Cada página inclui
+metadados de anexos, `deliveryStatus`, tentativas e motivo de falha. A
 solicitação atual é exibida com campos estruturados e sua própria versão.
 Campos operacionais internos da API, como identificadores e leases de claim do
 dispatcher, hashes ou chaves de persistência das transições, são descartados
@@ -219,6 +240,13 @@ atendente. O frontend usa a rota canônica `actions/close`; a rota
 `close-after-rejection` existe somente como alias legado no backend e não é
 emitida pelo painel.
 
+Para iniciar um atendimento, o painel envia o telefone a
+`POST /whatsapp/conversations`. A Tenant API normaliza o número, escolhe o canal
+ativo e cria ou reutiliza a conversa canônica antes de atribuir o usuário atual.
+Uma conversa encerrada expõe **Iniciar atendimento**, que reutiliza `take-over`
+para bloquear o bot, limpar o encerramento e ativar o atendente sem duplicar o
+histórico.
+
 O encerramento exige conversa aberta e ausência de proposta ativa. No MVP,
 `hasApprovedQuoteRequest=true` não bloqueia mais o botão: a política anterior
 permanece no domínio, desabilitada por uma constante explícita, para possível
@@ -231,9 +259,9 @@ com proposta aprovada, sem atendente responsável, pode executar **Devolver ao
 bot** para retomar o menu de acompanhamento; a mesma ação continua bloqueada
 para um resumo ainda aguardando confirmação. Para proposta recusada, a Tenant
 API exige um motivo efetivo: o texto confirmado pelo atendente ou o motivo já
-persistido na decisão. O próximo inbound do mesmo telefone cria uma nova
-conversa em `bot-active/main-menu`; histórico, proposta e auditoria permanecem
-preservados.
+persistido na decisão. O próximo inbound do mesmo telefone reutiliza a conversa
+canônica e reinicia o bot em `bot-active/main-menu`; histórico, proposta e
+auditoria permanecem preservados.
 
 A matriz ainda não publica comandos de painel para aguardar cliente ou cancelar
 solicitação. Esses controles permanecem desabilitados e identificados como
@@ -258,13 +286,21 @@ O histórico de mensagens e o compositor ficam no painel lateral aberto por
 para distinguir mensagens recebidas e enviadas, mostrar o estado de entrega e
 listar anexos. O rodapé de uma mensagem enviada exibe a data, a hora e
 `sentBy.name`, publicado pela Tenant API; quando esse campo não existe em um
-registro antigo, a atribuição atual é usada somente como fallback visual. O
-renderer usa `kind` e `media`: imagem e figurinha são exibidas, áudio e vídeo
+registro antigo, a atribuição atual é usada somente como fallback visual.
+
+O conteúdo binário de imagem, áudio e vídeo é solicitado apenas quando o usuário
+seleciona **Carregar mídia**; referências históricas sem retenção ficam
+identificadas como indisponíveis e não disparam requisições automáticas.
+
+O renderer usa `kind` e `media`: imagem e figurinha são exibidas, áudio e vídeo
 possuem controles nativos e documentos mantêm o link de abertura. Sem URL
 HTTPS fornecida pelo provedor, o chat conserva os metadados e sinaliza que o
 conteúdo não está disponível, sem inventar ou buscar o arquivo no navegador.
-compositor envia por clique, `Enter` ou `NumpadEnter`; `Shift+Enter` preserva a
-quebra de linha. Uma conversa ainda sem responsável pode ser assumida dentro
+
+O compositor envia texto ou um anexo por clique, `Enter` ou `NumpadEnter`;
+`Shift+Enter` preserva a quebra de linha. Imagens, vídeos, áudios, documentos,
+arquivos ZIP/RAR/7z e contatos `.vcf` usam um Route Handler multipart autenticado e entram na mesma
+outbox durável das mensagens de texto. Uma conversa ainda sem responsável pode ser assumida dentro
 do próprio painel lateral. O painel usa toda a largura do mobile e, no desktop,
 possui limite de 84 rem, o dobro do limite anterior de 42 rem, sem rolagem
 horizontal. Todas essas escritas usam Server Actions: o
@@ -447,7 +483,10 @@ do filtro é o publicado por `GET /permissions` e inclui permissões individuais
 automáticas; a Tenant API resolve o acesso efetivo antes de aplicar o filtro. O
 cadastramento possui três etapas obrigatórias e somente a ação final da etapa de
 permissões envia os dados. Nomes de usuário precisam conter ao menos uma letra.
-Na edição, cada bloco possui **Selecionar todas** com estado parcial.
+Na edição, cada bloco possui **Selecionar todas** com estado parcial. Perfis com
+autoridade de gestão também podem trocar **Candidato — somente documentos** por
+**Colaborador — painel autorizado**; a promoção exige departamento e permissões
+compatíveis antes do envio à Tenant API.
 
 `isAdministrator` é uma autoridade explícita da Tenant API, não um cargo, mas
 não pode ser atribuída pelo Tenant Web. O cadastro força

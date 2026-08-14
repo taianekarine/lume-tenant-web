@@ -138,6 +138,13 @@ export interface WhatsAppMessage {
   readonly attempts: readonly WhatsAppMessageAttempt[];
 }
 
+export interface WhatsAppMessageHistory {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly total: number;
+  readonly totalPages: number;
+}
+
 export interface WhatsAppConversationSnapshot {
   readonly department: WhatsAppConversationDepartment;
   readonly conversationState: WhatsAppConversationState;
@@ -214,6 +221,7 @@ export interface WhatsAppConversation {
   readonly currentQuoteRequest: WhatsAppQuoteRequest | null;
   readonly hasApprovedQuoteRequest: boolean;
   readonly messages: readonly WhatsAppMessage[];
+  readonly messageHistory?: WhatsAppMessageHistory;
   readonly transitions: readonly WhatsAppConversationTransition[];
 }
 
@@ -273,10 +281,7 @@ export function isWhatsAppQuoteSummaryConfirmed(conversation: WhatsAppConversati
 }
 
 export function canTakeOverWhatsAppConversation(conversation: WhatsAppConversation): boolean {
-  return (
-    conversation.conversationState !== 'closed' &&
-    !(conversation.conversationState === 'human-active' && conversation.assignedTo !== null)
-  );
+  return !(conversation.conversationState === 'human-active' && conversation.assignedTo !== null);
 }
 
 export function canReturnWhatsAppConversationToBot(conversation: WhatsAppConversation): boolean {

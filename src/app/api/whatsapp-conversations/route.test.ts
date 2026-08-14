@@ -9,6 +9,7 @@ import { getCurrentAuthenticatedSession } from '@/features/auth/server';
 import {
   pollWhatsAppConversationForDashboard,
   pollWhatsAppConversationsForDashboard,
+  searchWhatsAppMessagesForDashboard,
 } from '@/features/whatsapp-conversations/server';
 import { createWhatsAppConversationFixture } from '@/features/whatsapp-conversations/testing/whatsapp-conversation-fixture';
 
@@ -20,11 +21,13 @@ jest.mock('@/features/auth/server', () => ({
 jest.mock('@/features/whatsapp-conversations/server', () => ({
   pollWhatsAppConversationForDashboard: jest.fn(),
   pollWhatsAppConversationsForDashboard: jest.fn(),
+  searchWhatsAppMessagesForDashboard: jest.fn(),
 }));
 
 const mockedSession = jest.mocked(getCurrentAuthenticatedSession);
 const mockedPollDetail = jest.mocked(pollWhatsAppConversationForDashboard);
 const mockedPollList = jest.mocked(pollWhatsAppConversationsForDashboard);
+const mockedSearch = jest.mocked(searchWhatsAppMessagesForDashboard);
 
 function session(permissions: readonly Permission[]): AuthenticatedSession {
   return {
@@ -72,16 +75,39 @@ describe('WhatsApp polling route', () => {
     });
   });
 
-  it('loads a selected conversation with its complete history', async () => {
+  it('loads the selected page of a conversation history', async () => {
     const conversation = createWhatsAppConversationFixture();
     mockedSession.mockResolvedValue(session(['whatsapp-conversations:manage']));
     mockedPollDetail.mockResolvedValue(conversation);
 
     const response = await GET(
-      new Request(`http://localhost/api/whatsapp-conversations?conversationId=${conversation.id}`),
+      new Request(
+        `http://localhost/api/whatsapp-conversations?conversationId=${conversation.id}&messagePage=4`,
+      ),
     );
 
     expect(response.status).toBe(200);
-    expect(mockedPollDetail).toHaveBeenCalledWith(conversation.id);
+    expect(mockedPollDetail).toHaveBeenCalledWith(conversation.id, 4);
+  });
+
+  it('searches the complete conversation history through the authenticated server layer', async () => {
+    const conversation = createWhatsAppConversationFixture();
+    mockedSession.mockResolvedValue(session(['whatsapp-conversations:manage']));
+    mockedSearch.mockResolvedValue({
+      messages: conversation.messages,
+      page: 1,
+      pageSize: 50,
+      total: conversation.messages.length,
+      totalPages: conversation.messages.length > 0 ? 1 : 0,
+    });
+
+    const response = await GET(
+      new Request(
+        `http://localhost/api/whatsapp-conversations?conversationId=${conversation.id}&messageSearch=orçamento`,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockedSearch).toHaveBeenCalledWith(conversation.id, 'orçamento', 1);
   });
 });

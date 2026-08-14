@@ -13,8 +13,11 @@ import {
 } from '@/features/auth/infrastructure/session-storage';
 import { resolveSessionRefreshReturnTo } from '@/features/auth/lib/session-refresh-return-to';
 
-function redirectResponse(request: NextRequest, path: string): NextResponse {
-  const response = NextResponse.redirect(new URL(path, request.url), 303);
+function redirectResponse(_request: NextRequest, path: string): NextResponse {
+  const response = new NextResponse(null, {
+    status: 303,
+    headers: { Location: path },
+  });
   response.headers.set('Cache-Control', 'no-store');
   return response;
 }

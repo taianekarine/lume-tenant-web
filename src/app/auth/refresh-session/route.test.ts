@@ -102,7 +102,7 @@ describe('GET /auth/refresh-session', () => {
     const response = await GET(await refreshRequest());
 
     expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe('http://localhost:3000/users?page=2');
+    expect(response.headers.get('location')).toBe('/users?page=2');
     expect(gateway.refresh).toHaveBeenCalledWith('o'.repeat(40));
     expect(response.cookies.get(SESSION_COOKIE_NAME)?.value).toBeTruthy();
 
@@ -119,7 +119,7 @@ describe('GET /auth/refresh-session', () => {
     const response = await GET(await refreshRequest());
 
     expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe('http://localhost:3000/login');
+    expect(response.headers.get('location')).toBe('/login');
     SESSION_COOKIE_NAMES.forEach((cookieName) => {
       expect(response.cookies.get(cookieName)?.value).toBe('');
     });
@@ -129,6 +129,6 @@ describe('GET /auth/refresh-session', () => {
   it('rejects an external return destination', async () => {
     const response = await GET(await refreshRequest('//attacker.example/collect'));
 
-    expect(response.headers.get('location')).toBe('http://localhost:3000/dashboard');
+    expect(response.headers.get('location')).toBe('/dashboard');
   });
 });

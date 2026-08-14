@@ -10,13 +10,16 @@ import {
 import { markWhatsAppConversationAsRead } from './mark-whatsapp-conversation-as-read';
 import { returnWhatsAppConversationToBot } from './return-whatsapp-conversation-to-bot';
 import { sendHumanWhatsAppMessage } from './send-human-whatsapp-message';
+import { startWhatsAppConversation } from './start-whatsapp-conversation';
 import { takeOverWhatsAppConversation } from './take-over-whatsapp-conversation';
 
 function createRepository(): jest.Mocked<WhatsAppConversationRepository> {
   return {
+    startConversation: jest.fn(),
     getConversations: jest.fn(),
     getDashboardConversations: jest.fn(),
     getConversationById: jest.fn(),
+    searchMessages: jest.fn(),
     takeOverConversation: jest.fn(),
     returnConversationToBot: jest.fn(),
     forwardConversation: jest.fn(),
@@ -29,6 +32,16 @@ function createRepository(): jest.Mocked<WhatsAppConversationRepository> {
 }
 
 describe('WhatsApp conversation use cases', () => {
+  it('normalizes the phone before starting a conversation', async () => {
+    const repository = createRepository();
+
+    await startWhatsAppConversation(repository, ' (34) 98765-4321 ');
+    await startWhatsAppConversation(repository, '123');
+
+    expect(repository.startConversation).toHaveBeenCalledTimes(1);
+    expect(repository.startConversation).toHaveBeenCalledWith('34987654321');
+  });
+
   it('passes the real API list filters to the repository', async () => {
     const repository = createRepository();
     const filters = {
@@ -59,11 +72,11 @@ describe('WhatsApp conversation use cases', () => {
     const repository = createRepository();
     repository.getConversationById.mockResolvedValue(null);
 
-    await getWhatsAppConversationById(repository, ' conversation-001 ');
+    await getWhatsAppConversationById(repository, ' conversation-001 ', 3);
     await getWhatsAppConversationById(repository, null);
 
     expect(repository.getConversationById).toHaveBeenCalledTimes(1);
-    expect(repository.getConversationById).toHaveBeenCalledWith('conversation-001');
+    expect(repository.getConversationById).toHaveBeenCalledWith('conversation-001', 3);
   });
 
   it('passes expectedVersion to every write', async () => {

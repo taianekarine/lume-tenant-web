@@ -32,7 +32,9 @@ para a imagem. Requisitos:
 - `SESSION_SECRET` deve ser aleatório, ter pelo menos 32 caracteres e ser
   diferente entre instalações;
 - `AUTH_SIMULATION_ENABLED=false`;
-- `LUME_TENANT_WHATSAPP_DATA_SOURCE=api`.
+- `LUME_TENANT_WHATSAPP_DATA_SOURCE=api`;
+- `LUME_TENANT_API_WHATSAPP_IMPORT_TIMEOUT_MS` compatível com o maior backup
+  aceito pela API; o exemplo usa dez minutos.
 
 Nunca grave tokens, cookies, `SESSION_SECRET` ou o arquivo real de ambiente em
 logs, imagens ou repositórios.
@@ -59,6 +61,11 @@ ambíguo no navegador.
 
 O Tenant Web precisa alcançar apenas a Tenant API e os destinos HTTPS dos anexos
 publicados por ela.
+
+Para a importação assistida, o proxy deve aceitar o limite configurado para um
+ZIP mais o overhead multipart e manter streaming habilitado. A aplicação envia
+somente um arquivo por requisição; não acumule todo o lote no proxy. O volume
+privado dos lotes pertence à Tenant API e não deve ser montado no frontend.
 
 ## Sondas
 

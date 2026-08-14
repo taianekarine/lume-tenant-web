@@ -239,7 +239,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     );
   });
 
-  it('loads complete message and transition history with delivery attempts', async () => {
+  it('loads one message page and the transition history with delivery attempts', async () => {
     const historicalRecoveryTransition = {
       ...apiTransition(),
       commandId: 'local-recovery-20382581-b462-4373-a288-e265aea0dca3',
@@ -259,7 +259,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           data: [apiMessage()],
-          meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+          meta: { page: 3, pageSize: 100, total: 250, totalPages: 3 },
         }),
       )
       .mockResolvedValueOnce(
@@ -274,7 +274,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       fetcher,
     );
 
-    const conversation = await repository.getConversationById(conversationId);
+    const conversation = await repository.getConversationById(conversationId, 3);
 
     expect(conversation?.messages).toEqual([
       expect.objectContaining({
@@ -312,9 +312,15 @@ describe('LumeApiWhatsAppConversationRepository', () => {
         }),
       ]),
     );
+    expect(conversation?.messageHistory).toEqual({
+      page: 3,
+      pageSize: 100,
+      total: 250,
+      totalPages: 3,
+    });
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
-      `https://tenant.example/api/v1/whatsapp/conversations/${conversationId}/messages?page=1&pageSize=100`,
+      `https://tenant.example/api/v1/whatsapp/conversations/${conversationId}/messages?page=3&pageSize=100`,
       expect.any(Object),
     );
     expect(fetcher).toHaveBeenNthCalledWith(
@@ -461,6 +467,45 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     expect(requests[2][1]).toMatchObject({ targetDepartment: 'operations' });
     expect(requests[5][1]).toMatchObject({ reason: 'Solicitação concluída.' });
     expect(requests.every(([, body]) => /^[0-9a-f-]{36}$/.test(body.commandId))).toBe(true);
+  });
+
+  it('starts a canonical human conversation by phone', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse(
+        apiConversation({
+          conversationState: 'human-active',
+          flowStep: 'human-service',
+          assignedTo: {
+            id: '00000000-0000-4000-8000-000000000801',
+            name: 'Atendente Comercial',
+          },
+        }),
+      ),
+    );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'https://tenant.example/api/v1',
+      'token',
+      fetcher,
+    );
+
+    await expect(repository.startConversation('5534987654321')).resolves.toMatchObject({
+      id: conversationId,
+      conversationState: 'human-active',
+      assignedTo: { name: 'Atendente Comercial' },
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://tenant.example/api/v1/whatsapp/conversations',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.any(String),
+      }),
+    );
+    const requestBody = JSON.parse(
+      (fetcher.mock.calls[0]?.[1] as RequestInit).body as string,
+    ) as Record<string, unknown>;
+    expect(requestBody).toMatchObject({ phone: '5534987654321' });
+    expect(requestBody.commandId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('maps HTTP 409 and details.currentVersion to a typed conflict', async () => {

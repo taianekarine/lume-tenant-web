@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
 import {
   AlertCircle,
   ArrowLeft,
@@ -9,11 +10,13 @@ import {
   CircleStop,
   Clock3,
   FileText,
+  FileUp,
   Forward,
   Headset,
   History,
   Inbox,
   MessageCircle,
+  MessageSquarePlus,
   Phone,
   RefreshCw,
   RotateCcw,
@@ -24,7 +27,8 @@ import {
 
 import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
 import { cn } from '@/shared/lib/utils';
-import { Button } from '@/shared/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
+import { Button, buttonVariants } from '@/shared/ui/button';
 import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import {
   Dialog,
@@ -37,6 +41,7 @@ import {
 } from '@/shared/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
+import { Input } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
 
 import {
@@ -45,6 +50,7 @@ import {
   markWhatsAppConversationAsReadAction,
   returnWhatsAppConversationToBotAction,
   sendHumanWhatsAppMessageAction,
+  startWhatsAppConversationAction,
   takeOverWhatsAppConversationAction,
   type SendHumanWhatsAppMessageActionResult,
   type WhatsAppConversationActionResult,
@@ -105,6 +111,16 @@ interface HumanMessageSubmission {
   readonly idempotencyKey: string;
   readonly expectedVersion: number;
   readonly text: string;
+}
+
+interface HumanMediaSubmission {
+  readonly conversationId: string;
+  readonly commandId: string;
+  readonly idempotencyKey: string;
+  readonly expectedVersion: number;
+  readonly caption: string;
+  readonly file: File;
+  readonly mediaKind: 'auto' | 'sticker';
 }
 
 const MANUAL_COMMERCIAL_STATUSES = [
@@ -177,7 +193,7 @@ function getDefaultTargetDepartment(
   );
 }
 
-function preserveLoadedMessages(
+export function preserveLoadedConversationHistory(
   current: readonly WhatsAppConversation[],
   incoming: readonly WhatsAppConversation[],
 ): WhatsAppConversation[] {
@@ -186,6 +202,7 @@ function preserveLoadedMessages(
     return {
       ...conversation,
       messages: existing?.messages ?? conversation.messages,
+      messageHistory: existing?.messageHistory ?? conversation.messageHistory,
       transitions: existing?.transitions ?? conversation.transitions,
     };
   });
@@ -286,11 +303,16 @@ export function ConversationWorkspace({
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackTone, setFeedbackTone] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [messageDraft, setMessageDraft] = useState('');
+  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null);
+  const [selectedAttachmentKind, setSelectedAttachmentKind] = useState<'auto' | 'sticker'>('auto');
   const [listError, setListError] = useState(initialError ?? '');
   const [detailError, setDetailError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [isStartConversationDialogOpen, setIsStartConversationDialogOpen] = useState(false);
+  const [newConversationPhone, setNewConversationPhone] = useState('');
   const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
@@ -309,6 +331,7 @@ export function ConversationWorkspace({
   const selectedConversationIdRef = useRef(selectedConversationId);
   const pollingFailureCountRef = useRef(0);
   const humanMessageSubmissionRef = useRef<HumanMessageSubmission | null>(null);
+  const humanMediaSubmissionRef = useRef<HumanMediaSubmission | null>(null);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -347,6 +370,10 @@ export function ConversationWorkspace({
                   !preserveExistingMessages || updatedConversation.messages.length > 0
                     ? updatedConversation.messages
                     : conversation.messages,
+                messageHistory:
+                  !preserveExistingMessages || updatedConversation.messageHistory
+                    ? updatedConversation.messageHistory
+                    : conversation.messageHistory,
                 transitions:
                   !preserveExistingMessages || updatedConversation.transitions.length > 0
                     ? updatedConversation.transitions
@@ -360,13 +387,14 @@ export function ConversationWorkspace({
   );
 
   const loadConversationDetail = useCallback(
-    async (conversationId: string): Promise<void> => {
-      setIsLoadingDetail(true);
+    async (conversationId: string, messagePage = 1): Promise<void> => {
+      if (messagePage === 1) setIsLoadingDetail(true);
+      else setIsLoadingOlderMessages(true);
       setDetailError('');
 
       try {
         const response = await fetch(
-          `/api/whatsapp-conversations?conversationId=${encodeURIComponent(conversationId)}`,
+          `/api/whatsapp-conversations?conversationId=${encodeURIComponent(conversationId)}&messagePage=${messagePage}`,
           { cache: 'no-store' },
         );
 
@@ -381,7 +409,33 @@ export function ConversationWorkspace({
         };
         if (!body.conversation) throw new Error('A conversa retornada é inválida.');
 
-        replaceConversation(body.conversation, false);
+        if (messagePage === 1) {
+          replaceConversation(body.conversation, false);
+        } else {
+          setConversations((currentConversations) =>
+            currentConversations.map((currentConversation) => {
+              if (currentConversation.id !== body.conversation!.id) {
+                return currentConversation;
+              }
+
+              const messagesById = new Map(
+                currentConversation.messages.map((message) => [message.id, message]),
+              );
+              body.conversation!.messages.forEach((message) => {
+                messagesById.set(message.id, message);
+              });
+              const messages = [...messagesById.values()].sort((first, second) => {
+                const difference = Date.parse(first.occurredAt) - Date.parse(second.occurredAt);
+                return difference === 0 ? first.id.localeCompare(second.id) : difference;
+              });
+
+              return {
+                ...body.conversation!,
+                messages,
+              };
+            }),
+          );
+        }
         setLoadedConversationIds((current) => new Set([...current, body.conversation!.id]));
       } catch (error) {
         setDetailError(
@@ -390,7 +444,8 @@ export function ConversationWorkspace({
             : 'Não foi possível carregar o histórico completo.',
         );
       } finally {
-        setIsLoadingDetail(false);
+        if (messagePage === 1) setIsLoadingDetail(false);
+        else setIsLoadingOlderMessages(false);
       }
     },
     [replaceConversation],
@@ -425,7 +480,9 @@ export function ConversationWorkspace({
           (conversation) => conversation.id === selectedId,
         );
 
-        setConversations((current) => preserveLoadedMessages(current, body.conversations ?? []));
+        setConversations((current) =>
+          preserveLoadedConversationHistory(current, body.conversations ?? []),
+        );
         setListError('');
 
         if (
@@ -607,6 +664,38 @@ export function ConversationWorkspace({
     });
   }
 
+  function handleStartConversation() {
+    setFeedbackMessage('');
+    setFeedbackTone('neutral');
+
+    startConversationTransition(async () => {
+      const result = await startWhatsAppConversationAction({ phone: newConversationPhone });
+      if (!result.success) {
+        setFeedbackMessage(result.message);
+        setFeedbackTone('error');
+        return;
+      }
+
+      const conversation = result.conversation;
+      setConversations((current) => [
+        conversation,
+        ...current.filter((candidate) => candidate.id !== conversation.id),
+      ]);
+      setLoadedConversationIds((current) => {
+        const next = new Set(current);
+        next.delete(conversation.id);
+        return next;
+      });
+      setSelectedConversationId(conversation.id);
+      setMobileDetailOpen(true);
+      setTargetDepartment(getDefaultTargetDepartment(conversation.department));
+      setNewConversationPhone('');
+      setIsStartConversationDialogOpen(false);
+      setFeedbackMessage('Atendimento iniciado com sucesso.');
+      setFeedbackTone('success');
+    });
+  }
+
   function handleForward() {
     if (!selectedConversation) return;
     setFeedbackMessage('');
@@ -741,7 +830,10 @@ export function ConversationWorkspace({
     );
     setTargetDepartment(getDefaultTargetDepartment(result.conversation.department));
     setMessageDraft('');
+    setSelectedAttachment(null);
+    setSelectedAttachmentKind('auto');
     humanMessageSubmissionRef.current = null;
+    humanMediaSubmissionRef.current = null;
     setFeedbackMessage('Mensagem salva. Aguardando confirmação de envio.');
     setFeedbackTone('success');
     setLoadedConversationIds((current) => new Set([...current, result.conversation.id]));
@@ -752,7 +844,10 @@ export function ConversationWorkspace({
     if (!selectedConversation || !canCurrentUserSendMessage || isSendingMessage) return;
 
     const text = messageDraft.trim();
-    if (text.length === 0 || text.length > HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH) {
+    if (
+      (text.length === 0 && selectedAttachment === null) ||
+      text.length > HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH
+    ) {
       setFeedbackMessage(
         text.length === 0
           ? 'Digite uma mensagem antes de enviar.'
@@ -761,6 +856,73 @@ export function ConversationWorkspace({
             )} caracteres.`,
       );
       setFeedbackTone('error');
+      return;
+    }
+
+    if (selectedAttachment !== null) {
+      let mediaSubmission = humanMediaSubmissionRef.current;
+      if (
+        mediaSubmission === null ||
+        mediaSubmission.conversationId !== selectedConversation.id ||
+        mediaSubmission.caption !== text ||
+        mediaSubmission.file !== selectedAttachment ||
+        mediaSubmission.mediaKind !== selectedAttachmentKind
+      ) {
+        mediaSubmission = {
+          conversationId: selectedConversation.id,
+          commandId: globalThis.crypto.randomUUID(),
+          idempotencyKey: globalThis.crypto.randomUUID(),
+          expectedVersion: selectedConversation.version,
+          caption: text,
+          file: selectedAttachment,
+          mediaKind: selectedAttachmentKind,
+        };
+        humanMediaSubmissionRef.current = mediaSubmission;
+      }
+
+      setFeedbackMessage('');
+      setFeedbackTone('neutral');
+      startMessageTransition(async () => {
+        const formData = new FormData();
+        formData.set('file', mediaSubmission!.file);
+        formData.set('commandId', mediaSubmission!.commandId);
+        formData.set('idempotencyKey', mediaSubmission!.idempotencyKey);
+        formData.set('expectedVersion', String(mediaSubmission!.expectedVersion));
+        formData.set('mediaKind', mediaSubmission!.mediaKind);
+        if (mediaSubmission!.caption) formData.set('caption', mediaSubmission!.caption);
+
+        try {
+          const response = await fetch(
+            `/api/whatsapp-conversations/${encodeURIComponent(mediaSubmission!.conversationId)}/media`,
+            { method: 'POST', body: formData },
+          );
+          const payload = (await response.json().catch(() => null)) as { message?: unknown } | null;
+          if (!response.ok) {
+            const message = typeof payload?.message === 'string' ? payload.message : '';
+            setFeedbackMessage(
+              userFacingMessage(message, 'Não foi possível enviar o anexo. Tente novamente.'),
+            );
+            setFeedbackTone('error');
+            if (response.status === 409) await refreshList(true);
+            return;
+          }
+
+          setMessageDraft('');
+          setSelectedAttachment(null);
+          setSelectedAttachmentKind('auto');
+          humanMediaSubmissionRef.current = null;
+          humanMessageSubmissionRef.current = null;
+          setFeedbackMessage('Anexo salvo. Aguardando confirmação de envio.');
+          setFeedbackTone('success');
+          await refreshList(true);
+          await loadConversationDetail(mediaSubmission!.conversationId);
+        } catch {
+          setFeedbackMessage(
+            'Não foi possível enviar o anexo. Verifique sua conexão e tente novamente.',
+          );
+          setFeedbackTone('error');
+        }
+      });
       return;
     }
 
@@ -797,6 +959,56 @@ export function ConversationWorkspace({
 
   return (
     <>
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <Button type="button" onClick={() => setIsStartConversationDialogOpen(true)}>
+          <MessageSquarePlus aria-hidden="true" />
+          Nova conversa
+        </Button>
+        <Link
+          href="/whatsapp-conversations/import"
+          className={buttonVariants({ variant: 'outline' })}
+        >
+          <FileUp aria-hidden="true" />
+          Importar históricos
+        </Link>
+      </div>
+      <Dialog open={isStartConversationDialogOpen} onOpenChange={setIsStartConversationDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Iniciar nova conversa</DialogTitle>
+            <DialogDescription>
+              Informe o número com DDD. O canal e o atendimento serão preparados automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label htmlFor="new-whatsapp-conversation-phone" className="text-sm font-medium">
+              Número do WhatsApp
+            </label>
+            <Input
+              id="new-whatsapp-conversation-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              value={newConversationPhone}
+              onChange={(event) => setNewConversationPhone(event.target.value)}
+              placeholder="(34) 99999-9999"
+              disabled={isUpdatingConversation}
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button type="button" variant="outline" />}>Cancelar</DialogClose>
+            <Button
+              type="button"
+              onClick={handleStartConversation}
+              disabled={
+                isUpdatingConversation || newConversationPhone.replace(/\D/g, '').length < 10
+              }
+            >
+              {isUpdatingConversation ? 'Iniciando...' : 'Iniciar atendimento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <ConversationMetricsCards conversations={conversations} className="mt-4" />
       <section aria-labelledby="conversation-workspace-title" className={styles.section()}>
         <h2 id="conversation-workspace-title" className={styles.visuallyHidden()}>
@@ -966,9 +1178,17 @@ export function ConversationWorkspace({
                     className={styles.conversationButton({ selected: isSelected })}
                     aria-pressed={isSelected}
                   >
-                    <span className={styles.avatar()}>
-                      {getContactInitial(conversation.contact.name)}
-                    </span>
+                    <Avatar className={styles.avatar()}>
+                      {conversation.contact.profilePictureUrl ? (
+                        <AvatarImage
+                          src={conversation.contact.profilePictureUrl}
+                          alt={`Foto de ${conversation.contact.name}`}
+                        />
+                      ) : null}
+                      <AvatarFallback>
+                        {getContactInitial(conversation.contact.name)}
+                      </AvatarFallback>
+                    </Avatar>
                     <span className={styles.conversationSummary()}>
                       <span className={styles.conversationHeading()}>
                         <strong className={styles.contactName()}>
@@ -1046,9 +1266,17 @@ export function ConversationWorkspace({
                   <ArrowLeft aria-hidden="true" />
                 </Button>
                 <div className={styles.contactBlock()}>
-                  <span className={styles.detailAvatar()}>
-                    {getContactInitial(selectedConversation.contact.name)}
-                  </span>
+                  <Avatar className={styles.detailAvatar()}>
+                    {selectedConversation.contact.profilePictureUrl ? (
+                      <AvatarImage
+                        src={selectedConversation.contact.profilePictureUrl}
+                        alt={`Foto de ${selectedConversation.contact.name}`}
+                      />
+                    ) : null}
+                    <AvatarFallback>
+                      {getContactInitial(selectedConversation.contact.name)}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className={styles.contactIdentity()}>
                     <h3 className={styles.detailTitle()}>{selectedConversation.contact.name}</h3>
                     <p className={styles.phone()}>
@@ -1199,6 +1427,7 @@ export function ConversationWorkspace({
                       }
                       disabled={
                         isUpdatingConversation ||
+                        selectedConversation.conversationState === 'closed' ||
                         !canTakeOverWhatsAppConversation(selectedConversation)
                       }
                       className={styles.actionButton({ action: 'human' })}
@@ -1225,15 +1454,30 @@ export function ConversationWorkspace({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setIsCloseDialogOpen(true)}
+                      onClick={() =>
+                        selectedConversation.conversationState === 'closed'
+                          ? handleVersionedAction(
+                              takeOverWhatsAppConversationAction,
+                              'Atendimento iniciado com sucesso.',
+                            )
+                          : setIsCloseDialogOpen(true)
+                      }
                       disabled={
                         isUpdatingConversation ||
-                        !canCloseWhatsAppConversation(selectedConversation)
+                        (selectedConversation.conversationState === 'closed'
+                          ? !canTakeOverWhatsAppConversation(selectedConversation)
+                          : !canCloseWhatsAppConversation(selectedConversation))
                       }
                       className={styles.actionButton({ action: 'close' })}
                     >
-                      <CircleStop aria-hidden="true" />
-                      Encerrar atendimento
+                      {selectedConversation.conversationState === 'closed' ? (
+                        <Headset aria-hidden="true" />
+                      ) : (
+                        <CircleStop aria-hidden="true" />
+                      )}
+                      {selectedConversation.conversationState === 'closed'
+                        ? 'Iniciar atendimento'
+                        : 'Encerrar atendimento'}
                     </button>
                   </div>
                   <div className={styles.actions()}>
@@ -1245,9 +1489,20 @@ export function ConversationWorkspace({
                       isLoaded={loadedConversationIds.has(selectedConversation.id)}
                       detailError={detailError}
                       onRetry={() => void loadConversationDetail(selectedConversation.id)}
+                      onLoadOlder={() => {
+                        const nextPage = (selectedConversation.messageHistory?.page ?? 1) + 1;
+                        void loadConversationDetail(selectedConversation.id, nextPage);
+                      }}
+                      isLoadingOlder={isLoadingOlderMessages}
                       onRefresh={() => void refreshList(true)}
                       messageDraft={messageDraft}
                       onMessageDraftChange={setMessageDraft}
+                      selectedAttachment={selectedAttachment}
+                      onSelectedAttachmentChange={(file, kind = 'auto') => {
+                        setSelectedAttachment(file);
+                        setSelectedAttachmentKind(file ? kind : 'auto');
+                        humanMediaSubmissionRef.current = null;
+                      }}
                       canSendMessage={canCurrentUserSendMessage}
                       canTakeOver={canTakeOverWhatsAppConversation(selectedConversation)}
                       isTakingOver={isUpdatingConversation}
