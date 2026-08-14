@@ -72,16 +72,18 @@ describe('WhatsApp polling route', () => {
     });
   });
 
-  it('loads a selected conversation with its complete history', async () => {
+  it('loads the selected page of a conversation history', async () => {
     const conversation = createWhatsAppConversationFixture();
     mockedSession.mockResolvedValue(session(['whatsapp-conversations:manage']));
     mockedPollDetail.mockResolvedValue(conversation);
 
     const response = await GET(
-      new Request(`http://localhost/api/whatsapp-conversations?conversationId=${conversation.id}`),
+      new Request(
+        `http://localhost/api/whatsapp-conversations?conversationId=${conversation.id}&messagePage=4`,
+      ),
     );
 
     expect(response.status).toBe(200);
-    expect(mockedPollDetail).toHaveBeenCalledWith(conversation.id);
+    expect(mockedPollDetail).toHaveBeenCalledWith(conversation.id, 4);
   });
 });

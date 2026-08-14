@@ -265,6 +265,11 @@ describe('ConversationWorkspace', () => {
     render(<ConversationWorkspace initialConversations={[summary]} />);
     await openMessages(user);
 
+    const mediaLoadButtons = await screen.findAllByRole('button', {
+      name: 'Carregar mídia',
+    });
+    for (const button of mediaLoadButtons) await user.click(button);
+
     expect(await screen.findByAltText('imagem.jpg')).toHaveAttribute(
       'src',
       'https://files.example.test/imagem.jpg',

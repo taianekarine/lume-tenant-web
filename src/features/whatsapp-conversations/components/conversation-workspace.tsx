@@ -292,6 +292,7 @@ export function ConversationWorkspace({
   const [detailError, setDetailError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
   const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
@@ -362,13 +363,14 @@ export function ConversationWorkspace({
   );
 
   const loadConversationDetail = useCallback(
-    async (conversationId: string): Promise<void> => {
-      setIsLoadingDetail(true);
+    async (conversationId: string, messagePage = 1): Promise<void> => {
+      if (messagePage === 1) setIsLoadingDetail(true);
+      else setIsLoadingOlderMessages(true);
       setDetailError('');
 
       try {
         const response = await fetch(
-          `/api/whatsapp-conversations?conversationId=${encodeURIComponent(conversationId)}`,
+          `/api/whatsapp-conversations?conversationId=${encodeURIComponent(conversationId)}&messagePage=${messagePage}`,
           { cache: 'no-store' },
         );
 
@@ -383,7 +385,33 @@ export function ConversationWorkspace({
         };
         if (!body.conversation) throw new Error('A conversa retornada é inválida.');
 
-        replaceConversation(body.conversation, false);
+        if (messagePage === 1) {
+          replaceConversation(body.conversation, false);
+        } else {
+          setConversations((currentConversations) =>
+            currentConversations.map((currentConversation) => {
+              if (currentConversation.id !== body.conversation!.id) {
+                return currentConversation;
+              }
+
+              const messagesById = new Map(
+                currentConversation.messages.map((message) => [message.id, message]),
+              );
+              body.conversation!.messages.forEach((message) => {
+                messagesById.set(message.id, message);
+              });
+              const messages = [...messagesById.values()].sort((first, second) => {
+                const difference = Date.parse(first.occurredAt) - Date.parse(second.occurredAt);
+                return difference === 0 ? first.id.localeCompare(second.id) : difference;
+              });
+
+              return {
+                ...body.conversation!,
+                messages,
+              };
+            }),
+          );
+        }
         setLoadedConversationIds((current) => new Set([...current, body.conversation!.id]));
       } catch (error) {
         setDetailError(
@@ -392,7 +420,8 @@ export function ConversationWorkspace({
             : 'Não foi possível carregar o histórico completo.',
         );
       } finally {
-        setIsLoadingDetail(false);
+        if (messagePage === 1) setIsLoadingDetail(false);
+        else setIsLoadingOlderMessages(false);
       }
     },
     [replaceConversation],
@@ -1256,6 +1285,11 @@ export function ConversationWorkspace({
                       isLoaded={loadedConversationIds.has(selectedConversation.id)}
                       detailError={detailError}
                       onRetry={() => void loadConversationDetail(selectedConversation.id)}
+                      onLoadOlder={() => {
+                        const nextPage = (selectedConversation.messageHistory?.page ?? 1) + 1;
+                        void loadConversationDetail(selectedConversation.id, nextPage);
+                      }}
+                      isLoadingOlder={isLoadingOlderMessages}
                       onRefresh={() => void refreshList(true)}
                       messageDraft={messageDraft}
                       onMessageDraftChange={setMessageDraft}

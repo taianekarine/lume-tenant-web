@@ -60,7 +60,10 @@ export interface WhatsAppConversationRepository {
   getDashboardConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]>;
-  getConversationById(conversationId: string): Promise<WhatsAppConversation | null>;
+  getConversationById(
+    conversationId: string,
+    messagePage?: number,
+  ): Promise<WhatsAppConversation | null>;
   takeOverConversation(
     conversationId: string,
     expectedVersion: number,
@@ -91,8 +94,5 @@ export interface WhatsAppConversationRepository {
     conversationId: string,
     command: SendHumanWhatsAppMessageCommand,
   ): Promise<SendHumanWhatsAppMessageResult>;
-  downloadMessageContent(
-    conversationId: string,
-    messageId: string,
-  ): Promise<WhatsAppMediaContent>;
+  downloadMessageContent(conversationId: string, messageId: string): Promise<WhatsAppMediaContent>;
 }

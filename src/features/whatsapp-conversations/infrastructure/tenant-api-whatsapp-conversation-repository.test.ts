@@ -239,7 +239,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     );
   });
 
-  it('loads complete message and transition history with delivery attempts', async () => {
+  it('loads one message page and the transition history with delivery attempts', async () => {
     const historicalRecoveryTransition = {
       ...apiTransition(),
       commandId: 'local-recovery-20382581-b462-4373-a288-e265aea0dca3',
@@ -259,7 +259,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           data: [apiMessage()],
-          meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+          meta: { page: 3, pageSize: 100, total: 250, totalPages: 3 },
         }),
       )
       .mockResolvedValueOnce(
@@ -274,7 +274,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       fetcher,
     );
 
-    const conversation = await repository.getConversationById(conversationId);
+    const conversation = await repository.getConversationById(conversationId, 3);
 
     expect(conversation?.messages).toEqual([
       expect.objectContaining({
@@ -312,9 +312,15 @@ describe('LumeApiWhatsAppConversationRepository', () => {
         }),
       ]),
     );
+    expect(conversation?.messageHistory).toEqual({
+      page: 3,
+      pageSize: 100,
+      total: 250,
+      totalPages: 3,
+    });
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
-      `https://tenant.example/api/v1/whatsapp/conversations/${conversationId}/messages?page=1&pageSize=100`,
+      `https://tenant.example/api/v1/whatsapp/conversations/${conversationId}/messages?page=3&pageSize=100`,
       expect.any(Object),
     );
     expect(fetcher).toHaveBeenNthCalledWith(

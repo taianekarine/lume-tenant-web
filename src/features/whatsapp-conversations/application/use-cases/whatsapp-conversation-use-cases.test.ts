@@ -59,11 +59,11 @@ describe('WhatsApp conversation use cases', () => {
     const repository = createRepository();
     repository.getConversationById.mockResolvedValue(null);
 
-    await getWhatsAppConversationById(repository, ' conversation-001 ');
+    await getWhatsAppConversationById(repository, ' conversation-001 ', 3);
     await getWhatsAppConversationById(repository, null);
 
     expect(repository.getConversationById).toHaveBeenCalledTimes(1);
-    expect(repository.getConversationById).toHaveBeenCalledWith('conversation-001');
+    expect(repository.getConversationById).toHaveBeenCalledWith('conversation-001', 3);
   });
 
   it('passes expectedVersion to every write', async () => {

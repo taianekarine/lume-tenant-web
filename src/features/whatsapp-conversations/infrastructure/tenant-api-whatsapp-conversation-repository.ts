@@ -219,6 +219,7 @@ const apiErrorSchema = z.object({
 
 type ApiConversation = z.infer<typeof conversationSchema>;
 type ApiMessage = z.infer<typeof messageSchema>;
+type ApiPagination = z.infer<typeof paginationSchema>;
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
@@ -273,11 +274,20 @@ function mapAttachment(message: ApiMessage): WhatsAppMessageAttachment | null {
       ? media.retentionStatus
       : null;
   const secureUrl = `/api/whatsapp-conversations/${encodeURIComponent(message.conversationId)}/messages/${encodeURIComponent(message.id)}/content`;
+  const isHistoricalExport =
+    typeof media.legacyReference === 'string' &&
+    media.legacyReference.startsWith('whatsapp-export://');
+  const hasRecoverableContent =
+    retentionStatus === 'stored' ||
+    retentionStatus === 'pending' ||
+    (retentionStatus === null &&
+      !isHistoricalExport &&
+      (message.providerMessageId !== null || message.direction === 'outbound'));
 
   return {
     mimeType: typeof media.mimeType === 'string' ? media.mimeType : null,
     size: typeof media.size === 'number' ? media.size : null,
-    url: retentionStatus === 'unavailable' || retentionStatus === 'too-large' ? null : secureUrl,
+    url: hasRecoverableContent ? secureUrl : null,
     fileName: typeof media.fileName === 'string' ? media.fileName : null,
     retentionStatus,
     metadata: media,
@@ -302,6 +312,7 @@ function mapConversation(
   conversation: ApiConversation,
   messages: readonly WhatsAppMessage[] = [],
   transitions: readonly WhatsAppConversationTransition[] = [],
+  messageHistory?: ApiPagination,
 ): WhatsAppConversation {
   return {
     id: conversation.id,
@@ -331,6 +342,7 @@ function mapConversation(
     currentQuoteRequest: mapQuoteRequest(conversation.currentQuoteRequest),
     hasApprovedQuoteRequest: conversation.hasApprovedQuoteRequest,
     messages,
+    ...(messageHistory ? { messageHistory } : {}),
     transitions,
   };
 }
@@ -441,7 +453,10 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
     );
   }
 
-  async getConversationById(conversationId: string): Promise<WhatsAppConversation | null> {
+  async getConversationById(
+    conversationId: string,
+    messagePage = 1,
+  ): Promise<WhatsAppConversation | null> {
     let conversationValue: unknown;
 
     try {
@@ -456,12 +471,12 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
     }
 
     const conversation = parseResponse(conversationSchema, conversationValue);
-    const [messages, transitions] = await Promise.all([
-      this.getAllMessages(conversationId),
+    const [messageHistory, transitions] = await Promise.all([
+      this.getMessagePage(conversationId, messagePage),
       this.getAllTransitions(conversationId),
     ]);
 
-    return mapConversation(conversation, messages, transitions);
+    return mapConversation(conversation, messageHistory.messages, transitions, messageHistory.meta);
   }
 
   async downloadMessageContent(
@@ -583,28 +598,28 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
     };
   }
 
-  private async getAllMessages(conversationId: string): Promise<readonly WhatsAppMessage[]> {
+  private async getMessagePage(
+    conversationId: string,
+    page: number,
+  ): Promise<{
+    readonly messages: readonly WhatsAppMessage[];
+    readonly meta: ApiPagination;
+  }> {
     const path = `/whatsapp/conversations/${encodeURIComponent(conversationId)}/messages`;
-    const firstPage = parseResponse(
+    const result = parseResponse(
       messageListSchema,
-      await this.request(`${path}?page=1&pageSize=100`),
+      await this.request(`${path}?page=${page}&pageSize=100`),
     );
-    const messages = [...firstPage.data];
 
-    for (let page = 2; page <= firstPage.meta.totalPages; page += 1) {
-      const result = parseResponse(
-        messageListSchema,
-        await this.request(`${path}?page=${page}&pageSize=100`),
-      );
-      messages.push(...result.data);
-    }
-
-    return messages
-      .sort((first, second) => {
-        const difference = Date.parse(first.occurredAt) - Date.parse(second.occurredAt);
-        return difference === 0 ? first.id.localeCompare(second.id) : difference;
-      })
-      .map(mapMessage);
+    return {
+      messages: result.data
+        .sort((first, second) => {
+          const difference = Date.parse(first.occurredAt) - Date.parse(second.occurredAt);
+          return difference === 0 ? first.id.localeCompare(second.id) : difference;
+        })
+        .map(mapMessage),
+      meta: result.meta,
+    };
   }
 
   private async getAllTransitions(
