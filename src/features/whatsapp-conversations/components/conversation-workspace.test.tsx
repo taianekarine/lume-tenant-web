@@ -878,6 +878,55 @@ describe('ConversationWorkspace', () => {
     expect(input).toHaveValue('');
   });
 
+  it('sends an image from the same chat composer with an optional caption', async () => {
+    const assignedTo = { id: 'employee-001', name: 'Usuário Comercial' };
+    const conversation = createWhatsAppConversationFixture({
+      conversationState: 'human-active',
+      flowStep: 'human-service',
+      assignedTo,
+      version: 8,
+      unreadCount: 0,
+      messages: [],
+    });
+    jest
+      .mocked(global.fetch)
+      .mockResolvedValueOnce(response({ conversation }))
+      .mockResolvedValueOnce(response({ message: { id: 'message-id' } }, 201))
+      .mockResolvedValueOnce(response({ conversations: [conversation] }))
+      .mockResolvedValueOnce(response({ conversation }));
+    const user = userEvent.setup();
+    render(
+      <ConversationWorkspace initialConversations={[conversation]} currentUserId={assignedTo.id} />,
+    );
+    await openMessages(user);
+    await screen.findByText('Nenhuma mensagem registrada');
+
+    const file = new File(['imagem'], 'foto.jpg', { type: 'image/jpeg' });
+    const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    await user.upload(fileInput!, file);
+    await user.type(
+      screen.getByRole('textbox', { name: `Mensagem para ${conversation.contact.name}` }),
+      'Segue a foto solicitada.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Enviar anexo' }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        `/api/whatsapp-conversations/${conversation.id}/media`,
+        expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+      );
+    });
+    const mediaRequest = jest.mocked(global.fetch).mock.calls[1]?.[1];
+    const formData = mediaRequest?.body as FormData;
+    expect(formData.get('file')).toBe(file);
+    expect(formData.get('caption')).toBe('Segue a foto solicitada.');
+    expect(formData.get('expectedVersion')).toBe('8');
+    expect(
+      await screen.findAllByText('Anexo salvo. Aguardando confirmação de envio.'),
+    ).not.toHaveLength(0);
+  });
+
   it('sends through main Enter and numpad Enter while preserving Shift+Enter for a new line', async () => {
     const assignedTo = { id: 'employee-001', name: 'Usuário Comercial' };
     const conversation = createWhatsAppConversationFixture({

@@ -109,6 +109,15 @@ interface HumanMessageSubmission {
   readonly text: string;
 }
 
+interface HumanMediaSubmission {
+  readonly conversationId: string;
+  readonly commandId: string;
+  readonly idempotencyKey: string;
+  readonly expectedVersion: number;
+  readonly caption: string;
+  readonly file: File;
+}
+
 const MANUAL_COMMERCIAL_STATUSES = [
   'under-review',
   'waiting-for-customer',
@@ -288,6 +297,7 @@ export function ConversationWorkspace({
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackTone, setFeedbackTone] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [messageDraft, setMessageDraft] = useState('');
+  const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null);
   const [listError, setListError] = useState(initialError ?? '');
   const [detailError, setDetailError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -312,6 +322,7 @@ export function ConversationWorkspace({
   const selectedConversationIdRef = useRef(selectedConversationId);
   const pollingFailureCountRef = useRef(0);
   const humanMessageSubmissionRef = useRef<HumanMessageSubmission | null>(null);
+  const humanMediaSubmissionRef = useRef<HumanMediaSubmission | null>(null);
 
   useEffect(() => {
     conversationsRef.current = conversations;
@@ -772,7 +783,9 @@ export function ConversationWorkspace({
     );
     setTargetDepartment(getDefaultTargetDepartment(result.conversation.department));
     setMessageDraft('');
+    setSelectedAttachment(null);
     humanMessageSubmissionRef.current = null;
+    humanMediaSubmissionRef.current = null;
     setFeedbackMessage('Mensagem salva. Aguardando confirmação de envio.');
     setFeedbackTone('success');
     setLoadedConversationIds((current) => new Set([...current, result.conversation.id]));
@@ -783,7 +796,10 @@ export function ConversationWorkspace({
     if (!selectedConversation || !canCurrentUserSendMessage || isSendingMessage) return;
 
     const text = messageDraft.trim();
-    if (text.length === 0 || text.length > HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH) {
+    if (
+      (text.length === 0 && selectedAttachment === null) ||
+      text.length > HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH
+    ) {
       setFeedbackMessage(
         text.length === 0
           ? 'Digite uma mensagem antes de enviar.'
@@ -792,6 +808,69 @@ export function ConversationWorkspace({
             )} caracteres.`,
       );
       setFeedbackTone('error');
+      return;
+    }
+
+    if (selectedAttachment !== null) {
+      let mediaSubmission = humanMediaSubmissionRef.current;
+      if (
+        mediaSubmission === null ||
+        mediaSubmission.conversationId !== selectedConversation.id ||
+        mediaSubmission.caption !== text ||
+        mediaSubmission.file !== selectedAttachment
+      ) {
+        mediaSubmission = {
+          conversationId: selectedConversation.id,
+          commandId: globalThis.crypto.randomUUID(),
+          idempotencyKey: globalThis.crypto.randomUUID(),
+          expectedVersion: selectedConversation.version,
+          caption: text,
+          file: selectedAttachment,
+        };
+        humanMediaSubmissionRef.current = mediaSubmission;
+      }
+
+      setFeedbackMessage('');
+      setFeedbackTone('neutral');
+      startMessageTransition(async () => {
+        const formData = new FormData();
+        formData.set('file', mediaSubmission!.file);
+        formData.set('commandId', mediaSubmission!.commandId);
+        formData.set('idempotencyKey', mediaSubmission!.idempotencyKey);
+        formData.set('expectedVersion', String(mediaSubmission!.expectedVersion));
+        if (mediaSubmission!.caption) formData.set('caption', mediaSubmission!.caption);
+
+        try {
+          const response = await fetch(
+            `/api/whatsapp-conversations/${encodeURIComponent(mediaSubmission!.conversationId)}/media`,
+            { method: 'POST', body: formData },
+          );
+          const payload = (await response.json().catch(() => null)) as { message?: unknown } | null;
+          if (!response.ok) {
+            const message = typeof payload?.message === 'string' ? payload.message : '';
+            setFeedbackMessage(
+              userFacingMessage(message, 'Não foi possível enviar o anexo. Tente novamente.'),
+            );
+            setFeedbackTone('error');
+            if (response.status === 409) await refreshList(true);
+            return;
+          }
+
+          setMessageDraft('');
+          setSelectedAttachment(null);
+          humanMediaSubmissionRef.current = null;
+          humanMessageSubmissionRef.current = null;
+          setFeedbackMessage('Anexo salvo. Aguardando confirmação de envio.');
+          setFeedbackTone('success');
+          await refreshList(true);
+          await loadConversationDetail(mediaSubmission!.conversationId);
+        } catch {
+          setFeedbackMessage(
+            'Não foi possível enviar o anexo. Verifique sua conexão e tente novamente.',
+          );
+          setFeedbackTone('error');
+        }
+      });
       return;
     }
 
@@ -1293,6 +1372,11 @@ export function ConversationWorkspace({
                       onRefresh={() => void refreshList(true)}
                       messageDraft={messageDraft}
                       onMessageDraftChange={setMessageDraft}
+                      selectedAttachment={selectedAttachment}
+                      onSelectedAttachmentChange={(file) => {
+                        setSelectedAttachment(file);
+                        humanMediaSubmissionRef.current = null;
+                      }}
                       canSendMessage={canCurrentUserSendMessage}
                       canTakeOver={canTakeOverWhatsAppConversation(selectedConversation)}
                       isTakingOver={isUpdatingConversation}

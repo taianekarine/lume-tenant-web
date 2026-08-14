@@ -90,6 +90,8 @@ function renderSheet() {
       onRefresh={jest.fn()}
       messageDraft=""
       onMessageDraftChange={jest.fn()}
+      selectedAttachment={null}
+      onSelectedAttachmentChange={jest.fn()}
       canSendMessage={false}
       canTakeOver={false}
       isTakingOver={false}
