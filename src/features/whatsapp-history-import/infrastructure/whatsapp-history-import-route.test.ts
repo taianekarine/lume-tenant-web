@@ -44,7 +44,7 @@ describe('sanitizeWhatsAppHistoryImportResponse', () => {
 
     await expect(response.json()).resolves.toEqual({
       message:
-        'NÃ£o foi possÃ­vel iniciar a importaÃ§Ã£o. Tente novamente e, se o problema continuar, contate o suporte.',
+        'Não foi possível iniciar a importação. Tente novamente e, se o problema continuar, contate o suporte.',
     });
     expect(response.status).toBe(500);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
