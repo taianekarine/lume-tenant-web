@@ -4,6 +4,21 @@ function normalizeBaseUrl(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+export async function sanitizeWhatsAppHistoryImportResponse(upstream: Response): Promise<Response> {
+  if (upstream.status < 500) return upstream;
+
+  return Response.json(
+    {
+      message:
+        'NÃ£o foi possÃ­vel iniciar a importaÃ§Ã£o. Tente novamente e, se o problema continuar, contate o suporte.',
+    },
+    {
+      status: upstream.status,
+      headers: { 'Cache-Control': 'private, no-store' },
+    },
+  );
+}
+
 export async function proxyWhatsAppHistoryImportRequest(
   accessToken: string,
   request: Request,
@@ -36,5 +51,9 @@ export async function proxyWhatsAppHistoryImportRequest(
     init.duplex = 'half';
   }
 
-  return fetch(`${normalizeBaseUrl(baseUrl)}/whatsapp/history-imports${upstreamPath}`, init);
+  const upstream = await fetch(
+    `${normalizeBaseUrl(baseUrl)}/whatsapp/history-imports${upstreamPath}`,
+    init,
+  );
+  return sanitizeWhatsAppHistoryImportResponse(upstream);
 }
