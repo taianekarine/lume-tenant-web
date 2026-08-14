@@ -44,6 +44,14 @@ export const WHATSAPP_HISTORY_DEPARTMENT_LABELS: Record<
   operations: 'Operacional',
 };
 
+export const WHATSAPP_HISTORY_REVIEW_FILTER_LABELS = {
+  'needs-review': 'Pendentes de revisão',
+  ready: 'Revisados',
+  all: 'Todos',
+} as const;
+
+export type WhatsAppHistoryReviewFilter = keyof typeof WHATSAPP_HISTORY_REVIEW_FILTER_LABELS;
+
 const senderSchema = z.object({
   name: z.string().min(1),
   messageCount: z.number().int().nonnegative(),

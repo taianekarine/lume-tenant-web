@@ -25,11 +25,13 @@ import {
   buildPaginationItems,
   WHATSAPP_HISTORY_DEPARTMENTS,
   WHATSAPP_HISTORY_DEPARTMENT_LABELS,
+  WHATSAPP_HISTORY_REVIEW_FILTER_LABELS,
   WHATSAPP_HISTORY_STATES,
   WHATSAPP_HISTORY_STATE_LABELS,
   type WhatsAppHistoryArchive,
   type WhatsAppHistoryDepartment,
   type WhatsAppHistoryImportBatch,
+  type WhatsAppHistoryReviewFilter,
   type WhatsAppHistoryState,
   whatsAppHistoryChannelSchema,
   whatsAppHistoryImportBatchSchema,
@@ -191,7 +193,9 @@ function ArchiveReviewCard({ batchId, archive, onSaved }: ArchiveReviewCardProps
               onValueChange={(value) => setState(value as WhatsAppHistoryState)}
             >
               <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder="Selecione a situação" />
+                <SelectValue placeholder="Selecione a situação">
+                  {state ? WHATSAPP_HISTORY_STATE_LABELS[state] : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>
                 {WHATSAPP_HISTORY_STATES.map((value) => (
@@ -209,7 +213,7 @@ function ArchiveReviewCard({ batchId, archive, onSaved }: ArchiveReviewCardProps
               onValueChange={(value) => setDepartment(value as WhatsAppHistoryDepartment)}
             >
               <SelectTrigger className="h-9 w-full">
-                <SelectValue />
+                <SelectValue>{WHATSAPP_HISTORY_DEPARTMENT_LABELS[department]}</SelectValue>
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>
                 {WHATSAPP_HISTORY_DEPARTMENTS.map((value) => (
@@ -255,9 +259,7 @@ export function WhatsAppHistoryImportPage() {
     readonly { fileName: string; message: string }[]
   >([]);
   const [search, setSearch] = useState('');
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'ready' | 'needs-review'>(
-    'needs-review',
-  );
+  const [reviewFilter, setReviewFilter] = useState<WhatsAppHistoryReviewFilter>('needs-review');
   const [page, setPage] = useState(1);
   const [cutoffAt, setCutoffAt] = useState(localDateTimeValue);
   const [applying, setApplying] = useState(false);
@@ -310,6 +312,7 @@ export function WhatsAppHistoryImportPage() {
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE,
   );
+  const selectedChannel = channels.find((channel) => channel.id === channelId);
 
   async function ensureBatch(): Promise<WhatsAppHistoryImportBatch> {
     if (batch) return batch;
@@ -478,7 +481,11 @@ export function WhatsAppHistoryImportPage() {
               disabled={Boolean(batch)}
             >
               <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder={loadingChannels ? 'Carregando' : 'Selecione o canal'} />
+                <SelectValue placeholder={loadingChannels ? 'Carregando' : 'Selecione o canal'}>
+                  {selectedChannel
+                    ? `${selectedChannel.name} · ${selectedChannel.phoneNumber}`
+                    : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent alignItemWithTrigger={false}>
                 {channels.map((channel) => (
@@ -583,17 +590,19 @@ export function WhatsAppHistoryImportPage() {
                 <Select
                   value={reviewFilter}
                   onValueChange={(value) => {
-                    setReviewFilter(value as 'all' | 'ready' | 'needs-review');
+                    setReviewFilter(value as WhatsAppHistoryReviewFilter);
                     setPage(1);
                   }}
                 >
                   <SelectTrigger className="h-8 w-full">
-                    <SelectValue />
+                    <SelectValue>{WHATSAPP_HISTORY_REVIEW_FILTER_LABELS[reviewFilter]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent alignItemWithTrigger={false}>
-                    <SelectItem value="needs-review">Pendentes de revisão</SelectItem>
-                    <SelectItem value="ready">Revisados</SelectItem>
-                    <SelectItem value="all">Todos</SelectItem>
+                    {Object.entries(WHATSAPP_HISTORY_REVIEW_FILTER_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
