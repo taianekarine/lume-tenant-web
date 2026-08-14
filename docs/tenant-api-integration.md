@@ -58,6 +58,10 @@ manual, o download e a aplicação usam uma única planilha consolidada. Configu
 `LUME_TENANT_API_WHATSAPP_IMPORT_TIMEOUT_MS` acima da janela esperada para um ZIP
 grande, sem remover os limites de segurança da Tenant API.
 
+Uma conversa já aplicada pode participar de um novo lote sem duplicar mensagens
+nem bloquear as demais. Arquivos realmente presentes em cada ZIP são retidos
+pela Tenant API e passam a usar a mesma rota autenticada das mídias correntes.
+
 ## Sessão e renovação
 
 1. O login é enviado por uma Server Action à Tenant API e só aceita uma
@@ -285,8 +289,10 @@ possuem controles nativos e documentos mantêm o link de abertura. Sem URL
 HTTPS fornecida pelo provedor, o chat conserva os metadados e sinaliza que o
 conteúdo não está disponível, sem inventar ou buscar o arquivo no navegador.
 
-O compositor envia por clique, `Enter` ou `NumpadEnter`; `Shift+Enter` preserva a
-quebra de linha. Uma conversa ainda sem responsável pode ser assumida dentro
+O compositor envia texto ou um anexo por clique, `Enter` ou `NumpadEnter`;
+`Shift+Enter` preserva a quebra de linha. Imagens, vídeos, áudios, documentos e
+contatos `.vcf` usam um Route Handler multipart autenticado e entram na mesma
+outbox durável das mensagens de texto. Uma conversa ainda sem responsável pode ser assumida dentro
 do próprio painel lateral. O painel usa toda a largura do mobile e, no desktop,
 possui limite de 84 rem, o dobro do limite anterior de 42 rem, sem rolagem
 horizontal. Todas essas escritas usam Server Actions: o

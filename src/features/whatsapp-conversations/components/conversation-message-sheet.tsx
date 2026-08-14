@@ -11,6 +11,7 @@ import {
   Paperclip,
   RefreshCw,
   Send,
+  X,
 } from 'lucide-react';
 
 import { CurrentUserAvatar } from '@/shared/current-user-avatar';
@@ -66,6 +67,8 @@ const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
   'text/plain': '.txt',
   'text/csv': '.csv',
+  'text/vcard': '.vcf',
+  'text/x-vcard': '.vcf',
   'audio/ogg': '.ogg',
   'audio/mpeg': '.mp3',
   'audio/mp4': '.m4a',
@@ -288,6 +291,8 @@ export interface ConversationMessageSheetProps {
   readonly onRefresh: () => void;
   readonly messageDraft: string;
   readonly onMessageDraftChange: (value: string) => void;
+  readonly selectedAttachment: File | null;
+  readonly onSelectedAttachmentChange: (file: File | null) => void;
   readonly canSendMessage: boolean;
   readonly canTakeOver: boolean;
   readonly isTakingOver: boolean;
@@ -311,6 +316,8 @@ export function ConversationMessageSheet({
   onRefresh,
   messageDraft,
   onMessageDraftChange,
+  selectedAttachment,
+  onSelectedAttachmentChange,
   canSendMessage,
   canTakeOver,
   isTakingOver,
@@ -321,6 +328,7 @@ export function ConversationMessageSheet({
   feedbackTone,
 }: ConversationMessageSheetProps) {
   const historyRef = useRef<HTMLDivElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const initialScrollFrameRef = useRef<number | null>(null);
   const previousHistoryRef = useRef({
     open: false,
@@ -468,6 +476,14 @@ export function ConversationMessageSheet({
             previousHistoryRef.current.scrollHeight = history.scrollHeight;
             previousHistoryRef.current.scrollTop = history.scrollTop;
             previousHistoryRef.current.clientHeight = history.clientHeight;
+            if (
+              history.scrollTop <= 64 &&
+              !isLoadingOlder &&
+              conversation.messageHistory &&
+              conversation.messageHistory.page < conversation.messageHistory.totalPages
+            ) {
+              onLoadOlder();
+            }
           }}
         >
           {isLoading && !isLoaded ? (
@@ -489,17 +505,23 @@ export function ConversationMessageSheet({
               {conversation.messageHistory &&
               conversation.messageHistory.page < conversation.messageHistory.totalPages ? (
                 <div className="flex justify-center">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isLoadingOlder}
-                    onClick={onLoadOlder}
-                  >
-                    {isLoadingOlder
-                      ? 'Carregando mensagens anteriores...'
-                      : 'Carregar mensagens anteriores'}
-                  </Button>
+                  <div className="flex flex-col items-center gap-1 text-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isLoadingOlder}
+                      onClick={onLoadOlder}
+                    >
+                      {isLoadingOlder
+                        ? 'Carregando mensagens anteriores...'
+                        : 'Carregar 100 mensagens anteriores'}
+                    </Button>
+                    <small className="text-muted-foreground" aria-live="polite">
+                      Exibindo {conversation.messages.length.toLocaleString('pt-BR')} de{' '}
+                      {conversation.messageHistory.total.toLocaleString('pt-BR')} mensagens
+                    </small>
+                  </div>
                 </div>
               ) : null}
               {conversation.messages.map((message) => {
@@ -621,7 +643,7 @@ export function ConversationMessageSheet({
                 !event.shiftKey &&
                 !event.nativeEvent.isComposing &&
                 canSendMessage &&
-                messageDraft.trim().length > 0
+                (messageDraft.trim().length > 0 || selectedAttachment !== null)
               ) {
                 event.preventDefault();
                 onSendMessage();
@@ -637,6 +659,38 @@ export function ConversationMessageSheet({
             }
             aria-label={`Mensagem para ${conversation.contact.name}`}
           />
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            className="sr-only"
+            accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.vcf,text/vcard,text/x-vcard"
+            disabled={!canSendMessage || isSendingMessage}
+            onChange={(event) => {
+              onSelectedAttachmentChange(event.target.files?.item(0) ?? null);
+              event.currentTarget.value = '';
+            }}
+          />
+          {selectedAttachment ? (
+            <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/30 p-2">
+              <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-sm">{selectedAttachment.name}</strong>
+                <small className="text-muted-foreground">
+                  {formatFileSize(selectedAttachment.size)}
+                </small>
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Remover anexo"
+                disabled={isSendingMessage}
+                onClick={() => onSelectedAttachmentChange(null)}
+              >
+                <X aria-hidden="true" />
+              </Button>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <p className="whitespace-nowrap text-xs text-muted-foreground">
               {messageDraft.length.toLocaleString('pt-BR')} /{' '}
@@ -649,6 +703,18 @@ export function ConversationMessageSheet({
                   : 'grid w-full min-w-0 max-w-full grid-cols-1 overflow-x-hidden'
               }
             >
+              {canSendMessage ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full min-w-0 max-w-full gap-1 overflow-hidden px-1 text-xs sm:px-2.5 sm:text-sm"
+                  disabled={isSendingMessage}
+                  onClick={() => attachmentInputRef.current?.click()}
+                >
+                  <Paperclip aria-hidden="true" className="size-3.5" />
+                  Anexar arquivo
+                </Button>
+              ) : null}
               {!canSendMessage && canTakeOver ? (
                 <Button
                   type="button"
@@ -667,14 +733,22 @@ export function ConversationMessageSheet({
                 type="button"
                 className="w-full min-w-0 max-w-full gap-1 overflow-hidden px-1 text-xs sm:px-2.5 sm:text-sm"
                 onClick={onSendMessage}
-                disabled={!canSendMessage || isSendingMessage || messageDraft.trim().length === 0}
+                disabled={
+                  !canSendMessage ||
+                  isSendingMessage ||
+                  (messageDraft.trim().length === 0 && selectedAttachment === null)
+                }
               >
                 {isSendingMessage ? (
                   <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
                 ) : (
                   <Send aria-hidden="true" className="size-3.5" />
                 )}
-                {isSendingMessage ? 'Enviando...' : 'Enviar mensagem'}
+                {isSendingMessage
+                  ? 'Enviando...'
+                  : selectedAttachment
+                    ? 'Enviar anexo'
+                    : 'Enviar mensagem'}
               </Button>
             </div>
           </div>
