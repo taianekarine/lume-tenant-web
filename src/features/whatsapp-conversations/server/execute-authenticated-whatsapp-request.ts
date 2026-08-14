@@ -19,7 +19,7 @@ import {
 import { createWhatsAppConversationRepository } from '../infrastructure';
 
 async function executeAuthenticatedWhatsAppOperation<T>(
-  operation: (repository: WhatsAppConversationRepository) => Promise<T>,
+  operation: (repository: WhatsAppConversationRepository, accessToken: string) => Promise<T>,
   canRefreshCookies: boolean,
 ): Promise<T> {
   const [sessionStorage, tokenStorage] = await Promise.all([
@@ -74,7 +74,10 @@ async function executeAuthenticatedWhatsAppOperation<T>(
   }
 
   try {
-    return await operation(await createWhatsAppConversationRepository(tokens.accessToken));
+    return await operation(
+      await createWhatsAppConversationRepository(tokens.accessToken),
+      tokens.accessToken,
+    );
   } catch (error) {
     if (
       !(error instanceof WhatsAppConversationRepositoryError) ||
@@ -86,17 +89,20 @@ async function executeAuthenticatedWhatsAppOperation<T>(
   }
 
   await refreshAuthentication();
-  return operation(await createWhatsAppConversationRepository(tokens.accessToken));
+  return operation(
+    await createWhatsAppConversationRepository(tokens.accessToken),
+    tokens.accessToken,
+  );
 }
 
 export function executeAuthenticatedWhatsAppRequest<T>(
-  operation: (repository: WhatsAppConversationRepository) => Promise<T>,
+  operation: (repository: WhatsAppConversationRepository, accessToken: string) => Promise<T>,
 ): Promise<T> {
   return executeAuthenticatedWhatsAppOperation(operation, false);
 }
 
 export function executeAuthenticatedWhatsAppMutation<T>(
-  operation: (repository: WhatsAppConversationRepository) => Promise<T>,
+  operation: (repository: WhatsAppConversationRepository, accessToken: string) => Promise<T>,
 ): Promise<T> {
   return executeAuthenticatedWhatsAppOperation(operation, true);
 }
