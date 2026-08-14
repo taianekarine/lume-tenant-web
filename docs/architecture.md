@@ -53,6 +53,13 @@ Tenant API. Em conflito 409, o frontend recarrega a conversa antes de permitir
 uma nova tentativa. O frontend nunca chama cache, Evolution ou o edge
 diretamente.
 
+A rota `/whatsapp-conversations/import` prepara importações em massa sem criar
+uma segunda regra de persistência. O navegador envia um ZIP por vez a uma Route
+Handler autenticada, revisa os mapeamentos e solicita uma planilha consolidada.
+A Tenant API aplica essa planilha pelo importador oficial. O frontend não tenta
+identificar contatos por nome, não decide estados automaticamente e não guarda
+tokens ou arquivos de histórico no cliente.
+
 ## Shell, tema e estados de carregamento
 
 As rotas autenticadas compartilham `AuthenticatedShell`, montado com os

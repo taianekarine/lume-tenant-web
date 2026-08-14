@@ -104,6 +104,12 @@ O header autenticado também concentra o sino para todos os usuários ativos; a 
 retorna somente notificações compatíveis com seus departamentos. Não há
 integração direta do navegador com cache ou Evolution.
 
+Usuários com permissão de gerenciamento podem abrir **Importar históricos** no
+Painel WhatsApp, selecionar vários backups ZIP, acompanhar falhas por arquivo,
+revisar telefone, participante, departamento e estado e aplicar uma única
+planilha consolidada. A gravação continua sob responsabilidade do importador
+oficial da Tenant API.
+
 No MVP, uma proposta aprovada não impede o atendente de encerrar a conversa,
 desde que não exista outra proposta em coleta, aguardando cliente ou em análise.
 A política mais restritiva foi preservada no domínio, mas está explicitamente

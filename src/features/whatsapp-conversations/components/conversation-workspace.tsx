@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
 import {
   AlertCircle,
   ArrowLeft,
@@ -9,6 +10,7 @@ import {
   CircleStop,
   Clock3,
   FileText,
+  FileUp,
   Forward,
   Headset,
   History,
@@ -24,7 +26,7 @@ import {
 
 import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
 import { cn } from '@/shared/lib/utils';
-import { Button } from '@/shared/ui/button';
+import { Button, buttonVariants } from '@/shared/ui/button';
 import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import {
   Dialog,
@@ -797,6 +799,15 @@ export function ConversationWorkspace({
 
   return (
     <>
+      <div className="mt-4 flex justify-end">
+        <Link
+          href="/whatsapp-conversations/import"
+          className={buttonVariants({ variant: 'outline' })}
+        >
+          <FileUp aria-hidden="true" />
+          Importar históricos
+        </Link>
+      </div>
       <ConversationMetricsCards conversations={conversations} className="mt-4" />
       <section aria-labelledby="conversation-workspace-title" className={styles.section()}>
         <h2 id="conversation-workspace-title" className={styles.visuallyHidden()}>

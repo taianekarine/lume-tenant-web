@@ -32,6 +32,7 @@ não são expostos a componentes client-side.
 | WhatsApp      | `POST /whatsapp/conversations/:id/actions/mark-read`                                                                            |
 | WhatsApp      | `POST /whatsapp/conversations/:id/actions/close`                                                                                |
 | WhatsApp      | `POST /whatsapp/conversations/:id/messages`                                                                                     |
+| Históricos    | `GET/POST/PATCH /whatsapp/history-imports/*`                                                                                    |
 | Propostas     | `GET /whatsapp/quote-proposals?stage=pending\|sent\|approved\|cancelled&search=&createdFrom=&createdTo=`                        |
 | Propostas     | `GET /whatsapp/quote-proposals/:id`                                                                                             |
 | Propostas     | `POST /whatsapp/quote-proposals/:id/documents`                                                                                  |
@@ -42,6 +43,20 @@ não são expostos a componentes client-side.
 
 As rotas acima são relativas ao prefixo configurado, normalmente
 `http://localhost:3333/api/v1` no desenvolvimento.
+
+## Importação assistida de históricos
+
+`/api/whatsapp-history-import/*` é uma Route Handler com lista explícita de
+caminhos permitidos. Ela encaminha o corpo como stream, mantém o bearer token
+somente no servidor e preserva apenas os cabeçalhos de conteúdo necessários. A
+renovação da sessão segue o mesmo executor autenticado usado pelas ações do
+Painel WhatsApp.
+
+A tela envia os ZIPs sequencialmente. O progresso e os erros são exibidos por
+arquivo, portanto um backup inválido não interrompe os demais. Depois da revisão
+manual, o download e a aplicação usam uma única planilha consolidada. Configure
+`LUME_TENANT_API_WHATSAPP_IMPORT_TIMEOUT_MS` acima da janela esperada para um ZIP
+grande, sem remover os limites de segurança da Tenant API.
 
 ## Sessão e renovação
 
