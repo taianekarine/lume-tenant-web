@@ -26,6 +26,7 @@ import {
 
 import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
 import { cn } from '@/shared/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, buttonVariants } from '@/shared/ui/button';
 import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import {
@@ -116,6 +117,7 @@ interface HumanMediaSubmission {
   readonly expectedVersion: number;
   readonly caption: string;
   readonly file: File;
+  readonly mediaKind: 'auto' | 'sticker';
 }
 
 const MANUAL_COMMERCIAL_STATUSES = [
@@ -299,6 +301,7 @@ export function ConversationWorkspace({
   const [feedbackTone, setFeedbackTone] = useState<'neutral' | 'success' | 'error'>('neutral');
   const [messageDraft, setMessageDraft] = useState('');
   const [selectedAttachment, setSelectedAttachment] = useState<File | null>(null);
+  const [selectedAttachmentKind, setSelectedAttachmentKind] = useState<'auto' | 'sticker'>('auto');
   const [listError, setListError] = useState(initialError ?? '');
   const [detailError, setDetailError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -791,6 +794,7 @@ export function ConversationWorkspace({
     setTargetDepartment(getDefaultTargetDepartment(result.conversation.department));
     setMessageDraft('');
     setSelectedAttachment(null);
+    setSelectedAttachmentKind('auto');
     humanMessageSubmissionRef.current = null;
     humanMediaSubmissionRef.current = null;
     setFeedbackMessage('Mensagem salva. Aguardando confirmação de envio.');
@@ -824,7 +828,8 @@ export function ConversationWorkspace({
         mediaSubmission === null ||
         mediaSubmission.conversationId !== selectedConversation.id ||
         mediaSubmission.caption !== text ||
-        mediaSubmission.file !== selectedAttachment
+        mediaSubmission.file !== selectedAttachment ||
+        mediaSubmission.mediaKind !== selectedAttachmentKind
       ) {
         mediaSubmission = {
           conversationId: selectedConversation.id,
@@ -833,6 +838,7 @@ export function ConversationWorkspace({
           expectedVersion: selectedConversation.version,
           caption: text,
           file: selectedAttachment,
+          mediaKind: selectedAttachmentKind,
         };
         humanMediaSubmissionRef.current = mediaSubmission;
       }
@@ -845,6 +851,7 @@ export function ConversationWorkspace({
         formData.set('commandId', mediaSubmission!.commandId);
         formData.set('idempotencyKey', mediaSubmission!.idempotencyKey);
         formData.set('expectedVersion', String(mediaSubmission!.expectedVersion));
+        formData.set('mediaKind', mediaSubmission!.mediaKind);
         if (mediaSubmission!.caption) formData.set('caption', mediaSubmission!.caption);
 
         try {
@@ -865,6 +872,7 @@ export function ConversationWorkspace({
 
           setMessageDraft('');
           setSelectedAttachment(null);
+          setSelectedAttachmentKind('auto');
           humanMediaSubmissionRef.current = null;
           humanMessageSubmissionRef.current = null;
           setFeedbackMessage('Anexo salvo. Aguardando confirmação de envio.');
@@ -1092,9 +1100,17 @@ export function ConversationWorkspace({
                     className={styles.conversationButton({ selected: isSelected })}
                     aria-pressed={isSelected}
                   >
-                    <span className={styles.avatar()}>
-                      {getContactInitial(conversation.contact.name)}
-                    </span>
+                    <Avatar className={styles.avatar()}>
+                      {conversation.contact.profilePictureUrl ? (
+                        <AvatarImage
+                          src={conversation.contact.profilePictureUrl}
+                          alt={`Foto de ${conversation.contact.name}`}
+                        />
+                      ) : null}
+                      <AvatarFallback>
+                        {getContactInitial(conversation.contact.name)}
+                      </AvatarFallback>
+                    </Avatar>
                     <span className={styles.conversationSummary()}>
                       <span className={styles.conversationHeading()}>
                         <strong className={styles.contactName()}>
@@ -1172,9 +1188,17 @@ export function ConversationWorkspace({
                   <ArrowLeft aria-hidden="true" />
                 </Button>
                 <div className={styles.contactBlock()}>
-                  <span className={styles.detailAvatar()}>
-                    {getContactInitial(selectedConversation.contact.name)}
-                  </span>
+                  <Avatar className={styles.detailAvatar()}>
+                    {selectedConversation.contact.profilePictureUrl ? (
+                      <AvatarImage
+                        src={selectedConversation.contact.profilePictureUrl}
+                        alt={`Foto de ${selectedConversation.contact.name}`}
+                      />
+                    ) : null}
+                    <AvatarFallback>
+                      {getContactInitial(selectedConversation.contact.name)}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className={styles.contactIdentity()}>
                     <h3 className={styles.detailTitle()}>{selectedConversation.contact.name}</h3>
                     <p className={styles.phone()}>
@@ -1380,8 +1404,9 @@ export function ConversationWorkspace({
                       messageDraft={messageDraft}
                       onMessageDraftChange={setMessageDraft}
                       selectedAttachment={selectedAttachment}
-                      onSelectedAttachmentChange={(file) => {
+                      onSelectedAttachmentChange={(file, kind = 'auto') => {
                         setSelectedAttachment(file);
+                        setSelectedAttachmentKind(file ? kind : 'auto');
                         humanMediaSubmissionRef.current = null;
                       }}
                       canSendMessage={canCurrentUserSendMessage}

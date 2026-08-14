@@ -6,6 +6,14 @@ import type {
   WhatsAppRequestStatus,
 } from '../../domain';
 
+export interface WhatsAppMessageSearchResult {
+  readonly messages: readonly WhatsAppMessage[];
+  readonly page: number;
+  readonly pageSize: number;
+  readonly total: number;
+  readonly totalPages: number;
+}
+
 export interface GetWhatsAppConversationsFilters {
   readonly page?: number;
   readonly pageSize?: number;
@@ -64,6 +72,11 @@ export interface WhatsAppConversationRepository {
     conversationId: string,
     messagePage?: number,
   ): Promise<WhatsAppConversation | null>;
+  searchMessages(
+    conversationId: string,
+    search: string,
+    page?: number,
+  ): Promise<WhatsAppMessageSearchResult>;
   takeOverConversation(
     conversationId: string,
     expectedVersion: number,

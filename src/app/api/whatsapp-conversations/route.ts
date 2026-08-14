@@ -4,6 +4,7 @@ import { WhatsAppConversationRepositoryError } from '@/features/whatsapp-convers
 import {
   pollWhatsAppConversationForDashboard,
   pollWhatsAppConversationsForDashboard,
+  searchWhatsAppMessagesForDashboard,
 } from '@/features/whatsapp-conversations/server';
 import { hasPermission } from '@/features/auth/domain';
 import { getCurrentAuthenticatedSession } from '@/features/auth/server';
@@ -31,12 +32,30 @@ export async function GET(request: Request) {
 
   const searchParams = new URL(request.url).searchParams;
   const conversationId = searchParams.get('conversationId')?.trim();
+  const messageSearch = searchParams.get('messageSearch')?.trim();
   const rawMessagePage = Number.parseInt(searchParams.get('messagePage') ?? '1', 10);
   const messagePage =
     Number.isSafeInteger(rawMessagePage) && rawMessagePage > 0 ? rawMessagePage : 1;
 
   try {
     if (conversationId) {
+      if (messageSearch) {
+        if (messageSearch.length < 2 || messageSearch.length > 160) {
+          return NextResponse.json(
+            { message: 'Digite ao menos dois caracteres para pesquisar.' },
+            { status: 400 },
+          );
+        }
+        const result = await searchWhatsAppMessagesForDashboard(
+          conversationId,
+          messageSearch,
+          messagePage,
+        );
+        if (!result) {
+          return NextResponse.json({ message: 'Pesquisa inválida.' }, { status: 400 });
+        }
+        return NextResponse.json(result);
+      }
       const conversation = await pollWhatsAppConversationForDashboard(conversationId, messagePage);
 
       if (conversation === null) {

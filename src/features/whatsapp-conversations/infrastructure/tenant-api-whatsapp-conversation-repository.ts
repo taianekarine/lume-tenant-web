@@ -9,6 +9,7 @@ import {
   type GetWhatsAppConversationsFilters,
   type SendHumanWhatsAppMessageCommand,
   type SendHumanWhatsAppMessageResult,
+  type WhatsAppMessageSearchResult,
   type WhatsAppConversationRepository,
   type WhatsAppConversationRepositoryErrorCode,
 } from '../application';
@@ -477,6 +478,27 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
     ]);
 
     return mapConversation(conversation, messageHistory.messages, transitions, messageHistory.meta);
+  }
+
+  async searchMessages(
+    conversationId: string,
+    search: string,
+    page = 1,
+  ): Promise<WhatsAppMessageSearchResult> {
+    const path = `/whatsapp/conversations/${encodeURIComponent(conversationId)}/messages`;
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: '50',
+      search: search.trim(),
+    });
+    const result = parseResponse(
+      messageListSchema,
+      await this.request(`${path}?${params.toString()}`),
+    );
+    return {
+      messages: result.data.map(mapMessage),
+      ...result.meta,
+    };
   }
 
   async downloadMessageContent(

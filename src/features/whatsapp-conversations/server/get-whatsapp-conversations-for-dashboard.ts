@@ -9,6 +9,7 @@ import {
   getWhatsAppConversations,
   markWhatsAppConversationAsRead,
   returnWhatsAppConversationToBot,
+  searchWhatsAppMessages,
   sendHumanWhatsAppMessage,
   takeOverWhatsAppConversation,
   type GetWhatsAppConversationsFilters,
@@ -35,6 +36,16 @@ export function getWhatsAppConversationsForOperationalDashboard(
 export function pollWhatsAppConversationsForDashboard(filters?: GetWhatsAppConversationsFilters) {
   return executeAuthenticatedWhatsAppMutation((repository) =>
     getWhatsAppConversations(repository, filters),
+  );
+}
+
+export function searchWhatsAppMessagesForDashboard(
+  conversationId: unknown,
+  search: unknown,
+  page: unknown = 1,
+) {
+  return executeAuthenticatedWhatsAppMutation((repository) =>
+    searchWhatsAppMessages(repository, conversationId, search, page),
   );
 }
 

@@ -955,7 +955,11 @@ describe('ConversationWorkspace', () => {
         expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
       );
     });
-    const mediaRequest = jest.mocked(global.fetch).mock.calls[1]?.[1];
+    const mediaRequest = jest
+      .mocked(global.fetch)
+      .mock.calls.find(([url]) =>
+        String(url).includes(`/api/whatsapp-conversations/${conversation.id}/media`),
+      )?.[1];
     const formData = mediaRequest?.body as FormData;
     expect(formData.get('file')).toBe(file);
     expect(formData.get('caption')).toBe('Segue a foto solicitada.');
