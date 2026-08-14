@@ -188,7 +188,7 @@ function getDefaultTargetDepartment(
   );
 }
 
-function preserveLoadedMessages(
+export function preserveLoadedConversationHistory(
   current: readonly WhatsAppConversation[],
   incoming: readonly WhatsAppConversation[],
 ): WhatsAppConversation[] {
@@ -197,6 +197,7 @@ function preserveLoadedMessages(
     return {
       ...conversation,
       messages: existing?.messages ?? conversation.messages,
+      messageHistory: existing?.messageHistory ?? conversation.messageHistory,
       transitions: existing?.transitions ?? conversation.transitions,
     };
   });
@@ -361,6 +362,10 @@ export function ConversationWorkspace({
                   !preserveExistingMessages || updatedConversation.messages.length > 0
                     ? updatedConversation.messages
                     : conversation.messages,
+                messageHistory:
+                  !preserveExistingMessages || updatedConversation.messageHistory
+                    ? updatedConversation.messageHistory
+                    : conversation.messageHistory,
                 transitions:
                   !preserveExistingMessages || updatedConversation.transitions.length > 0
                     ? updatedConversation.transitions
@@ -467,7 +472,9 @@ export function ConversationWorkspace({
           (conversation) => conversation.id === selectedId,
         );
 
-        setConversations((current) => preserveLoadedMessages(current, body.conversations ?? []));
+        setConversations((current) =>
+          preserveLoadedConversationHistory(current, body.conversations ?? []),
+        );
         setListError('');
 
         if (

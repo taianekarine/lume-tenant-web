@@ -11,7 +11,7 @@ import {
 } from '../actions';
 import type { WhatsAppConversation } from '../domain';
 import { createWhatsAppConversationFixture } from '../testing/whatsapp-conversation-fixture';
-import { ConversationWorkspace } from './conversation-workspace';
+import { ConversationWorkspace, preserveLoadedConversationHistory } from './conversation-workspace';
 
 jest.setTimeout(15_000);
 
@@ -67,6 +67,42 @@ describe('ConversationWorkspace', () => {
       configurable: true,
       value: 'visible',
     });
+  });
+
+  it('preserves loaded pagination metadata during list polling', () => {
+    const loadedConversation = createWhatsAppConversationFixture({
+      messages: [
+        {
+          id: '00000000-0000-4000-8000-000000000501',
+          direction: 'inbound',
+          deliveryStatus: 'received',
+          kind: 'text',
+          text: 'Mensagem mais recente',
+          attachment: null,
+          sentBy: null,
+          occurredAt: '2026-07-21T13:42:00.000Z',
+          attempts: [],
+        },
+      ],
+      messageHistory: {
+        page: 1,
+        pageSize: 100,
+        total: 6_711,
+        totalPages: 68,
+      },
+    });
+    const polledSummary = createWhatsAppConversationFixture({
+      ...loadedConversation,
+      messages: [],
+      messageHistory: undefined,
+      updatedAt: '2026-07-21T13:43:00.000Z',
+    });
+
+    const [result] = preserveLoadedConversationHistory([loadedConversation], [polledSummary]);
+
+    expect(result.messages).toEqual(loadedConversation.messages);
+    expect(result.messageHistory).toEqual(loadedConversation.messageHistory);
+    expect(result.updatedAt).toBe(polledSummary.updatedAt);
   });
 
   it('keeps the selected contact identity and last interaction in a compact responsive row', () => {
@@ -195,6 +231,7 @@ describe('ConversationWorkspace', () => {
     expect(screen.queryByText('Dados adicionais confirmados')).not.toBeInTheDocument();
     expect(screen.queryByText('Auditoria essencial')).not.toBeInTheDocument();
     expect(screen.queryByText('confirm-quote')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Visualizar PDF' }));
     expect(screen.getByRole('link', { name: 'Abrir' })).toHaveAttribute(
       'href',
       'https://files.example.test/proposta.pdf',
@@ -280,6 +317,7 @@ describe('ConversationWorkspace', () => {
     );
     expect(screen.getByLabelText('video.mp4')).toHaveAttribute('controls');
     expect(screen.getByLabelText('audio.ogg')).toHaveAttribute('controls');
+    await user.click(screen.getByRole('button', { name: 'Visualizar PDF' }));
     expect(screen.getByRole('link', { name: 'Abrir' })).toHaveAttribute(
       'href',
       'https://files.example.test/arquivo.pdf',
