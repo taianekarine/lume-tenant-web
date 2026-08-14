@@ -10,7 +10,7 @@ export async function sanitizeWhatsAppHistoryImportResponse(upstream: Response):
   return Response.json(
     {
       message:
-        'NÃ£o foi possÃ­vel iniciar a importaÃ§Ã£o. Tente novamente e, se o problema continuar, contate o suporte.',
+        'Não foi possível iniciar a importação. Tente novamente e, se o problema continuar, contate o suporte.',
     },
     {
       status: upstream.status,
