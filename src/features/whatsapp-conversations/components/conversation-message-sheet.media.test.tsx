@@ -113,12 +113,18 @@ describe('pré-visualização de mídias no chat', () => {
     screen.getAllByRole('button', { name: 'Carregar mídia' }).forEach((button) => {
       fireEvent.click(button);
     });
+    expect(screen.queryByTitle('Visualização de proposta.pdf')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Visualizar PDF' }));
     expect(screen.getByAltText('foto.jpg')).toBeInTheDocument();
     expect(screen.getByLabelText('audio.m4a')).toBeInTheDocument();
     expect(screen.getByLabelText('video.mp4')).toBeInTheDocument();
     expect(screen.getByAltText('Figurinha recebida')).toBeInTheDocument();
     expect(screen.getByText('proposta.pdf')).toBeInTheDocument();
     expect(screen.getByText(/Documento PDF/)).toBeInTheDocument();
+    expect(screen.getByTitle('Visualização de proposta.pdf')).toHaveAttribute(
+      'src',
+      expect.stringContaining('/content#toolbar=1&navpanes=0'),
+    );
     expect(screen.getAllByRole('link', { name: 'Baixar' })).toHaveLength(5);
     expect(document.body).not.toHaveTextContent('.enc');
     expect(document.body).not.toHaveTextContent('[vídeo]');

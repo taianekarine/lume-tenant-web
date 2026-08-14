@@ -179,8 +179,9 @@ function MessageAttachmentPreview({
   }
 
   const contentUrl = attachment.url;
+  const isPdf = attachment.mimeType?.toLowerCase().split(';')[0] === 'application/pdf';
   const requiresExplicitLoad =
-    kind === 'image' || kind === 'sticker' || kind === 'video' || kind === 'audio';
+    kind === 'image' || kind === 'sticker' || kind === 'video' || kind === 'audio' || isPdf;
 
   if (requiresExplicitLoad && !contentRequested) {
     return (
@@ -191,8 +192,27 @@ function MessageAttachmentPreview({
           <small className="block text-muted-foreground">{details}</small>
         </span>
         <Button type="button" variant="outline" size="sm" onClick={() => setContentRequested(true)}>
-          Carregar mídia
+          {isPdf ? 'Visualizar PDF' : 'Carregar mídia'}
         </Button>
+      </div>
+    );
+  }
+
+  if (isPdf) {
+    return (
+      <div className="overflow-hidden rounded-xl border bg-background/70">
+        <iframe
+          src={`${contentUrl}#toolbar=1&navpanes=0`}
+          title={`Visualização de ${label}`}
+          className="h-[min(65vh,44rem)] min-h-80 w-full bg-background"
+        />
+        <div className="flex min-w-0 items-center justify-between gap-2 border-t px-2 py-1 text-[11px] text-muted-foreground">
+          <span className="min-w-0">
+            <strong className="block truncate text-foreground">{label}</strong>
+            <small className="block truncate">{details}</small>
+          </span>
+          <AttachmentActions contentUrl={contentUrl} />
+        </div>
       </div>
     );
   }
