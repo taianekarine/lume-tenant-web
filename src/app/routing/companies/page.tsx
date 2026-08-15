@@ -15,7 +15,6 @@ import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 
 export default async function RoutingCompaniesPage({
   searchParams,
@@ -44,175 +43,172 @@ export default async function RoutingCompaniesPage({
       >
         <PageFeedbackToast error={query.error} success={query.success} />
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <Card>
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle>Cadastro de clientes</CardTitle>
               <CardDescription>
                 {companies.total} cliente(s) no escopo do seu acesso.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               {companies.items.length === 0 ? (
                 <RoutingEmpty>Nenhum cliente cadastrado.</RoutingEmpty>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>CNPJ/CPF</TableHead>
-                      <TableHead>Situacao</TableHead>
-                      {(canUpdate || canManage) && <TableHead>Acoes</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {companies.items.map((company) => (
-                      <TableRow key={company.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Building2 className="size-4 text-muted-foreground" />
-                            <div>
-                              <p className="font-medium">
-                                {company.tradeName || company.legalName}
+                <div className="space-y-4">
+                  {companies.items.map((company) => (
+                    <article key={company.id} className="min-w-0 overflow-hidden rounded-xl border">
+                      <div className="grid min-w-0 gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Building2 className="size-5 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">
+                              {company.tradeName || company.legalName}
+                            </p>
+                            {company.tradeName ? (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {company.legalName}
                               </p>
-                              {company.tradeName ? (
-                                <p className="text-xs text-muted-foreground">{company.legalName}</p>
-                              ) : null}
-                            </div>
+                            ) : null}
                           </div>
-                        </TableCell>
-                        <TableCell>{company.taxId}</TableCell>
-                        <TableCell>
+                        </div>
+                        <span className="break-all text-sm text-muted-foreground">
+                          {company.taxId}
+                        </span>
+                        <span className="w-fit rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
                           {company.status === 'active'
                             ? 'Ativo'
                             : company.status === 'suspended'
                               ? 'Suspenso'
                               : 'Inativo'}
-                        </TableCell>
-                        {canUpdate || canManage ? (
-                          <TableCell>
-                            <details className="min-w-64">
-                              <summary className="cursor-pointer text-sm font-medium text-primary">
-                                Editar / gerenciar
-                              </summary>
-                              <div className="mt-3 space-y-4 rounded-lg border p-3">
-                                {canUpdate ? (
-                                  <form action={updateRoutingCompanyAction} className="space-y-3">
-                                    <input
-                                      type="hidden"
-                                      name="routingCompanyId"
-                                      value={company.id}
-                                    />
-                                    <input
-                                      type="hidden"
-                                      name="expectedVersion"
-                                      value={company.version}
-                                    />
-                                    <input type="hidden" name="status" value={company.status} />
-                                    <Input
-                                      name="taxId"
-                                      defaultValue={company.taxId}
-                                      aria-label="CNPJ ou CPF"
-                                      required
-                                    />
-                                    <Input
-                                      name="legalName"
-                                      defaultValue={company.legalName}
-                                      aria-label="Nome ou razao social"
-                                      required
-                                    />
-                                    <Input
-                                      name="tradeName"
-                                      defaultValue={company.tradeName ?? ''}
-                                      aria-label="Nome fantasia"
-                                    />
-                                    <Input
-                                      name="costCenter"
-                                      defaultValue={company.costCenter ?? ''}
-                                      aria-label="Centro de custo"
-                                    />
-                                    <Button size="sm" type="submit">
-                                      Salvar alteracoes
-                                    </Button>
-                                  </form>
-                                ) : null}
-                                {canManage ? (
-                                  <form action={updateRoutingCompanyAction}>
-                                    <input
-                                      type="hidden"
-                                      name="routingCompanyId"
-                                      value={company.id}
-                                    />
-                                    <input
-                                      type="hidden"
-                                      name="expectedVersion"
-                                      value={company.version}
-                                    />
-                                    <input type="hidden" name="taxId" value={company.taxId} />
-                                    <input
-                                      type="hidden"
-                                      name="legalName"
-                                      value={company.legalName}
-                                    />
-                                    <input
-                                      type="hidden"
-                                      name="tradeName"
-                                      value={company.tradeName ?? ''}
-                                    />
-                                    <input
-                                      type="hidden"
-                                      name="costCenter"
-                                      value={company.costCenter ?? ''}
-                                    />
-                                    <input
-                                      type="hidden"
-                                      name="status"
-                                      value={company.status === 'active' ? 'inactive' : 'active'}
-                                    />
-                                    <Button size="sm" type="submit" variant="outline">
-                                      {company.status === 'active'
-                                        ? 'Desativar cliente'
-                                        : 'Reativar cliente'}
-                                    </Button>
-                                  </form>
-                                ) : null}
-                                {canManage ? (
-                                  <form
-                                    action={deleteRoutingCompanyAction}
-                                    className="space-y-2 border-t pt-3"
-                                  >
-                                    <input
-                                      type="hidden"
-                                      name="routingCompanyId"
-                                      value={company.id}
-                                    />
-                                    <Label htmlFor={`delete-password-${company.id}`}>
-                                      Senha atual para excluir
-                                    </Label>
-                                    <Input
-                                      id={`delete-password-${company.id}`}
-                                      name="password"
-                                      type="password"
-                                      autoComplete="current-password"
-                                      required
-                                    />
-                                    <Button size="sm" type="submit" variant="destructive">
-                                      Excluir definitivamente
-                                    </Button>
-                                    <p className="text-xs text-muted-foreground">
-                                      Se houver usuarios, contratos, colaboradores, rotas ou pontos
-                                      exclusivos, o cliente deve ser desativado para preservar o
-                                      historico.
-                                    </p>
-                                  </form>
-                                ) : null}
+                        </span>
+                      </div>
+                      {canUpdate || canManage ? (
+                        <details className="border-t">
+                          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-primary">
+                            Editar / gerenciar
+                          </summary>
+                          <div className="min-w-0 space-y-5 border-t bg-muted/20 p-4">
+                            {canUpdate ? (
+                              <form
+                                action={updateRoutingCompanyAction}
+                                className="grid min-w-0 gap-4 sm:grid-cols-2"
+                              >
+                                <input type="hidden" name="routingCompanyId" value={company.id} />
+                                <input
+                                  type="hidden"
+                                  name="expectedVersion"
+                                  value={company.version}
+                                />
+                                <input type="hidden" name="status" value={company.status} />
+                                <div className="min-w-0 space-y-2">
+                                  <Label htmlFor={`tax-id-${company.id}`}>CNPJ/CPF</Label>
+                                  <Input
+                                    id={`tax-id-${company.id}`}
+                                    name="taxId"
+                                    defaultValue={company.taxId}
+                                    required
+                                  />
+                                </div>
+                                <div className="min-w-0 space-y-2">
+                                  <Label htmlFor={`legal-name-${company.id}`}>
+                                    Nome / razão social
+                                  </Label>
+                                  <Input
+                                    id={`legal-name-${company.id}`}
+                                    name="legalName"
+                                    defaultValue={company.legalName}
+                                    required
+                                  />
+                                </div>
+                                <div className="min-w-0 space-y-2">
+                                  <Label htmlFor={`trade-name-${company.id}`}>Nome fantasia</Label>
+                                  <Input
+                                    id={`trade-name-${company.id}`}
+                                    name="tradeName"
+                                    defaultValue={company.tradeName ?? ''}
+                                  />
+                                </div>
+                                <div className="min-w-0 space-y-2">
+                                  <Label htmlFor={`cost-center-${company.id}`}>
+                                    Centro de custo
+                                  </Label>
+                                  <Input
+                                    id={`cost-center-${company.id}`}
+                                    name="costCenter"
+                                    defaultValue={company.costCenter ?? ''}
+                                  />
+                                </div>
+                                <div className="sm:col-span-2">
+                                  <Button size="sm" type="submit">
+                                    Salvar alterações
+                                  </Button>
+                                </div>
+                              </form>
+                            ) : null}
+                            {canManage ? (
+                              <div className="grid min-w-0 gap-5 border-t pt-5 lg:grid-cols-2">
+                                <form action={updateRoutingCompanyAction} className="space-y-2">
+                                  <input type="hidden" name="routingCompanyId" value={company.id} />
+                                  <input
+                                    type="hidden"
+                                    name="expectedVersion"
+                                    value={company.version}
+                                  />
+                                  <input type="hidden" name="taxId" value={company.taxId} />
+                                  <input type="hidden" name="legalName" value={company.legalName} />
+                                  <input
+                                    type="hidden"
+                                    name="tradeName"
+                                    value={company.tradeName ?? ''}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="costCenter"
+                                    value={company.costCenter ?? ''}
+                                  />
+                                  <input
+                                    type="hidden"
+                                    name="status"
+                                    value={company.status === 'active' ? 'inactive' : 'active'}
+                                  />
+                                  <p className="text-sm font-medium">Situação do cliente</p>
+                                  <Button size="sm" type="submit" variant="outline">
+                                    {company.status === 'active'
+                                      ? 'Desativar cliente'
+                                      : 'Reativar cliente'}
+                                  </Button>
+                                </form>
+                                <form
+                                  action={deleteRoutingCompanyAction}
+                                  className="min-w-0 space-y-2"
+                                >
+                                  <input type="hidden" name="routingCompanyId" value={company.id} />
+                                  <Label htmlFor={`delete-password-${company.id}`}>
+                                    Senha atual para excluir
+                                  </Label>
+                                  <Input
+                                    id={`delete-password-${company.id}`}
+                                    name="password"
+                                    type="password"
+                                    autoComplete="current-password"
+                                    required
+                                  />
+                                  <Button size="sm" type="submit" variant="destructive">
+                                    Excluir definitivamente
+                                  </Button>
+                                  <p className="text-xs text-muted-foreground">
+                                    Se houver usuários, contratos, colaboradores, rotas ou pontos
+                                    exclusivos, desative o cliente para preservar o histórico.
+                                  </p>
+                                </form>
                               </div>
-                            </details>
-                          </TableCell>
-                        ) : null}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                            ) : null}
+                          </div>
+                        </details>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
