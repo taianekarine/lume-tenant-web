@@ -9,8 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 const stages = [
   {
     icon: Building2,
-    title: '1. Empresa atendida',
-    description: 'Cadastre a empresa cliente da Milenium, sem criar um novo tenant.',
+    title: '1. Cliente',
+    description: 'Cadastre o cliente PF ou PJ da Milenium, sem criar um novo tenant.',
     href: '/routing/companies',
   },
   {
@@ -22,7 +22,7 @@ const stages = [
   {
     icon: UsersRound,
     title: '3. Lista geral de colaboradores',
-    description: 'Baixe o modelo oficial XLSX e importe a lista vinculada à empresa atendida.',
+    description: 'Escolha o cliente, baixe o modelo oficial XLSX e importe a lista vinculada.',
     href: '/routing/passengers',
   },
   {

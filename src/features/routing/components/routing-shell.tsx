@@ -5,7 +5,8 @@ import { Button } from '@/shared/ui/button';
 
 const links = [
   { href: '/routing', label: 'Visão geral' },
-  { href: '/routing/companies', label: 'Empresas atendidas' },
+  { href: '/routing/companies', label: 'Clientes' },
+  { href: '/routing/fixed-points', label: 'Pontos fixos' },
   { href: '/routing/contracts', label: 'Contratos' },
   { href: '/routing/passengers', label: 'Colaboradores' },
   { href: '/routing/routes', label: 'Rotas sugeridas' },

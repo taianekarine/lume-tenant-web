@@ -119,7 +119,7 @@ describe('userFormSchema', () => {
     ).toBe(true);
   });
 
-  it('accepts an individual client only without a served-company link', () => {
+  it('requires an individual client to be linked to its client record', () => {
     const client = {
       name: 'Cliente Pessoa Física',
       username: 'cliente.pf',
@@ -133,13 +133,13 @@ describe('userFormSchema', () => {
       permissionCodes: [],
     };
 
-    expect(userFormSchema.safeParse(client).success).toBe(true);
+    expect(userFormSchema.safeParse(client).success).toBe(false);
     expect(
       userFormSchema.safeParse({
         ...client,
         routingCompanyId: '11111111-1111-4111-8111-111111111111',
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('does not allow creating an administrator through the Tenant Web', () => {

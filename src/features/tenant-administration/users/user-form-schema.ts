@@ -6,7 +6,7 @@ const userAssignmentFields = {
   isAdministrator: z.boolean(),
   documentAccessMode: z.enum(['standard', 'document-portal', 'client']).optional(),
   clientCategory: z.enum(['legal-entity', 'individual']).nullable().optional(),
-  routingCompanyId: z.string().uuid('Selecione a empresa atendida.').nullable().optional(),
+  routingCompanyId: z.string().uuid('Selecione o cliente vinculado.').nullable().optional(),
   departments: z.array(z.string()),
   permissionCodes: z.array(z.string()),
   jobTitle: z.enum(['Administrativo', 'Geral', 'Motorista'], {
@@ -69,17 +69,10 @@ function requireClientScope(
       path: ['clientCategory'],
     });
   }
-  if (input.clientCategory === 'legal-entity' && !input.routingCompanyId) {
+  if (!input.routingCompanyId) {
     context.addIssue({
       code: 'custom',
-      message: 'Selecione a empresa atendida do cliente PJ.',
-      path: ['routingCompanyId'],
-    });
-  }
-  if (input.clientCategory === 'individual' && input.routingCompanyId) {
-    context.addIssue({
-      code: 'custom',
-      message: 'Cliente PF não deve ser vinculado a uma empresa atendida.',
+      message: 'Selecione o cliente PF ou PJ vinculado a este acesso.',
       path: ['routingCompanyId'],
     });
   }

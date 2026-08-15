@@ -88,7 +88,7 @@ Os itens são organizados em cinco grupos:
 - **Geral:** Dashboard, Agentes de IA e Suporte, sujeitos às respectivas
   permissões e com conteúdo filtrado pelo departamento;
 - **Comercial:** Painel WhatsApp e Orçamentos, somente para vínculo Comercial;
-- **Operacional:** Roteirização, conforme as permissões de empresas atendidas,
+- **Operacional:** Roteirização, conforme as permissões dos clientes atendidos,
   contratos, colaboradores e rotas;
 - **Pessoas:** Usuários e Gestão documental conforme vínculo e permissões;
 - **Administração:** Painel administrativo exclusivo de administradores, além de
@@ -214,7 +214,7 @@ da projeção do painel, mantêm leitura local por identificador.
 
 ## Roteirização orientada por contrato
 
-`RoutingCompany` representa a empresa atendida pela Milenium e nunca um novo
+`RoutingCompany` representa o cliente atendido pela Milenium e nunca um novo
 tenant. `RoutingContract` é a raiz operacional: unidade, vigência, tipo de
 operação, centros de custo, turnos, horários, veículos, capacidades, KM e
 periodicidade determinam os limites da geração. A rota surge somente de
@@ -225,16 +225,19 @@ plano retornado pela API para revisão, aprovação e publicação. Exportaçõe
 uma versão aprovada e imutável. O arquivo operacional mantém centros de custo;
 os formatos do Google My Maps os omitem.
 
-Os endereços de saída e destino reutilizam `PostalCodeAddressFields`. Ao
+Pontos fixos globais ou exclusivos de um cliente mantêm nome, código e endereço
+canônico. Os contratos selecionam pontos fixos de saída e destino, e cada turno
+informa quantidade de veículos e capacidade por veículo. Os endereços reutilizam
+`PostalCodeAddressFields`. Ao
 informar oito dígitos, o navegador chama a rota interna
 `GET /api/postal-code/:postalCode`; essa fronteira valida o CEP, consulta o
 ViaCEP server-side, trata CEP inexistente e aplica cache compartilhado. Número
 e complemento permanecem editáveis e uma indisponibilidade externa não impede
 o preenchimento manual.
 
-Cliente PJ exige `routingCompanyId` e departamento `client-company`; cliente PF
-não recebe `routingCompanyId`. Usuários internos permanecem no tenant Milenium e
-podem operar várias empresas atendidas quando autorizados.
+Clientes PF e PJ exigem `routingCompanyId` e departamento `client-company`.
+Usuários internos permanecem no tenant Milenium e podem operar vários clientes
+quando autorizados.
 
 ## Autenticação e ciclo da conta
 

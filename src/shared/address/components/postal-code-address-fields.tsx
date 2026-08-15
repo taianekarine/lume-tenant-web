@@ -42,9 +42,11 @@ type LookupState =
 export function PostalCodeAddressFields({
   prefix,
   title,
+  showPointName = true,
 }: {
   readonly prefix: string;
   readonly title: string;
+  readonly showPointName?: boolean;
 }) {
   const [address, setAddress] = useState<AddressFormState>(emptyAddress);
   const [lookup, setLookup] = useState<LookupState>({ status: 'idle' });
@@ -112,16 +114,20 @@ export function PostalCodeAddressFields({
   return (
     <fieldset className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
       <legend className="px-2 text-sm font-semibold">{title}</legend>
-      <div className="space-y-1 lg:col-span-2">
-        <Label htmlFor={`${prefix}-label`}>Nome do ponto</Label>
-        <Input
-          id={`${prefix}-label`}
-          name={`${prefix}Label`}
-          value={address.label}
-          onChange={(event) => update('label', event.target.value)}
-          required
-        />
-      </div>
+      {showPointName ? (
+        <div className="space-y-1 lg:col-span-2">
+          <Label htmlFor={`${prefix}-label`}>Nome do ponto</Label>
+          <Input
+            id={`${prefix}-label`}
+            name={`${prefix}Label`}
+            value={address.label}
+            onChange={(event) => update('label', event.target.value)}
+            required
+          />
+        </div>
+      ) : (
+        <input type="hidden" name={`${prefix}Label`} value={title} />
+      )}
       <div className="space-y-1">
         <Label htmlFor={`${prefix}-postal-code`}>CEP</Label>
         <Input

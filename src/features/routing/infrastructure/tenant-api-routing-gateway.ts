@@ -28,6 +28,15 @@ const addressSchema = z.object({
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
 });
+const fixedPointSchema = z.object({
+  id: z.string().uuid(),
+  routingCompanyId: z.string().uuid().nullable(),
+  code: z.string(),
+  name: z.string(),
+  status: z.enum(['active', 'inactive']),
+  address: addressSchema,
+  version: z.number().int(),
+});
 const shiftSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string(),
@@ -39,6 +48,8 @@ const shiftSchema = z.object({
 const contractSchema = z.object({
   id: z.string().uuid(),
   routingCompanyId: z.string().uuid(),
+  originFixedPointId: z.string().uuid().nullable(),
+  destinationFixedPointId: z.string().uuid().nullable(),
   code: z.string(),
   name: z.string(),
   operationType: z.string(),
@@ -129,6 +140,38 @@ const routeDetailSchema = z.object({
     )
     .optional(),
 });
+const passengerImportSchema = z.object({
+  batch: z
+    .object({
+      id: z.string().uuid(),
+      status: z.enum(['processing', 'completed', 'review-required', 'failed']),
+      totalRows: z.number().int(),
+      createdCount: z.number().int(),
+      updatedCount: z.number().int(),
+      keptCount: z.number().int(),
+      pendingCount: z.number().int(),
+      conflictCount: z.number().int(),
+    })
+    .passthrough(),
+  records: z.array(
+    z
+      .object({
+        id: z.string().uuid(),
+        rowNumber: z.number().int(),
+        passengerId: z.string().uuid().nullable(),
+        action: z.enum(['created', 'updated', 'kept', 'conflict', 'pending']),
+        payload: z.record(z.string(), z.unknown()),
+        problems: z.array(
+          z.object({
+            field: z.string(),
+            reason: z.string(),
+            resolutionAction: z.string(),
+          }),
+        ),
+      })
+      .passthrough(),
+  ),
+});
 
 function listSchema<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ items: z.array(schema), total: z.number().int().nonnegative() });
@@ -168,6 +211,37 @@ export class TenantApiRoutingGateway implements RoutingGateway {
     });
   }
 
+  updateCompany(id: string, input: Record<string, unknown>) {
+    return this.json(`/routing/companies/${encodeURIComponent(id)}`, companySchema, {
+      method: 'PATCH',
+      body: { ...input, commandId: randomUUID() },
+    });
+  }
+
+  deleteCompany(id: string, password: string) {
+    return this.json(
+      `/routing/companies/${encodeURIComponent(id)}`,
+      z.object({ deleted: z.literal(true) }),
+      {
+        method: 'DELETE',
+        body: { commandId: randomUUID(), password },
+      },
+    );
+  }
+
+  listFixedPoints(
+    query: { search?: string; routingCompanyId?: string; routeId?: string; status?: string } = {},
+  ) {
+    return this.json(`/routing/fixed-points${queryString(query)}`, listSchema(fixedPointSchema));
+  }
+
+  createFixedPoint(input: Record<string, unknown>) {
+    return this.json('/routing/fixed-points', fixedPointSchema, {
+      method: 'POST',
+      body: { ...input, commandId: randomUUID() },
+    });
+  }
+
   listContracts(query: { routingCompanyId?: string; search?: string; status?: string } = {}) {
     return this.json(`/routing/contracts${queryString(query)}`, listSchema(contractSchema));
   }
@@ -197,15 +271,41 @@ export class TenantApiRoutingGateway implements RoutingGateway {
     });
   }
 
-  async passengerTemplate() {
-    return this.binary('/routing/passengers/template.xlsx', 'modelo-colaboradores.xlsx');
+  async passengerTemplate(routingCompanyId?: string) {
+    return this.binary(
+      `/routing/passengers/template.xlsx${queryString({ routingCompanyId })}`,
+      'modelo-colaboradores.xlsx',
+    );
   }
 
-  async importPassengers(file: File, commandId: string) {
+  async importPassengers(file: File, commandId: string, routingCompanyId: string) {
     const body = new FormData();
     body.set('file', file);
     body.set('commandId', commandId);
-    return this.rawJson('/routing/passengers/imports', { method: 'POST', body });
+    body.set('routingCompanyId', routingCompanyId);
+    const value = await this.rawJson('/routing/passengers/imports', { method: 'POST', body });
+    const parsed = passengerImportSchema.safeParse(value);
+    if (!parsed.success)
+      throw new RoutingError('invalid-response', 'A API retornou uma importacao incompatível.');
+    return parsed.data;
+  }
+
+  getPassengerImport(batchId: string) {
+    return this.json(
+      `/routing/passengers/imports/${encodeURIComponent(batchId)}`,
+      passengerImportSchema,
+    );
+  }
+
+  resolvePassengerImportAddress(batchId: string, recordId: string, input: Record<string, unknown>) {
+    return this.json(
+      `/routing/passengers/imports/${encodeURIComponent(batchId)}/records/${encodeURIComponent(recordId)}/address`,
+      passengerImportSchema,
+      {
+        method: 'PATCH',
+        body: { ...input, commandId: randomUUID() },
+      },
+    );
   }
 
   async listRoutes(query: { routingCompanyId?: string; search?: string; status?: string } = {}) {

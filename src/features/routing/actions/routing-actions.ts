@@ -56,22 +56,88 @@ export async function createRoutingCompanyAction(data: FormData): Promise<void> 
   }
   revalidatePath('/routing');
   revalidatePath('/routing/companies');
-  redirect('/routing/companies?success=Empresa atendida cadastrada.');
+  redirect('/routing/companies?success=Cliente cadastrado.');
+}
+
+export async function updateRoutingCompanyAction(data: FormData): Promise<void> {
+  const id = value(data, 'routingCompanyId');
+  try {
+    await executeAuthenticatedRoutingMutation((gateway) =>
+      gateway.updateCompany(id, {
+        expectedVersion: numberValue(data, 'expectedVersion', 1),
+        taxId: value(data, 'taxId'),
+        legalName: value(data, 'legalName'),
+        tradeName: value(data, 'tradeName') || null,
+        costCenter: value(data, 'costCenter') || null,
+        status: value(data, 'status') || 'active',
+      }),
+    );
+  } catch (error) {
+    failure('/routing/companies', error);
+  }
+  revalidatePath('/routing/companies');
+  redirect('/routing/companies?success=Dados do cliente atualizados.');
+}
+
+export async function deleteRoutingCompanyAction(data: FormData): Promise<void> {
+  try {
+    await executeAuthenticatedRoutingMutation((gateway) =>
+      gateway.deleteCompany(value(data, 'routingCompanyId'), value(data, 'password')),
+    );
+  } catch (error) {
+    failure('/routing/companies', error);
+  }
+  revalidatePath('/routing/companies');
+  redirect('/routing/companies?success=Cliente excluido.');
+}
+
+export async function createFixedPointAction(data: FormData): Promise<void> {
+  try {
+    await executeAuthenticatedRoutingMutation((gateway) =>
+      gateway.createFixedPoint({
+        name: value(data, 'name'),
+        routingCompanyId: value(data, 'routingCompanyId') || null,
+        address: address(data, 'address'),
+      }),
+    );
+  } catch (error) {
+    failure('/routing/fixed-points', error);
+  }
+  revalidatePath('/routing/fixed-points');
+  revalidatePath('/routing/contracts');
+  redirect('/routing/fixed-points?success=Ponto fixo cadastrado.');
 }
 
 export async function createRoutingContractAction(data: FormData): Promise<void> {
-  const requiredDocuments = value(data, 'requiredDocumentTypeCodes')
+  const routeType = value(data, 'routeType') || 'municipal';
+  const requiredDocuments = (
+    routeType === 'intermunicipal' ? value(data, 'requiredDocumentTypeCodes') : ''
+  )
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+  const shiftCount = Math.max(1, numberValue(data, 'shiftCount', 1));
+  const shifts = Array.from({ length: shiftCount }, (_, index) => ({
+    name: value(data, `shifts.${index}.name`),
+    requiredArrivalTime: value(data, `shifts.${index}.requiredArrivalTime`),
+    vehicleCount: value(data, `shifts.${index}.vehicleCount`)
+      ? numberValue(data, `shifts.${index}.vehicleCount`, 1)
+      : null,
+    vehicleCapacity: value(data, `shifts.${index}.vehicleCapacity`)
+      ? numberValue(data, `shifts.${index}.vehicleCapacity`, 1)
+      : null,
+    activeWeekdays: data.getAll(`shifts.${index}.activeWeekdays`).map(Number),
+  }));
   try {
     await executeAuthenticatedRoutingMutation((gateway) =>
       gateway.createContract({
         routingCompanyId: value(data, 'routingCompanyId'),
+        originFixedPointId: value(data, 'originFixedPointId'),
+        destinationFixedPointId: value(data, 'destinationFixedPointId'),
         code: value(data, 'code'),
         name: value(data, 'name'),
         operationType: value(data, 'operationType'),
-        routeType: value(data, 'routeType') || 'municipal',
+        routeType,
         status: value(data, 'status') || 'active',
         periodicity: value(data, 'periodicity') || 'monthly',
         contractedVehicleCount: numberValue(data, 'contractedVehicleCount', 1),
@@ -92,19 +158,7 @@ export async function createRoutingContractAction(data: FormData): Promise<void>
         costCenters: [
           { code: value(data, 'costCenterCode'), name: value(data, 'costCenterName') || null },
         ],
-        shifts: [
-          {
-            name: value(data, 'shiftName'),
-            requiredArrivalTime: value(data, 'requiredArrivalTime'),
-            vehicleCount: value(data, 'shiftVehicleCount')
-              ? numberValue(data, 'shiftVehicleCount', 1)
-              : null,
-            vehicleCapacity: value(data, 'shiftVehicleCapacity')
-              ? numberValue(data, 'shiftVehicleCapacity', 1)
-              : null,
-            activeWeekdays: data.getAll('activeWeekdays').map(Number),
-          },
-        ],
+        shifts,
       }),
     );
   } catch (error) {
@@ -118,18 +172,43 @@ export async function createRoutingContractAction(data: FormData): Promise<void>
 export async function importRoutingPassengersAction(data: FormData): Promise<void> {
   const file = data.get('file');
   if (!(file instanceof File) || file.size === 0)
-    redirect('/routing/passengers?error=Selecione o arquivo XLSX.');
+    redirect('/routing/passengers?error=Selecione uma planilha.');
+  const routingCompanyId = value(data, 'routingCompanyId');
+  if (!routingCompanyId)
+    redirect('/routing/passengers?error=Selecione o cliente dos colaboradores.');
+  let batchId = '';
   try {
-    await executeAuthenticatedRoutingMutation((gateway) =>
-      gateway.importPassengers(file, randomUUID()),
+    const result = await executeAuthenticatedRoutingMutation((gateway) =>
+      gateway.importPassengers(file, randomUUID(), routingCompanyId),
     );
+    batchId = result.batch.id;
   } catch (error) {
     failure('/routing/passengers', error);
   }
   revalidatePath('/routing');
   revalidatePath('/routing/passengers');
   redirect(
-    '/routing/passengers?success=Planilha processada. Consulte os registros pendentes antes de gerar rotas.',
+    `/routing/passengers?batchId=${encodeURIComponent(batchId)}&success=${encodeURIComponent('Planilha processada. Consulte os registros pendentes antes de gerar rotas.')}`,
+  );
+}
+
+export async function resolvePassengerImportAddressAction(data: FormData): Promise<void> {
+  const batchId = value(data, 'batchId');
+  const prefix = value(data, 'correctionPrefix');
+  try {
+    await executeAuthenticatedRoutingMutation((gateway) =>
+      gateway.resolvePassengerImportAddress(batchId, value(data, 'recordId'), {
+        postalCode: value(data, `${prefix}PostalCode`),
+        number: value(data, `${prefix}Number`),
+        complement: value(data, `${prefix}Complement`) || null,
+      }),
+    );
+  } catch (error) {
+    failure(`/routing/passengers?batchId=${encodeURIComponent(batchId)}`, error);
+  }
+  revalidatePath('/routing/passengers');
+  redirect(
+    `/routing/passengers?batchId=${encodeURIComponent(batchId)}&success=${encodeURIComponent('Endereco do colaborador atualizado.')}`,
   );
 }
 

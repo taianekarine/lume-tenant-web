@@ -10,6 +10,16 @@ export interface RoutingCompany {
   readonly version: number;
 }
 
+export interface RoutingFixedPoint {
+  readonly id: string;
+  readonly routingCompanyId: string | null;
+  readonly code: string;
+  readonly name: string;
+  readonly status: 'active' | 'inactive';
+  readonly address: RoutingAddress;
+  readonly version: number;
+}
+
 export interface RoutingAddress {
   readonly label: string;
   readonly street: string;
@@ -35,6 +45,8 @@ export interface RoutingContractShift {
 export interface RoutingContract {
   readonly id: string;
   readonly routingCompanyId: string;
+  readonly originFixedPointId: string | null;
+  readonly destinationFixedPointId: string | null;
   readonly code: string;
   readonly name: string;
   readonly operationType: string;
@@ -56,6 +68,31 @@ export interface RoutingContract {
   }[];
   readonly shifts: readonly RoutingContractShift[];
   readonly version: number;
+}
+
+export interface RoutingPassengerImport {
+  readonly batch: {
+    readonly id: string;
+    readonly status: 'processing' | 'completed' | 'review-required' | 'failed';
+    readonly totalRows: number;
+    readonly createdCount: number;
+    readonly updatedCount: number;
+    readonly keptCount: number;
+    readonly pendingCount: number;
+    readonly conflictCount: number;
+  };
+  readonly records: readonly {
+    readonly id: string;
+    readonly rowNumber: number;
+    readonly passengerId: string | null;
+    readonly action: 'created' | 'updated' | 'kept' | 'conflict' | 'pending';
+    readonly payload: Readonly<Record<string, unknown>>;
+    readonly problems: readonly {
+      readonly field: string;
+      readonly reason: string;
+      readonly resolutionAction: string;
+    }[];
+  }[];
 }
 
 export interface RoutingPassenger {

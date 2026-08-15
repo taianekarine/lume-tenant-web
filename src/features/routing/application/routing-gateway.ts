@@ -2,8 +2,10 @@ import type {
   RoutingBinary,
   RoutingCompany,
   RoutingContract,
+  RoutingFixedPoint,
   RoutingList,
   RoutingPassenger,
+  RoutingPassengerImport,
   RoutingRoute,
   RoutingRouteDetail,
   RoutingRouteStatus,
@@ -31,6 +33,15 @@ export class RoutingError extends Error {
 export interface RoutingGateway {
   listCompanies(query?: { search?: string; status?: string }): Promise<RoutingList<RoutingCompany>>;
   createCompany(input: Record<string, unknown>): Promise<RoutingCompany>;
+  updateCompany(id: string, input: Record<string, unknown>): Promise<RoutingCompany>;
+  deleteCompany(id: string, password: string): Promise<{ deleted: true }>;
+  listFixedPoints(query?: {
+    search?: string;
+    routingCompanyId?: string;
+    routeId?: string;
+    status?: string;
+  }): Promise<RoutingList<RoutingFixedPoint>>;
+  createFixedPoint(input: Record<string, unknown>): Promise<RoutingFixedPoint>;
   listContracts(query?: {
     routingCompanyId?: string;
     search?: string;
@@ -44,8 +55,18 @@ export interface RoutingGateway {
     registrationStatus?: string;
   }): Promise<RoutingList<RoutingPassenger>>;
   createPassenger(input: Record<string, unknown>): Promise<RoutingPassenger>;
-  passengerTemplate(): Promise<RoutingBinary>;
-  importPassengers(file: File, commandId: string): Promise<unknown>;
+  passengerTemplate(routingCompanyId?: string): Promise<RoutingBinary>;
+  importPassengers(
+    file: File,
+    commandId: string,
+    routingCompanyId: string,
+  ): Promise<RoutingPassengerImport>;
+  getPassengerImport(batchId: string): Promise<RoutingPassengerImport>;
+  resolvePassengerImportAddress(
+    batchId: string,
+    recordId: string,
+    input: Record<string, unknown>,
+  ): Promise<RoutingPassengerImport>;
   listRoutes(query?: {
     routingCompanyId?: string;
     search?: string;

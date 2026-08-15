@@ -74,16 +74,10 @@ function requireClientScope(
       message: 'Informe a categoria do cliente.',
       path: ['clientCategory'],
     });
-  if (input.clientCategory === 'legal-entity' && !input.routingCompanyId)
+  if (!input.routingCompanyId)
     context.addIssue({
       code: 'custom',
-      message: 'Selecione a empresa atendida.',
-      path: ['routingCompanyId'],
-    });
-  if (input.clientCategory === 'individual' && input.routingCompanyId)
-    context.addIssue({
-      code: 'custom',
-      message: 'Cliente PF não possui empresa atendida.',
+      message: 'Selecione o cliente PF ou PJ.',
       path: ['routingCompanyId'],
     });
   if (input.departments.length !== 1 || input.departments[0] !== 'client-company')

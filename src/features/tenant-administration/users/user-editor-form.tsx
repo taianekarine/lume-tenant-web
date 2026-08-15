@@ -414,13 +414,7 @@ export function UserEditorForm({
                     control={form.control}
                     name="clientCategory"
                     render={({ field }) => (
-                      <Select
-                        value={field.value ?? ''}
-                        onValueChange={(next) => {
-                          field.onChange(next);
-                          if (next === 'individual') form.setValue('routingCompanyId', null);
-                        }}
-                      >
+                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
                         <SelectTrigger id="edit-user-client-category" className="w-full">
                           <SelectValue>
                             {field.value === 'legal-entity'
@@ -439,9 +433,9 @@ export function UserEditorForm({
                   />
                   <FieldError errors={[form.formState.errors.clientCategory]} />
                 </Field>
-                {clientCategory === 'legal-entity' ? (
+                {clientCategory ? (
                   <Field data-invalid={Boolean(form.formState.errors.routingCompanyId)}>
-                    <FieldLabel htmlFor="edit-user-routing-company">Empresa atendida</FieldLabel>
+                    <FieldLabel htmlFor="edit-user-routing-company">Cliente vinculado</FieldLabel>
                     <Controller
                       control={form.control}
                       name="routingCompanyId"
@@ -450,7 +444,7 @@ export function UserEditorForm({
                           <SelectTrigger id="edit-user-routing-company" className="w-full">
                             <SelectValue>
                               {routingCompanies.find((company) => company.id === field.value)
-                                ?.label ?? 'Selecione a empresa'}
+                                ?.label ?? 'Selecione o cliente'}
                             </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
@@ -464,7 +458,7 @@ export function UserEditorForm({
                       )}
                     />
                     <FieldDescription>
-                      O cliente PJ permanece isolado nesta empresa.
+                      O cliente PF ou PJ permanece isolado neste cadastro.
                     </FieldDescription>
                     <FieldError errors={[form.formState.errors.routingCompanyId]} />
                   </Field>

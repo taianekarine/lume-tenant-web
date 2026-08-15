@@ -535,10 +535,12 @@ departamento.
 
 ## Roteirização
 
-O gateway autenticado integra `routing/companies`, `routing/contracts`,
-`routing/passengers` e `routing/routes`. Comandos de criação, importação,
+O gateway autenticado integra `routing/companies`, `routing/fixed-points`,
+`routing/contracts`, `routing/passengers` e `routing/routes`. Comandos de criação, importação,
 geração e ciclo de aprovação recebem `commandId`; alterações concorrentes usam
-`expectedVersion`. O upload XLSX é multipart e nunca expõe o token ao browser.
+`expectedVersion`. O upload XLSX/CSV/TSV é multipart e nunca expõe o token ao
+browser. A seleção do cliente é enviada fora da planilha, e correções de CEP
+pendentes usam o endpoint do registro de importação antes de revalidá-lo.
 
 Rotas são geradas exclusivamente por contrato. Downloads são proxied por Route
 Handlers autenticadas: `export.pdf`, `export.xlsx`, `my-maps.xlsx` e

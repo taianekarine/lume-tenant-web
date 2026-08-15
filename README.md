@@ -171,17 +171,17 @@ planilhas continua proibida no navegador.
 
 ## Roteirização orientada por contrato
 
-O módulo `/routing` segue empresa atendida, contrato, importação da lista geral
+O módulo `/routing` segue cliente, contrato, importação da lista geral
 de colaboradores, sugestão automática, revisão, aprovação e publicação. Não há
 cadastro manual de rota-base. O modelo oficial e a importação usam XLSX; versões
 aprovadas podem ser exportadas em PDF e XLSX operacional ou XLSX/CSV para Google
 My Maps. Centro de custo pertence ao contrato e ao relatório operacional, mas é
 intencionalmente omitido dos arquivos do My Maps.
 
-Os modos de acesso são colaborador, candidato e cliente. Cliente PJ exige vínculo
-com uma empresa atendida; cliente PF não possui esse vínculo. Funcionários
-internos com `passengers:import` podem importar várias empresas ao preencher o
-CNPJ em cada linha do modelo.
+Os modos de acesso são colaborador, candidato e cliente. Cliente PF ou PJ exige
+vínculo com o respectivo cadastro em **Clientes**. Funcionários internos com
+`passengers:import` selecionam o cliente na tela antes de baixar o modelo ou
+importar XLSX, CSV ou TSV; CPF/CNPJ não é repetido em cada linha.
 
 ## Qualidade
 

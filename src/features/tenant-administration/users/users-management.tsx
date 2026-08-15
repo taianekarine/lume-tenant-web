@@ -619,15 +619,7 @@ function CreateUserDialog({
                       control={form.control}
                       name="clientCategory"
                       render={({ field }) => (
-                        <Select
-                          value={field.value ?? ''}
-                          onValueChange={(next) => {
-                            field.onChange(next);
-                            if (next === 'individual') {
-                              form.setValue('routingCompanyId', null, { shouldValidate: true });
-                            }
-                          }}
-                        >
+                        <Select value={field.value ?? ''} onValueChange={field.onChange}>
                           <SelectTrigger id="new-user-client-category" className="h-11 w-full">
                             <SelectValue>
                               {field.value === 'legal-entity'
@@ -646,9 +638,9 @@ function CreateUserDialog({
                     />
                     <FieldError errors={[form.formState.errors.clientCategory]} />
                   </Field>
-                  {clientCategory === 'legal-entity' ? (
+                  {clientCategory ? (
                     <Field data-invalid={Boolean(form.formState.errors.routingCompanyId)}>
-                      <FieldLabel htmlFor="new-user-routing-company">Empresa atendida</FieldLabel>
+                      <FieldLabel htmlFor="new-user-routing-company">Cliente vinculado</FieldLabel>
                       <Controller
                         control={form.control}
                         name="routingCompanyId"
@@ -657,7 +649,7 @@ function CreateUserDialog({
                             <SelectTrigger id="new-user-routing-company" className="h-11 w-full">
                               <SelectValue>
                                 {routingCompanies.find((company) => company.id === field.value)
-                                  ?.label ?? 'Selecione a empresa'}
+                                  ?.label ?? 'Selecione o cliente'}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
@@ -671,7 +663,7 @@ function CreateUserDialog({
                         )}
                       />
                       <FieldDescription>
-                        O cliente PJ só acessa e importa dados desta empresa.
+                        O cliente PF ou PJ só acessa e importa dados deste cadastro.
                       </FieldDescription>
                       <FieldError errors={[form.formState.errors.routingCompanyId]} />
                     </Field>

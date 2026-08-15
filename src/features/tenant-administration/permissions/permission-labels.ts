@@ -26,7 +26,7 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   invoices: 'Faturas',
   'service-requests': 'Solicitações de serviço',
   support: 'Suporte',
-  'routing-companies': 'Empresas atendidas',
+  'routing-companies': 'Clientes',
   'routing-contracts': 'Contratos de roteirização',
   passengers: 'Colaboradores transportados',
   routes: 'Rotas',
