@@ -83,11 +83,14 @@ contextos sem alterar os componentes base do shadcn/ui. A cópia local é
 separada por `userId` e serve somente para atualização visual imediata: a
 Tenant API continua sendo a fonte de verdade do perfil.
 
-Os itens são organizados em três grupos:
+Os itens são organizados em cinco grupos:
 
 - **Geral:** Dashboard, Agentes de IA e Suporte, sujeitos às respectivas
   permissões e com conteúdo filtrado pelo departamento;
 - **Comercial:** Painel WhatsApp e Orçamentos, somente para vínculo Comercial;
+- **Operacional:** Roteirização, conforme as permissões de empresas atendidas,
+  contratos, colaboradores e rotas;
+- **Pessoas:** Usuários e Gestão documental conforme vínculo e permissões;
 - **Administração:** Painel administrativo exclusivo de administradores, além de
   Usuários e Licença conforme as permissões e o vínculo organizacional. O painel
   apresenta volume, bytes, duração, resultados, usuários e ações humanizadas;
@@ -221,6 +224,13 @@ O navegador não executa agrupamento nem calcula distâncias. Ele apresenta o
 plano retornado pela API para revisão, aprovação e publicação. Exportações usam
 uma versão aprovada e imutável. O arquivo operacional mantém centros de custo;
 os formatos do Google My Maps os omitem.
+
+Os endereços de saída e destino reutilizam `PostalCodeAddressFields`. Ao
+informar oito dígitos, o navegador chama a rota interna
+`GET /api/postal-code/:postalCode`; essa fronteira valida o CEP, consulta o
+ViaCEP server-side, trata CEP inexistente e aplica cache compartilhado. Número
+e complemento permanecem editáveis e uma indisponibilidade externa não impede
+o preenchimento manual.
 
 Cliente PJ exige `routingCompanyId` e departamento `client-company`; cliente PF
 não recebe `routingCompanyId`. Usuários internos permanecem no tenant Milenium e

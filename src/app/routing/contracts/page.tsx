@@ -10,6 +10,7 @@ import { RoutingEmpty, RoutingShell } from '@/features/routing/components';
 import { executeAuthenticatedRoutingRequest } from '@/features/routing/server';
 import { requireTenantSession } from '@/features/tenant-administration/server';
 import { PageFeedbackToast } from '@/shared/page-feedback-toast';
+import { PostalCodeAddressFields } from '@/shared/address';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Input } from '@/shared/ui/input';
@@ -38,52 +39,6 @@ const weekdays = [
   ['6', 'Sáb'],
   ['0', 'Dom'],
 ] as const;
-
-function AddressFields({
-  prefix,
-  title,
-}: {
-  readonly prefix: 'origin' | 'destination';
-  readonly title: string;
-}) {
-  return (
-    <fieldset className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
-      <legend className="px-2 text-sm font-semibold">{title}</legend>
-      <div className="space-y-1 lg:col-span-2">
-        <Label htmlFor={`${prefix}-label`}>Nome do ponto</Label>
-        <Input id={`${prefix}-label`} name={`${prefix}Label`} required />
-      </div>
-      <div className="space-y-1 lg:col-span-2">
-        <Label htmlFor={`${prefix}-street`}>Logradouro</Label>
-        <Input id={`${prefix}-street`} name={`${prefix}Street`} required />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor={`${prefix}-number`}>Número</Label>
-        <Input id={`${prefix}-number`} name={`${prefix}Number`} required />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor={`${prefix}-district`}>Bairro</Label>
-        <Input id={`${prefix}-district`} name={`${prefix}District`} required />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor={`${prefix}-postal-code`}>CEP</Label>
-        <Input id={`${prefix}-postal-code`} name={`${prefix}PostalCode`} required />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor={`${prefix}-city`}>Cidade</Label>
-        <Input id={`${prefix}-city`} name={`${prefix}City`} required />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor={`${prefix}-state`}>UF</Label>
-        <Input id={`${prefix}-state`} name={`${prefix}State`} maxLength={2} required />
-      </div>
-      <div className="space-y-1 sm:col-span-2 lg:col-span-3">
-        <Label htmlFor={`${prefix}-complement`}>Complemento</Label>
-        <Input id={`${prefix}-complement`} name={`${prefix}Complement`} />
-      </div>
-    </fieldset>
-  );
-}
 
 export default async function RoutingContractsPage({
   searchParams,
@@ -389,8 +344,8 @@ export default async function RoutingContractsPage({
                     ))}
                   </div>
                 </fieldset>
-                <AddressFields prefix="origin" title="Ponto de saída" />
-                <AddressFields prefix="destination" title="Destino / unidade" />
+                <PostalCodeAddressFields prefix="origin" title="Ponto de saída" />
+                <PostalCodeAddressFields prefix="destination" title="Destino / unidade" />
                 <div className="space-y-2">
                   <Label htmlFor="contract-notes">Observações</Label>
                   <Textarea id="contract-notes" name="notes" />
