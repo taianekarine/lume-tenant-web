@@ -82,6 +82,20 @@ const passengerSchema = z.object({
   registrationStatus: z.enum(['ready', 'pending']),
   routingEligible: z.boolean(),
   accessibilityRequired: z.boolean(),
+  accessibilityNotes: nullableString,
+  residenceStreet: nullableString,
+  residenceNumber: nullableString,
+  residenceComplement: nullableString,
+  residenceDistrict: nullableString,
+  residencePostalCode: nullableString,
+  residenceCity: nullableString,
+  residenceState: nullableString,
+  documents: z.array(
+    z.object({
+      documentTypeCode: z.string(),
+      data: z.record(z.string(), z.unknown()),
+    }),
+  ),
   version: z.number().int(),
 });
 const routeSchema = z.object({
@@ -177,10 +191,10 @@ function listSchema<T extends z.ZodTypeAny>(schema: T) {
   return z.object({ items: z.array(schema), total: z.number().int().nonnegative() });
 }
 
-function queryString(values: Record<string, string | undefined>): string {
+function queryString(values: Record<string, string | number | undefined>): string {
   const query = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => {
-    if (value) query.set(key, value);
+    if (value !== undefined && value !== '') query.set(key, String(value));
   });
   const encoded = query.toString();
   return encoded ? `?${encoded}` : '';
@@ -255,6 +269,8 @@ export class TenantApiRoutingGateway implements RoutingGateway {
 
   listPassengers(
     query: {
+      page?: number;
+      pageSize?: number;
       routingCompanyId?: string;
       search?: string;
       status?: string;
@@ -267,6 +283,13 @@ export class TenantApiRoutingGateway implements RoutingGateway {
   createPassenger(input: Record<string, unknown>) {
     return this.json('/routing/passengers', passengerSchema, {
       method: 'POST',
+      body: { ...input, commandId: randomUUID() },
+    });
+  }
+
+  updatePassenger(id: string, input: Record<string, unknown>) {
+    return this.json(`/routing/passengers/${encodeURIComponent(id)}`, passengerSchema, {
+      method: 'PATCH',
       body: { ...input, commandId: randomUUID() },
     });
   }
@@ -300,6 +323,17 @@ export class TenantApiRoutingGateway implements RoutingGateway {
   resolvePassengerImportAddress(batchId: string, recordId: string, input: Record<string, unknown>) {
     return this.json(
       `/routing/passengers/imports/${encodeURIComponent(batchId)}/records/${encodeURIComponent(recordId)}/address`,
+      passengerImportSchema,
+      {
+        method: 'PATCH',
+        body: { ...input, commandId: randomUUID() },
+      },
+    );
+  }
+
+  resolvePassengerImportData(batchId: string, recordId: string, input: Record<string, unknown>) {
+    return this.json(
+      `/routing/passengers/imports/${encodeURIComponent(batchId)}/records/${encodeURIComponent(recordId)}/data`,
       passengerImportSchema,
       {
         method: 'PATCH',

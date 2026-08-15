@@ -43,17 +43,24 @@ export function PostalCodeAddressFields({
   prefix,
   title,
   showPointName = true,
+  initialValue,
 }: {
   readonly prefix: string;
   readonly title: string;
   readonly showPointName?: boolean;
+  readonly initialValue?: Partial<AddressFormState>;
 }) {
-  const [address, setAddress] = useState<AddressFormState>(emptyAddress);
+  const [address, setAddress] = useState<AddressFormState>(() => ({
+    ...emptyAddress,
+    ...initialValue,
+    postalCode: formatPostalCode(initialValue?.postalCode ?? ''),
+  }));
   const [lookup, setLookup] = useState<LookupState>({ status: 'idle' });
+  const [lookupEnabled, setLookupEnabled] = useState(false);
   const digits = postalCodeDigits(address.postalCode);
 
   useEffect(() => {
-    if (digits.length !== 8) return;
+    if (!lookupEnabled || digits.length !== 8) return;
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => {
@@ -100,13 +107,14 @@ export function PostalCodeAddressFields({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [digits]);
+  }, [digits, lookupEnabled]);
 
   const update = (field: keyof AddressFormState, value: string) => {
     setAddress((current) => ({ ...current, [field]: value }));
   };
   const updatePostalCode = (value: string) => {
     setLookup({ status: 'idle' });
+    setLookupEnabled(true);
     update('postalCode', formatPostalCode(value));
   };
   const statusId = `${prefix}-postal-code-status`;

@@ -107,6 +107,18 @@ export interface RoutingPassenger {
   readonly registrationStatus: 'ready' | 'pending';
   readonly routingEligible: boolean;
   readonly accessibilityRequired: boolean;
+  readonly accessibilityNotes: string | null;
+  readonly residenceStreet: string | null;
+  readonly residenceNumber: string | null;
+  readonly residenceComplement: string | null;
+  readonly residenceDistrict: string | null;
+  readonly residencePostalCode: string | null;
+  readonly residenceCity: string | null;
+  readonly residenceState: string | null;
+  readonly documents: readonly {
+    readonly documentTypeCode: string;
+    readonly data: Readonly<Record<string, unknown>>;
+  }[];
   readonly version: number;
 }
 

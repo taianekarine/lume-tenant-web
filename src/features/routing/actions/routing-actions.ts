@@ -33,12 +33,68 @@ function address(data: FormData, prefix: string) {
   };
 }
 
+function passengerResidence(data: FormData) {
+  const residence = address(data, value(data, 'residencePrefix') || 'residence');
+  return {
+    street: residence.street,
+    number: residence.number,
+    complement: residence.complement,
+    district: residence.district,
+    postalCode: residence.postalCode,
+    city: residence.city,
+    state: residence.state,
+    latitude: residence.latitude,
+    longitude: residence.longitude,
+  };
+}
+
+function passengerDocuments(data: FormData) {
+  let preserved: { documentTypeCode: string; data: Record<string, unknown> }[] = [];
+  try {
+    const parsed = JSON.parse(value(data, 'preservedDocuments')) as unknown;
+    if (Array.isArray(parsed)) {
+      preserved = parsed.filter(
+        (item): item is { documentTypeCode: string; data: Record<string, unknown> } =>
+          Boolean(
+            item &&
+            typeof item === 'object' &&
+            'documentTypeCode' in item &&
+            typeof item.documentTypeCode === 'string' &&
+            'data' in item &&
+            item.data &&
+            typeof item.data === 'object' &&
+            !Array.isArray(item.data),
+          ),
+      );
+    }
+  } catch {
+    preserved = [];
+  }
+  const known = new Set(['cpf', 'matricula', 'observacoes-documentais']);
+  const documents = preserved.filter((item) => !known.has(item.documentTypeCode));
+  const cpf = value(data, 'cpf');
+  const registration = value(data, 'registration');
+  const notes = value(data, 'documentNotes');
+  if (cpf) documents.push({ documentTypeCode: 'cpf', data: { numero: cpf } });
+  if (registration) {
+    documents.push({ documentTypeCode: 'matricula', data: { numero: registration } });
+  }
+  if (notes) {
+    documents.push({
+      documentTypeCode: 'observacoes-documentais',
+      data: { observacoes: notes },
+    });
+  }
+  return documents;
+}
+
 function failure(path: string, error: unknown): never {
   if (error instanceof RoutingError && error.code === 'unauthorized')
     redirect('/auth/session-expired');
   const message =
     error instanceof RoutingError ? error.message : 'Não foi possível concluir a operação.';
-  redirect(`${path}?error=${encodeURIComponent(message)}`);
+  const separator = path.includes('?') ? '&' : '?';
+  redirect(`${path}${separator}error=${encodeURIComponent(message)}`);
 }
 
 export async function createRoutingCompanyAction(data: FormData): Promise<void> {
@@ -209,6 +265,48 @@ export async function resolvePassengerImportAddressAction(data: FormData): Promi
   revalidatePath('/routing/passengers');
   redirect(
     `/routing/passengers?batchId=${encodeURIComponent(batchId)}&success=${encodeURIComponent('Endereco do colaborador atualizado.')}`,
+  );
+}
+
+export async function updateRoutingPassengerAction(data: FormData): Promise<void> {
+  const passengerId = value(data, 'passengerId');
+  const batchId = value(data, 'batchId');
+  const recordId = value(data, 'recordId');
+  const input = {
+    fullName: value(data, 'fullName'),
+    externalReference: value(data, 'externalReference') || null,
+    shift: value(data, 'shift') || null,
+    requiredArrivalTime: value(data, 'requiredArrivalTime') || null,
+    sector: value(data, 'sector') || null,
+    accessibilityRequired: data.has('accessibilityRequired'),
+    accessibilityNotes: value(data, 'accessibilityNotes') || null,
+    residence: passengerResidence(data),
+    documents: passengerDocuments(data),
+  };
+  const returnPath = batchId
+    ? `/routing/passengers?batchId=${encodeURIComponent(batchId)}`
+    : '/routing/passengers';
+  try {
+    if (batchId && recordId) {
+      await executeAuthenticatedRoutingMutation((gateway) =>
+        gateway.resolvePassengerImportData(batchId, recordId, input),
+      );
+    } else {
+      await executeAuthenticatedRoutingMutation((gateway) =>
+        gateway.updatePassenger(passengerId, {
+          ...input,
+          expectedVersion: numberValue(data, 'expectedVersion', 1),
+        }),
+      );
+    }
+  } catch (error) {
+    failure(returnPath, error);
+  }
+  revalidatePath('/routing/passengers');
+  revalidatePath('/routing/contracts');
+  const separator = returnPath.includes('?') ? '&' : '?';
+  redirect(
+    `${returnPath}${separator}success=${encodeURIComponent('Dados do colaborador atualizados e pendencias reavaliadas.')}`,
   );
 }
 

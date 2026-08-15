@@ -1,14 +1,17 @@
 import { Accessibility } from 'lucide-react';
+import { Fragment } from 'react';
 
 import { hasPermission } from '@/features/auth/domain';
 import { AuthenticatedShell } from '@/features/navigation';
-import { resolvePassengerImportAddressAction } from '@/features/routing/actions';
-import { PassengerImportPanel, RoutingEmpty, RoutingShell } from '@/features/routing/components';
+import {
+  PassengerEditor,
+  PassengerImportPanel,
+  RoutingEmpty,
+  RoutingShell,
+} from '@/features/routing/components';
 import { executeAuthenticatedRoutingRequest } from '@/features/routing/server';
 import { requireTenantSession } from '@/features/tenant-administration/server';
-import { PostalCodeAddressFields } from '@/shared/address';
 import { PageFeedbackToast } from '@/shared/page-feedback-toast';
-import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 
@@ -17,13 +20,18 @@ export default async function RoutingPassengersPage({
 }: {
   readonly searchParams: Promise<{ error?: string; success?: string; batchId?: string }>;
 }) {
-  const session = await requireTenantSession(['passengers:view', 'passengers:import']);
+  const session = await requireTenantSession([
+    'passengers:view',
+    'passengers:import',
+    'passengers:update',
+  ]);
   const query = await searchParams;
   const canView = hasPermission(session.user, 'passengers:view');
   const canImport = hasPermission(session.user, 'passengers:import');
-  const [passengers, companies, imported] = await Promise.all([
+  const canUpdate = hasPermission(session.user, 'passengers:update');
+  const [passengers, companies, imported, contracts] = await Promise.all([
     canView
-      ? executeAuthenticatedRoutingRequest((gateway) => gateway.listPassengers())
+      ? executeAuthenticatedRoutingRequest((gateway) => gateway.listPassengers({ pageSize: 100 }))
       : Promise.resolve({ items: [], total: 0 }),
     canImport
       ? executeAuthenticatedRoutingRequest((gateway) => gateway.listCompanies({ status: 'active' }))
@@ -31,7 +39,15 @@ export default async function RoutingPassengersPage({
     query.batchId && canImport
       ? executeAuthenticatedRoutingRequest((gateway) => gateway.getPassengerImport(query.batchId!))
       : Promise.resolve(null),
+    canUpdate
+      ? executeAuthenticatedRoutingRequest((gateway) => gateway.listContracts({ status: 'active' }))
+      : Promise.resolve({ items: [], total: 0 }),
   ]);
+  const passengerById = new Map(passengers.items.map((passenger) => [passenger.id, passenger]));
+  const contractShifts = (routingCompanyId: string) =>
+    contracts.items
+      .filter((contract) => contract.routingCompanyId === routingCompanyId)
+      .flatMap((contract) => contract.shifts);
 
   return (
     <AuthenticatedShell user={session.user}>
@@ -79,18 +95,9 @@ export default async function RoutingPassengersPage({
                       typeof record.payload.fullName === 'string'
                         ? record.payload.fullName
                         : 'Colaborador';
-                    const needsAddress =
-                      record.passengerId &&
-                      record.problems.some((problem) =>
-                        [
-                          'residencePostalCode',
-                          'residenceStreet',
-                          'residenceNumber',
-                          'residenceCity',
-                          'residenceState',
-                        ].includes(problem.field),
-                      );
-                    const prefix = `correction${record.id.replaceAll('-', '')}`;
+                    const passenger = record.passengerId
+                      ? passengerById.get(record.passengerId)
+                      : null;
                     return (
                       <div key={record.id} className="space-y-3 rounded-lg border p-4">
                         <div>
@@ -106,18 +113,12 @@ export default async function RoutingPassengersPage({
                             </p>
                           ))}
                         </div>
-                        {needsAddress ? (
-                          <form action={resolvePassengerImportAddressAction} className="space-y-3">
-                            <input type="hidden" name="batchId" value={imported.batch.id} />
-                            <input type="hidden" name="recordId" value={record.id} />
-                            <input type="hidden" name="correctionPrefix" value={prefix} />
-                            <PostalCodeAddressFields
-                              prefix={prefix}
-                              title="Corrigir endereco residencial"
-                              showPointName={false}
-                            />
-                            <Button type="submit">Confirmar e substituir endereco</Button>
-                          </form>
+                        {passenger && canUpdate ? (
+                          <PassengerEditor
+                            passenger={passenger}
+                            contractShifts={contractShifts(passenger.routingCompanyId)}
+                            importRecord={{ batchId: imported.batch.id, recordId: record.id }}
+                          />
                         ) : null}
                       </div>
                     );
@@ -153,33 +154,45 @@ export default async function RoutingPassengersPage({
                 </TableHeader>
                 <TableBody>
                   {passengers.items.map((passenger) => (
-                    <TableRow key={passenger.id}>
-                      <TableCell>
-                        <p className="flex items-center gap-2 font-medium">
-                          {passenger.fullName}
-                          {passenger.accessibilityRequired ? (
-                            <Accessibility
-                              className="size-4 text-primary"
-                              aria-label="Requer acessibilidade"
+                    <Fragment key={passenger.id}>
+                      <TableRow>
+                        <TableCell>
+                          <p className="flex items-center gap-2 font-medium">
+                            {passenger.fullName}
+                            {passenger.accessibilityRequired ? (
+                              <Accessibility
+                                className="size-4 text-primary"
+                                aria-label="Requer acessibilidade"
+                              />
+                            ) : null}
+                          </p>
+                        </TableCell>
+                        <TableCell>{passenger.externalReference || '—'}</TableCell>
+                        <TableCell>
+                          {passenger.shift || '—'}
+                          <p className="text-xs text-muted-foreground">
+                            {passenger.requiredArrivalTime || 'horario pendente'}
+                          </p>
+                        </TableCell>
+                        <TableCell>{passenger.sector || '—'}</TableCell>
+                        <TableCell>
+                          {passenger.registrationStatus === 'ready' ? 'Completo' : 'Pendente'}
+                        </TableCell>
+                        <TableCell>
+                          {passenger.routingEligible ? 'Elegivel' : 'Nao elegivel'}
+                        </TableCell>
+                      </TableRow>
+                      {canUpdate ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="bg-muted/20">
+                            <PassengerEditor
+                              passenger={passenger}
+                              contractShifts={contractShifts(passenger.routingCompanyId)}
                             />
-                          ) : null}
-                        </p>
-                      </TableCell>
-                      <TableCell>{passenger.externalReference || '—'}</TableCell>
-                      <TableCell>
-                        {passenger.shift || '—'}
-                        <p className="text-xs text-muted-foreground">
-                          {passenger.requiredArrivalTime || 'horario pendente'}
-                        </p>
-                      </TableCell>
-                      <TableCell>{passenger.sector || '—'}</TableCell>
-                      <TableCell>
-                        {passenger.registrationStatus === 'ready' ? 'Completo' : 'Pendente'}
-                      </TableCell>
-                      <TableCell>
-                        {passenger.routingEligible ? 'Elegivel' : 'Nao elegivel'}
-                      </TableCell>
-                    </TableRow>
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>

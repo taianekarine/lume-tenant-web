@@ -1,15 +1,17 @@
-import { CalendarDays, Sparkles } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 
 import { hasPermission } from '@/features/auth/domain';
 import { AuthenticatedShell } from '@/features/navigation';
-import { generateContractRoutesAction } from '@/features/routing/actions';
-import { ContractCreationForm, RoutingEmpty, RoutingShell } from '@/features/routing/components';
+import {
+  ContractCreationForm,
+  ContractRouteGenerationForm,
+  RoutingEmpty,
+  RoutingShell,
+} from '@/features/routing/components';
 import { executeAuthenticatedRoutingRequest } from '@/features/routing/server';
 import { requireTenantSession } from '@/features/tenant-administration/server';
 import { PageFeedbackToast } from '@/shared/page-feedback-toast';
-import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
-import { Input } from '@/shared/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui/table';
 
 const statusLabel = {
@@ -116,23 +118,7 @@ export default async function RoutingContractsPage({
                       <TableCell>{statusLabel[contract.status]}</TableCell>
                       <TableCell className="text-right">
                         {canGenerate && contract.status === 'active' ? (
-                          <form
-                            action={generateContractRoutesAction}
-                            className="inline-flex items-center gap-2"
-                          >
-                            <input type="hidden" name="contractId" value={contract.id} />
-                            <Input
-                              className="h-8 w-36"
-                              type="date"
-                              name="serviceDate"
-                              defaultValue={today}
-                              aria-label={`Data para gerar ${contract.name}`}
-                            />
-                            <Button size="sm" type="submit">
-                              <Sparkles className="size-4" />
-                              Gerar sugestoes
-                            </Button>
-                          </form>
+                          <ContractRouteGenerationForm contract={contract} referenceDate={today} />
                         ) : (
                           '—'
                         )}

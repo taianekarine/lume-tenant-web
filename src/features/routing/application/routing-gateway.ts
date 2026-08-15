@@ -49,12 +49,15 @@ export interface RoutingGateway {
   }): Promise<RoutingList<RoutingContract>>;
   createContract(input: Record<string, unknown>): Promise<RoutingContract>;
   listPassengers(query?: {
+    page?: number;
+    pageSize?: number;
     routingCompanyId?: string;
     search?: string;
     status?: string;
     registrationStatus?: string;
   }): Promise<RoutingList<RoutingPassenger>>;
   createPassenger(input: Record<string, unknown>): Promise<RoutingPassenger>;
+  updatePassenger(id: string, input: Record<string, unknown>): Promise<RoutingPassenger>;
   passengerTemplate(routingCompanyId?: string): Promise<RoutingBinary>;
   importPassengers(
     file: File,
@@ -63,6 +66,11 @@ export interface RoutingGateway {
   ): Promise<RoutingPassengerImport>;
   getPassengerImport(batchId: string): Promise<RoutingPassengerImport>;
   resolvePassengerImportAddress(
+    batchId: string,
+    recordId: string,
+    input: Record<string, unknown>,
+  ): Promise<RoutingPassengerImport>;
+  resolvePassengerImportData(
     batchId: string,
     recordId: string,
     input: Record<string, unknown>,
