@@ -209,6 +209,23 @@ usuário na Tenant API, sem remover a pendência da lista. O armazenamento local
 ciclos pendentes voltam a ser não lidos. Automações pausadas, ainda derivadas
 da projeção do painel, mantêm leitura local por identificador.
 
+## Roteirização orientada por contrato
+
+`RoutingCompany` representa a empresa atendida pela Milenium e nunca um novo
+tenant. `RoutingContract` é a raiz operacional: unidade, vigência, tipo de
+operação, centros de custo, turnos, horários, veículos, capacidades, KM e
+periodicidade determinam os limites da geração. A rota surge somente de
+`POST /routing/contracts/:id/generate-routes`.
+
+O navegador não executa agrupamento nem calcula distâncias. Ele apresenta o
+plano retornado pela API para revisão, aprovação e publicação. Exportações usam
+uma versão aprovada e imutável. O arquivo operacional mantém centros de custo;
+os formatos do Google My Maps os omitem.
+
+Cliente PJ exige `routingCompanyId` e departamento `client-company`; cliente PF
+não recebe `routingCompanyId`. Usuários internos permanecem no tenant Milenium e
+podem operar várias empresas atendidas quando autorizados.
+
 ## Autenticação e ciclo da conta
 
 O login só aceita uma resposta de sessão completa. A senha inicial de

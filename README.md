@@ -164,11 +164,24 @@ navegador e nunca podem conter chaves, tokens, senhas ou licenças.
 - o tratamento compartilhado de erros públicos para sempre informar um código
   útil ao suporte.
 
-Uma futura interface de importação e exportação deve receber da Tenant API um
-contrato de lote, progresso, erros por registro e download. Conversão de
-documentos e planilhas não deve ocorrer no navegador. Enquanto esse contrato
-não estiver publicado, não deve ser criada uma tela que invente estados ou
-formatos.
+Novas interfaces genéricas de importação e exportação devem receber da Tenant
+API um contrato de lote, progresso, erros por registro e download. A exceção já
+publicada é o módulo de roteirização descrito abaixo. Conversão de documentos e
+planilhas continua proibida no navegador.
+
+## Roteirização orientada por contrato
+
+O módulo `/routing` segue empresa atendida, contrato, importação da lista geral
+de colaboradores, sugestão automática, revisão, aprovação e publicação. Não há
+cadastro manual de rota-base. O modelo oficial e a importação usam XLSX; versões
+aprovadas podem ser exportadas em PDF e XLSX operacional ou XLSX/CSV para Google
+My Maps. Centro de custo pertence ao contrato e ao relatório operacional, mas é
+intencionalmente omitido dos arquivos do My Maps.
+
+Os modos de acesso são colaborador, candidato e cliente. Cliente PJ exige vínculo
+com uma empresa atendida; cliente PF não possui esse vínculo. Funcionários
+internos com `passengers:import` podem importar várias empresas ao preencher o
+CNPJ em cada linha do modelo.
 
 ## Qualidade
 

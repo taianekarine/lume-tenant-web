@@ -27,7 +27,7 @@ describe('login page route', () => {
   it('renders the login page when there is no current session', async () => {
     mockedGetCurrentAuthenticatedSession.mockResolvedValue(null);
 
-    const page = await Page();
+    const page = await Page({});
 
     expect(page.type).toBeDefined();
     expect(mockedRedirect).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe('login page route', () => {
       throw new Error('NEXT_REDIRECT');
     });
 
-    await expect(Page()).rejects.toThrow('NEXT_REDIRECT');
+    await expect(Page({})).rejects.toThrow('NEXT_REDIRECT');
 
     expect(mockedRedirect).toHaveBeenCalledWith('/dashboard');
   });

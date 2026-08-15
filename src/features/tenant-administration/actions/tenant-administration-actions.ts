@@ -13,7 +13,9 @@ const userAssignmentFields = {
   name: z.string().trim().min(3).max(120),
   email: z.string().trim().email().max(254),
   isAdministrator: z.boolean(),
-  documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
+  documentAccessMode: z.enum(['standard', 'document-portal', 'client']).optional(),
+  clientCategory: z.enum(['legal-entity', 'individual']).nullable().optional(),
+  routingCompanyId: z.string().uuid().nullable().optional(),
   departments: z.array(z.string().min(1)),
   permissionCodes: z.array(z.string().min(1)),
   jobTitle: z.enum(['Administrativo', 'Geral', 'Motorista']).optional(),
@@ -37,7 +39,7 @@ const userAssignmentFields = {
 function requireDepartmentForStandardUser(
   input: {
     readonly isAdministrator: boolean;
-    readonly documentAccessMode?: 'standard' | 'document-portal';
+    readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
     readonly departments: readonly string[];
   },
   context: z.RefinementCtx,
@@ -45,6 +47,7 @@ function requireDepartmentForStandardUser(
   if (
     !input.isAdministrator &&
     input.documentAccessMode !== 'document-portal' &&
+    input.documentAccessMode !== 'client' &&
     input.departments.length === 0
   ) {
     context.addIssue({
@@ -55,7 +58,46 @@ function requireDepartmentForStandardUser(
   }
 }
 
-const userBaseSchema = z.object(userAssignmentFields).superRefine(requireDepartmentForStandardUser);
+function requireClientScope(
+  input: {
+    readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
+    readonly clientCategory?: 'legal-entity' | 'individual' | null;
+    readonly routingCompanyId?: string | null;
+    readonly departments: readonly string[];
+  },
+  context: z.RefinementCtx,
+) {
+  if (input.documentAccessMode !== 'client') return;
+  if (!input.clientCategory)
+    context.addIssue({
+      code: 'custom',
+      message: 'Informe a categoria do cliente.',
+      path: ['clientCategory'],
+    });
+  if (input.clientCategory === 'legal-entity' && !input.routingCompanyId)
+    context.addIssue({
+      code: 'custom',
+      message: 'Selecione a empresa atendida.',
+      path: ['routingCompanyId'],
+    });
+  if (input.clientCategory === 'individual' && input.routingCompanyId)
+    context.addIssue({
+      code: 'custom',
+      message: 'Cliente PF não possui empresa atendida.',
+      path: ['routingCompanyId'],
+    });
+  if (input.departments.length !== 1 || input.departments[0] !== 'client-company')
+    context.addIssue({
+      code: 'custom',
+      message: 'Use o escopo Empresa cliente.',
+      path: ['departments'],
+    });
+}
+
+const userBaseSchema = z.object(userAssignmentFields).superRefine((input, context) => {
+  requireDepartmentForStandardUser(input, context);
+  requireClientScope(input, context);
+});
 const createUserSchema = z
   .object({
     ...userAssignmentFields,
@@ -79,6 +121,7 @@ const createUserSchema = z
   })
   .superRefine((input, context) => {
     requireDepartmentForStandardUser(input, context);
+    requireClientScope(input, context);
     if (input.documentAccessMode === 'document-portal' && !input.requestDocuments) {
       context.addIssue({
         code: 'custom',
@@ -118,7 +161,17 @@ function withoutAdministratorMutation(input: z.infer<typeof userBaseSchema>) {
   return {
     name: input.name,
     email: input.email,
-    documentAccessMode: input.documentAccessMode,
+    ...(input.documentAccessMode === undefined
+      ? {}
+      : { documentAccessMode: input.documentAccessMode }),
+    ...(input.documentAccessMode === 'client'
+      ? {
+          clientCategory: input.clientCategory,
+          routingCompanyId: input.routingCompanyId,
+        }
+      : input.documentAccessMode === undefined
+        ? {}
+        : { clientCategory: null, routingCompanyId: null }),
     departments: input.departments,
     permissionCodes: input.permissionCodes,
     ...employeeProfile,
@@ -138,6 +191,11 @@ function formStrings(formData: FormData, name: string): string[] {
 function formBoolean(formData: FormData, name: string): boolean {
   const value = formData.get(name);
   return value === 'true' || value === 'on';
+}
+
+function formAccessMode(formData: FormData): 'standard' | 'document-portal' | 'client' {
+  const mode = formString(formData, 'documentAccessMode');
+  return mode === 'document-portal' || mode === 'client' ? mode : 'standard';
 }
 
 function actionFailureDestination(path: string, error: unknown): never {
@@ -160,10 +218,14 @@ export async function createTenantUserAction(formData: FormData): Promise<void> 
     password: formString(formData, 'password'),
     requestDocuments: formBoolean(formData, 'requestDocuments'),
     isAdministrator: formBoolean(formData, 'isAdministrator'),
-    documentAccessMode:
-      formString(formData, 'documentAccessMode') === 'document-portal'
-        ? 'document-portal'
-        : 'standard',
+    documentAccessMode: formAccessMode(formData),
+    clientCategory:
+      formString(formData, 'clientCategory') === 'legal-entity'
+        ? 'legal-entity'
+        : formString(formData, 'clientCategory') === 'individual'
+          ? 'individual'
+          : null,
+    routingCompanyId: formString(formData, 'routingCompanyId') || null,
     departments: formStrings(formData, 'departments'),
     permissionCodes: formStrings(formData, 'permissionCodes'),
     jobTitle: formString(formData, 'jobTitle') || undefined,
@@ -197,10 +259,14 @@ export async function updateTenantUserAction(userId: string, formData: FormData)
     name: formString(formData, 'name'),
     email: formString(formData, 'email'),
     isAdministrator: formBoolean(formData, 'isAdministrator'),
-    documentAccessMode:
-      formString(formData, 'documentAccessMode') === 'document-portal'
-        ? 'document-portal'
-        : 'standard',
+    documentAccessMode: formAccessMode(formData),
+    clientCategory:
+      formString(formData, 'clientCategory') === 'legal-entity'
+        ? 'legal-entity'
+        : formString(formData, 'clientCategory') === 'individual'
+          ? 'individual'
+          : null,
+    routingCompanyId: formString(formData, 'routingCompanyId') || null,
     departments: formStrings(formData, 'departments'),
     permissionCodes: formStrings(formData, 'permissionCodes'),
     jobTitle: formString(formData, 'jobTitle') || undefined,

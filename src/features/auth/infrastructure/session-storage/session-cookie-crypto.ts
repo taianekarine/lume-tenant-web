@@ -27,7 +27,9 @@ function isAuthenticatedSession(value: unknown): value is AuthenticatedSession {
   const hasValidClientCategory =
     (user.type === 'employee' && user.clientCategory === null) ||
     (user.type === 'client' &&
-      (user.clientCategory === 'continuous-charter' || user.clientCategory === 'eventual-charter'));
+      ['legal-entity', 'individual', 'continuous-charter', 'eventual-charter'].includes(
+        String(user.clientCategory),
+      ));
 
   return (
     value.version === AUTHENTICATED_SESSION_VERSION &&
@@ -51,6 +53,12 @@ function sanitizeAuthenticatedSession(session: AuthenticatedSession): Authentica
     name: session.user.name,
     permissions: [...session.user.permissions],
     isActive: session.user.isActive,
+    ...(session.user.isAdministrator === undefined
+      ? {}
+      : { isAdministrator: session.user.isAdministrator }),
+    ...(session.user.documentAccessMode === undefined
+      ? {}
+      : { documentAccessMode: session.user.documentAccessMode }),
   };
 
   return {
@@ -67,8 +75,9 @@ function sanitizeAuthenticatedSession(session: AuthenticatedSession): Authentica
         : {
             ...sharedUser,
             type: 'client',
-            departments: [],
+            departments: [...session.user.departments],
             clientCategory: session.user.clientCategory,
+            routingCompanyId: session.user.routingCompanyId ?? null,
           },
     issuedAt: session.issuedAt,
     expiresAt: session.expiresAt,

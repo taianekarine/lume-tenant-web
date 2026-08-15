@@ -96,6 +96,52 @@ describe('userFormSchema', () => {
     ).toBe(true);
   });
 
+  it('requires a served company for a legal-entity client', () => {
+    const client = {
+      name: 'Gestor Cliente',
+      username: 'gestor.cliente',
+      email: 'gestor@cliente.example',
+      password: 'SenhaInicial@2026',
+      jobTitle: 'Geral' as const,
+      isAdministrator: false as const,
+      documentAccessMode: 'client' as const,
+      clientCategory: 'legal-entity' as const,
+      departments: ['client-company'],
+      permissionCodes: ['passengers:import'],
+    };
+
+    expect(userFormSchema.safeParse(client).success).toBe(false);
+    expect(
+      userFormSchema.safeParse({
+        ...client,
+        routingCompanyId: '11111111-1111-4111-8111-111111111111',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('accepts an individual client only without a served-company link', () => {
+    const client = {
+      name: 'Cliente Pessoa Física',
+      username: 'cliente.pf',
+      email: 'cliente.pf@example.com',
+      password: 'SenhaInicial@2026',
+      jobTitle: 'Geral' as const,
+      isAdministrator: false as const,
+      documentAccessMode: 'client' as const,
+      clientCategory: 'individual' as const,
+      departments: ['client-company'],
+      permissionCodes: [],
+    };
+
+    expect(userFormSchema.safeParse(client).success).toBe(true);
+    expect(
+      userFormSchema.safeParse({
+        ...client,
+        routingCompanyId: '11111111-1111-4111-8111-111111111111',
+      }).success,
+    ).toBe(false);
+  });
+
   it('does not allow creating an administrator through the Tenant Web', () => {
     const parsed = userFormSchema.safeParse({
       name: 'Taiane Karine',

@@ -4,7 +4,9 @@ const userAssignmentFields = {
   name: z.string().trim().min(3, 'Informe o nome completo.').max(120),
   email: z.string().trim().email('Informe um e-mail válido.').max(254),
   isAdministrator: z.boolean(),
-  documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
+  documentAccessMode: z.enum(['standard', 'document-portal', 'client']).optional(),
+  clientCategory: z.enum(['legal-entity', 'individual']).nullable().optional(),
+  routingCompanyId: z.string().uuid('Selecione a empresa atendida.').nullable().optional(),
   departments: z.array(z.string()),
   permissionCodes: z.array(z.string()),
   jobTitle: z.enum(['Administrativo', 'Geral', 'Motorista'], {
@@ -31,7 +33,7 @@ const userAssignmentFields = {
 function requireDepartmentForStandardUser(
   input: {
     readonly isAdministrator: boolean;
-    readonly documentAccessMode?: 'standard' | 'document-portal';
+    readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
     readonly departments: readonly string[];
   },
   context: z.RefinementCtx,
@@ -39,6 +41,7 @@ function requireDepartmentForStandardUser(
   if (
     !input.isAdministrator &&
     input.documentAccessMode !== 'document-portal' &&
+    input.documentAccessMode !== 'client' &&
     input.departments.length === 0
   ) {
     context.addIssue({
@@ -49,9 +52,49 @@ function requireDepartmentForStandardUser(
   }
 }
 
+function requireClientScope(
+  input: {
+    readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
+    readonly clientCategory?: 'legal-entity' | 'individual' | null;
+    readonly routingCompanyId?: string | null;
+    readonly departments: readonly string[];
+  },
+  context: z.RefinementCtx,
+) {
+  if (input.documentAccessMode !== 'client') return;
+  if (!input.clientCategory) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Informe se o cliente é pessoa jurídica ou física.',
+      path: ['clientCategory'],
+    });
+  }
+  if (input.clientCategory === 'legal-entity' && !input.routingCompanyId) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Selecione a empresa atendida do cliente PJ.',
+      path: ['routingCompanyId'],
+    });
+  }
+  if (input.clientCategory === 'individual' && input.routingCompanyId) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Cliente PF não deve ser vinculado a uma empresa atendida.',
+      path: ['routingCompanyId'],
+    });
+  }
+  if (input.departments.length !== 1 || input.departments[0] !== 'client-company') {
+    context.addIssue({
+      code: 'custom',
+      message: 'O acesso de cliente deve usar o escopo Empresa cliente.',
+      path: ['departments'],
+    });
+  }
+}
+
 function requireDocumentsForCandidate(
   input: {
-    readonly documentAccessMode?: 'standard' | 'document-portal';
+    readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
     readonly requestDocuments: boolean;
   },
   context: z.RefinementCtx,
@@ -97,12 +140,16 @@ export const userFormSchema = z
   .superRefine((input, context) => {
     requireDepartmentForStandardUser(input, context);
     requireDocumentsForCandidate(input, context);
+    requireClientScope(input, context);
   });
 
 export const userEditorFormSchema = z
   .object(userAssignmentFields)
   .strict()
-  .superRefine(requireDepartmentForStandardUser);
+  .superRefine((input, context) => {
+    requireDepartmentForStandardUser(input, context);
+    requireClientScope(input, context);
+  });
 
 export type UserFormValues = z.input<typeof userFormSchema>;
 export type UserEditorFormValues = z.input<typeof userEditorFormSchema>;

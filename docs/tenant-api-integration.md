@@ -309,9 +309,10 @@ navegador não recebe credenciais e não chama o provedor.
 O frontend nunca contorna essas ausências chamando cache, Evolution,
 `lume-edge-agent` ou `lume-control` diretamente.
 
-## Contrato futuro de arquivos, importação e exportação
+## Contrato futuro de arquivos, importação e exportação genéricos
 
-O Tenant Web não converte documentos ou planilhas. Quando a Tenant API publicar
+O Tenant Web não converte documentos ou planilhas. Fora dos contratos já
+publicados para documentos e roteirização, quando a Tenant API publicar
 o contrato definitivo, a integração deve ser criada como gateway server-only e
 tipos validados com Zod. A tela futura poderá enviar um arquivo, consultar o
 progresso do lote, apresentar erros por registro e baixar o resultado
@@ -531,6 +532,17 @@ confirmação do usuário no aplicativo de e-mail.
 permissões implícitas de autoatendimento publicadas pela Tenant API. Elas são
 somadas às permissões individuais sem criar um atalho para páginas de outro
 departamento.
+
+## Roteirização
+
+O gateway autenticado integra `routing/companies`, `routing/contracts`,
+`routing/passengers` e `routing/routes`. Comandos de criação, importação,
+geração e ciclo de aprovação recebem `commandId`; alterações concorrentes usam
+`expectedVersion`. O upload XLSX é multipart e nunca expõe o token ao browser.
+
+Rotas são geradas exclusivamente por contrato. Downloads são proxied por Route
+Handlers autenticadas: `export.pdf`, `export.xlsx`, `my-maps.xlsx` e
+`my-maps.csv`. Os formatos do My Maps não incluem centro de custo.
 
 ## Dashboard e notificações por departamento
 

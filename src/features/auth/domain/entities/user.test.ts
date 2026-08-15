@@ -33,7 +33,12 @@ describe('user authorization contracts', () => {
   });
 
   it('defines the supported client categories', () => {
-    expect(CLIENT_CATEGORIES).toEqual(['continuous-charter', 'eventual-charter']);
+    expect(CLIENT_CATEGORIES).toEqual([
+      'legal-entity',
+      'individual',
+      'continuous-charter',
+      'eventual-charter',
+    ]);
   });
 
   it('defines resources that can receive permissions', () => {
