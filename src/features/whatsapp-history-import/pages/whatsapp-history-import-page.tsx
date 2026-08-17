@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   CheckCircle2,
+  Database,
   Download,
   FileArchive,
   LoaderCircle,
@@ -247,6 +248,7 @@ function ArchiveReviewCard({ batchId, archive, onSaved }: ArchiveReviewCardProps
 
 export function WhatsAppHistoryImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importMode, setImportMode] = useState<'zip-exports' | 'android-backup'>('android-backup');
   const [channels, setChannels] = useState<z.infer<typeof channelsSchema>>([]);
   const [channelId, setChannelId] = useState('');
   const [batch, setBatch] = useState<WhatsAppHistoryImportBatch | null>(null);
@@ -263,6 +265,11 @@ export function WhatsAppHistoryImportPage() {
   const [page, setPage] = useState(1);
   const [cutoffAt, setCutoffAt] = useState(localDateTimeValue);
   const [applying, setApplying] = useState(false);
+  const [rootKey, setRootKey] = useState('');
+  const [androidState, setAndroidState] = useState<WhatsAppHistoryState>('closed');
+  const [androidDepartment, setAndroidDepartment] =
+    useState<WhatsAppHistoryDepartment>('commercial');
+  const [androidOwnerUsername, setAndroidOwnerUsername] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -292,6 +299,19 @@ export function WhatsAppHistoryImportPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!batch || batch.status !== 'applying') return;
+    const interval = window.setInterval(() => {
+      void fetch(`/api/whatsapp-history-import/batches/${batch.id}`, {
+        cache: 'no-store',
+      })
+        .then(parseBatch)
+        .then(setBatch)
+        .catch(() => undefined);
+    }, 3_000);
+    return () => window.clearInterval(interval);
+  }, [batch]);
 
   const filteredArchives = useMemo(() => {
     if (!batch) return [];
@@ -406,6 +426,72 @@ export function WhatsAppHistoryImportPage() {
     }
   }
 
+  async function uploadAndroid(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    if (!file.name.toLocaleLowerCase('pt-BR').endsWith('.crypt15')) {
+      toast.add({
+        title: 'Arquivo incompatível',
+        description: 'Selecione o arquivo msgstore.db.crypt15.',
+        type: 'error',
+      });
+      return;
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(rootKey.trim())) {
+      toast.add({
+        title: 'Chave inválida',
+        description: 'Informe os 64 caracteres hexadecimais da chave crypt15.',
+        type: 'error',
+      });
+      return;
+    }
+    if (androidState === 'human-active' && !androidOwnerUsername.trim()) {
+      toast.add({
+        title: 'Atendente obrigatório',
+        description: 'Informe o usuário responsável pelo atendimento humano ativo.',
+        type: 'error',
+      });
+      return;
+    }
+    setUploading(true);
+    setUploadTotal(1);
+    setUploadCurrent(0);
+    setUploadErrors([]);
+    try {
+      const currentBatch = await ensureBatch();
+      const formData = new FormData();
+      formData.set('database', file);
+      formData.set('rootKey', rootKey.trim());
+      formData.set('state', androidState);
+      formData.set('departmentCode', androidDepartment);
+      if (androidOwnerUsername.trim()) {
+        formData.set('ownerUsername', androidOwnerUsername.trim());
+      }
+      const response = await fetch(
+        `/api/whatsapp-history-import/batches/${currentBatch.id}/android-backup`,
+        { method: 'POST', body: formData },
+      );
+      const updated = await parseBatch(response);
+      setBatch(updated);
+      setImportMode('android-backup');
+      setRootKey('');
+      setUploadSuccess(1);
+      toast.add({
+        title: 'Backup completo validado',
+        description: `${plural(updated.totals.archives, 'conversa encontrada', 'conversas encontradas')}.`,
+        type: 'success',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'O backup não pôde ser lido.';
+      setUploadErrors([{ fileName: file.name, message }]);
+      toast.add({ title: 'Backup não validado', description: message, type: 'error' });
+    } finally {
+      setUploadCurrent(1);
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
   async function applyImport() {
     if (!batch) return;
     setApplying(true);
@@ -416,16 +502,14 @@ export function WhatsAppHistoryImportPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cutoffAt: cutoffDate.toISOString() }),
       });
-      if (!response.ok) {
-        throw new Error(await responseMessage(response, 'Não foi possível aplicar o lote.'));
-      }
-      const refreshed = await fetch(`/api/whatsapp-history-import/batches/${batch.id}`, {
-        cache: 'no-store',
-      });
-      setBatch(await parseBatch(refreshed));
+      const updated = await parseBatch(response);
+      setBatch(updated);
       toast.add({
-        title: 'Históricos importados',
-        description: 'As conversas foram consolidadas no painel do WhatsApp.',
+        title: updated.status === 'applying' ? 'Importação iniciada' : 'Históricos importados',
+        description:
+          updated.status === 'applying'
+            ? 'O backup está sendo processado em blocos. Você pode acompanhar o progresso nesta tela.'
+            : 'As conversas foram consolidadas no painel do WhatsApp.',
         type: 'success',
       });
     } catch (error) {
@@ -441,7 +525,7 @@ export function WhatsAppHistoryImportPage() {
 
   const readyToApply =
     batch !== null &&
-    batch.status === 'draft' &&
+    (batch.status === 'draft' || batch.status === 'failed') &&
     batch.totals.archives > 0 &&
     batch.totals.needsReview === 0;
 
@@ -459,8 +543,8 @@ export function WhatsAppHistoryImportPage() {
           Importar históricos de conversas
         </h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          Selecione vários backups ZIP exportados individualmente pelo WhatsApp. Nenhuma conversa
-          será gravada antes da revisão final.
+          Importe vários ZIPs individuais ou um banco completo do Android. Nenhuma conversa será
+          gravada antes da confirmação final.
         </p>
       </div>
 
@@ -473,6 +557,24 @@ export function WhatsAppHistoryImportPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
+          <div className="flex flex-wrap gap-2" aria-label="Tipo de importação">
+            <Button
+              type="button"
+              variant={importMode === 'android-backup' ? 'default' : 'outline'}
+              disabled={Boolean(batch)}
+              onClick={() => setImportMode('android-backup')}
+            >
+              <Database /> Backup Android completo
+            </Button>
+            <Button
+              type="button"
+              variant={importMode === 'zip-exports' ? 'default' : 'outline'}
+              disabled={Boolean(batch)}
+              onClick={() => setImportMode('zip-exports')}
+            >
+              <FileArchive /> ZIPs individuais
+            </Button>
+          </div>
           <label className="grid max-w-xl gap-1.5 text-sm font-medium">
             Canal de destino
             <Select
@@ -496,23 +598,107 @@ export function WhatsAppHistoryImportPage() {
               </SelectContent>
             </Select>
           </label>
+          {importMode === 'android-backup' && !batch?.androidBackup ? (
+            <div className="grid max-w-3xl gap-4 rounded-lg border p-4 md:grid-cols-2">
+              <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
+                Chave crypt15 de 64 caracteres
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  value={rootKey}
+                  onChange={(event) => setRootKey(event.target.value.replace(/\s/g, ''))}
+                  placeholder="A chave não será armazenada"
+                />
+              </label>
+              <label className="grid gap-1.5 text-sm font-medium">
+                Situação das conversas importadas
+                <Select
+                  value={androidState}
+                  onValueChange={(value) => setAndroidState(value as WhatsAppHistoryState)}
+                >
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue>{WHATSAPP_HISTORY_STATE_LABELS[androidState]}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    {WHATSAPP_HISTORY_STATES.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {WHATSAPP_HISTORY_STATE_LABELS[value]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="grid gap-1.5 text-sm font-medium">
+                Departamento responsável
+                <Select
+                  value={androidDepartment}
+                  onValueChange={(value) =>
+                    setAndroidDepartment(value as WhatsAppHistoryDepartment)
+                  }
+                >
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue>
+                      {WHATSAPP_HISTORY_DEPARTMENT_LABELS[androidDepartment]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent alignItemWithTrigger={false}>
+                    {WHATSAPP_HISTORY_DEPARTMENTS.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {WHATSAPP_HISTORY_DEPARTMENT_LABELS[value]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              {androidState === 'human-active' ? (
+                <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
+                  Usuário do atendente responsável
+                  <Input
+                    value={androidOwnerUsername}
+                    onChange={(event) => setAndroidOwnerUsername(event.target.value)}
+                  />
+                </label>
+              ) : null}
+              <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
+                As mídias ausentes serão marcadas como pendentes e poderão ser vinculadas depois,
+                sem duplicar as mensagens.
+              </p>
+            </div>
+          ) : null}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".zip,application/zip"
-            multiple
+            accept={
+              importMode === 'android-backup'
+                ? '.crypt15,application/octet-stream'
+                : '.zip,application/zip'
+            }
+            multiple={importMode === 'zip-exports'}
             className="sr-only"
-            onChange={(event) => void upload(event.target.files)}
+            onChange={(event) =>
+              void (importMode === 'android-backup'
+                ? uploadAndroid(event.target.files)
+                : upload(event.target.files))
+            }
           />
           <div>
             <Button
               type="button"
               size="lg"
-              disabled={uploading || !channelId || batch?.status === 'applied'}
+              disabled={
+                uploading ||
+                !channelId ||
+                batch?.status === 'applied' ||
+                Boolean(batch?.androidBackup)
+              }
               onClick={() => fileInputRef.current?.click()}
             >
               {uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}
-              {uploading ? 'Processando backups' : 'Selecionar arquivos ZIP'}
+              {uploading
+                ? 'Processando backup'
+                : importMode === 'android-backup'
+                  ? 'Selecionar msgstore.db.crypt15'
+                  : 'Selecionar arquivos ZIP'}
             </Button>
           </div>
           {uploadTotal > 0 ? (
@@ -564,94 +750,149 @@ export function WhatsAppHistoryImportPage() {
             ))}
           </section>
 
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>2. Revisar cada conversa</CardTitle>
-              <CardDescription>
-                Confirme o número, quem representa a empresa e o estado em que a conversa deve
-                entrar no painel. O sistema não adivinha esses dados.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-                <label className="relative">
-                  <span className="sr-only">Pesquisar conversas importadas</span>
-                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    className="pl-9"
-                    placeholder="Pesquisar por arquivo, nome ou telefone"
-                    value={search}
-                    onChange={(event) => {
-                      setSearch(event.target.value);
+          {batch.mode === 'zip-exports' ? (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>2. Revisar cada conversa</CardTitle>
+                <CardDescription>
+                  Confirme o número, quem representa a empresa e o estado em que a conversa deve
+                  entrar no painel. O sistema não adivinha esses dados.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+                  <label className="relative">
+                    <span className="sr-only">Pesquisar conversas importadas</span>
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      className="pl-9"
+                      placeholder="Pesquisar por arquivo, nome ou telefone"
+                      value={search}
+                      onChange={(event) => {
+                        setSearch(event.target.value);
+                        setPage(1);
+                      }}
+                    />
+                  </label>
+                  <Select
+                    value={reviewFilter}
+                    onValueChange={(value) => {
+                      setReviewFilter(value as WhatsAppHistoryReviewFilter);
                       setPage(1);
                     }}
-                  />
-                </label>
-                <Select
-                  value={reviewFilter}
-                  onValueChange={(value) => {
-                    setReviewFilter(value as WhatsAppHistoryReviewFilter);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-full">
-                    <SelectValue>{WHATSAPP_HISTORY_REVIEW_FILTER_LABELS[reviewFilter]}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    {Object.entries(WHATSAPP_HISTORY_REVIEW_FILTER_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-4">
-                {visibleArchives.map((archive) => (
-                  <ArchiveReviewCard
-                    key={archive.archiveId}
-                    batchId={batch.id}
-                    archive={archive}
-                    onSaved={setBatch}
-                  />
-                ))}
-                {visibleArchives.length === 0 ? (
-                  <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                    Nenhuma conversa corresponde aos filtros.
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue>
+                        {WHATSAPP_HISTORY_REVIEW_FILTER_LABELS[reviewFilter]}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {Object.entries(WHATSAPP_HISTORY_REVIEW_FILTER_LABELS).map(
+                        ([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-4">
+                  {visibleArchives.map((archive) => (
+                    <ArchiveReviewCard
+                      key={archive.archiveId}
+                      batchId={batch.id}
+                      archive={archive}
+                      onSaved={setBatch}
+                    />
+                  ))}
+                  {visibleArchives.length === 0 ? (
+                    <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                      Nenhuma conversa corresponde aos filtros.
+                    </p>
+                  ) : null}
+                </div>
+                {pageCount > 1 ? (
+                  <nav
+                    className="flex flex-wrap justify-center gap-2"
+                    aria-label="Páginas da revisão"
+                  >
+                    {buildPaginationItems(currentPage, pageCount).map((value) =>
+                      typeof value === 'number' ? (
+                        <Button
+                          key={value}
+                          type="button"
+                          size="sm"
+                          variant={value === currentPage ? 'default' : 'outline'}
+                          onClick={() => setPage(value)}
+                          aria-current={value === currentPage ? 'page' : undefined}
+                        >
+                          {value}
+                        </Button>
+                      ) : (
+                        <span
+                          key={value}
+                          className="inline-flex size-8 items-center justify-center text-muted-foreground"
+                          aria-hidden="true"
+                        >
+                          …
+                        </span>
+                      ),
+                    )}
+                  </nav>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : batch.androidBackup ? (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>2. Conferir o backup completo</CardTitle>
+                <CardDescription>
+                  Conversas individuais são importadas por telefone. Grupos, listas e status não
+                  entram porque o painel atual é orientado a atendimentos individuais.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                <p>
+                  <strong>{batch.androidBackup.summary.groupConversationsExcluded}</strong> grupos
+                  excluídos
+                </p>
+                <p>
+                  <strong>{batch.androidBackup.summary.groupMessagesExcluded}</strong> mensagens de
+                  grupos
+                </p>
+                <p>
+                  <strong>{batch.androidBackup.summary.otherConversationsExcluded}</strong> chats
+                  técnicos excluídos
+                </p>
+                <p>
+                  <strong>{batch.androidBackup.summary.mediaReferences}</strong> mídias pendentes
+                </p>
+                {batch.status === 'applying' ? (
+                  <div className="sm:col-span-2 xl:col-span-4">
+                    <div className="mb-2 flex justify-between text-muted-foreground">
+                      <span>Importando em blocos</span>
+                      <span>
+                        {batch.androidBackup.messagesProcessed} de {batch.totals.messages}
+                      </span>
+                    </div>
+                    <Progress
+                      value={
+                        batch.totals.messages
+                          ? (batch.androidBackup.messagesProcessed / batch.totals.messages) * 100
+                          : 0
+                      }
+                    />
+                  </div>
+                ) : null}
+                {batch.status === 'failed' && batch.androidBackup.errorMessage ? (
+                  <p className="rounded-lg bg-destructive/10 p-3 text-destructive-emphasis sm:col-span-2 xl:col-span-4">
+                    {batch.androidBackup.errorMessage}
                   </p>
                 ) : null}
-              </div>
-              {pageCount > 1 ? (
-                <nav
-                  className="flex flex-wrap justify-center gap-2"
-                  aria-label="Páginas da revisão"
-                >
-                  {buildPaginationItems(currentPage, pageCount).map((value) =>
-                    typeof value === 'number' ? (
-                      <Button
-                        key={value}
-                        type="button"
-                        size="sm"
-                        variant={value === currentPage ? 'default' : 'outline'}
-                        onClick={() => setPage(value)}
-                        aria-current={value === currentPage ? 'page' : undefined}
-                      >
-                        {value}
-                      </Button>
-                    ) : (
-                      <span
-                        key={value}
-                        className="inline-flex size-8 items-center justify-center text-muted-foreground"
-                        aria-hidden="true"
-                      >
-                        …
-                      </span>
-                    ),
-                  )}
-                </nav>
-              ) : null}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card className="mt-6">
             <CardHeader>
@@ -672,20 +913,22 @@ export function WhatsAppHistoryImportPage() {
                 />
               </label>
               <div className="flex flex-wrap gap-2">
-                <Link
-                  href={`/api/whatsapp-history-import/batches/${batch.id}/workbook`}
-                  className={buttonVariants({ variant: 'outline' })}
-                  aria-disabled={!readyToApply && batch.status !== 'applied'}
-                  onClick={(event) => {
-                    if (!readyToApply && batch.status !== 'applied') event.preventDefault();
-                  }}
-                >
-                  <Download /> Baixar planilha consolidada
-                </Link>
+                {batch.mode === 'zip-exports' ? (
+                  <Link
+                    href={`/api/whatsapp-history-import/batches/${batch.id}/workbook`}
+                    className={buttonVariants({ variant: 'outline' })}
+                    aria-disabled={!readyToApply && batch.status !== 'applied'}
+                    onClick={(event) => {
+                      if (!readyToApply && batch.status !== 'applied') event.preventDefault();
+                    }}
+                  >
+                    <Download /> Baixar planilha consolidada
+                  </Link>
+                ) : null}
                 <Button
                   type="button"
                   onClick={() => void applyImport()}
-                  disabled={!readyToApply || applying}
+                  disabled={!readyToApply || applying || batch.status === 'applying'}
                 >
                   {applying ? <LoaderCircle className="animate-spin" /> : <CheckCircle2 />}
                   {applying ? 'Aplicando' : 'Aplicar importação'}
@@ -694,6 +937,11 @@ export function WhatsAppHistoryImportPage() {
               {batch.status === 'applied' ? (
                 <p className="rounded-lg bg-success/10 p-3 text-sm font-medium text-success-emphasis lg:col-span-2">
                   Este lote já foi aplicado. As conversas estão disponíveis no painel.
+                </p>
+              ) : batch.status === 'applying' ? (
+                <p className="text-sm text-muted-foreground lg:col-span-2">
+                  A importação continua em segundo plano. Não feche ou reinicie a API durante o
+                  processamento.
                 </p>
               ) : batch.totals.needsReview > 0 ? (
                 <p className="text-sm text-muted-foreground lg:col-span-2">

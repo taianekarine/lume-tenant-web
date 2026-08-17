@@ -59,6 +59,13 @@ manual, o download e a aplicação usam uma única planilha consolidada. Configu
 `LUME_TENANT_API_WHATSAPP_IMPORT_TIMEOUT_MS` acima da janela esperada para um ZIP
 grande, sem remover os limites de segurança da Tenant API.
 
+No modo Android completo, a mesma fronteira encaminha
+`POST /whatsapp/history-imports/:batchId/android-backup` em streaming. O corpo
+contém o `msgstore.db.crypt15`, a chave efêmera e a situação/departamento
+confirmados. A resposta nunca devolve a chave. Depois da validação, a tela
+consulta o lote enquanto o status for `applying` e apresenta mensagens,
+conversas e blocos já processados.
+
 Uma conversa já aplicada pode participar de um novo lote sem duplicar mensagens
 nem bloquear as demais. Arquivos realmente presentes em cada ZIP são retidos
 pela Tenant API e passam a usar a mesma rota autenticada das mídias correntes.
@@ -541,6 +548,11 @@ geração e ciclo de aprovação recebem `commandId`; alterações concorrentes 
 `expectedVersion`. O upload XLSX/CSV/TSV é multipart e nunca expõe o token ao
 browser. A seleção do cliente é enviada fora da planilha, e correções de CEP
 pendentes usam o endpoint do registro de importação antes de revalidá-lo.
+
+No frontend, a exclusão definitiva de um cliente só é apresentada quando seu
+status já não é `active`; clientes em operação recebem primeiro a ação de
+desativação, que preserva o histórico. A Tenant API ainda valida senha,
+dependências e permissões no comando de exclusão.
 
 Rotas são geradas exclusivamente por contrato. Downloads são proxied por Route
 Handlers autenticadas: `export.pdf`, `export.xlsx`, `my-maps.xlsx` e

@@ -220,6 +220,13 @@ operação, centros de custo, turnos, horários, veículos, capacidades, KM e
 periodicidade determinam os limites da geração. A rota surge somente de
 `POST /routing/contracts/:id/generate-routes`.
 
+A área de clientes separa cadastro, clientes em operação e clientes
+desativados em abas. Para um cliente ativo, a interface oferece somente a
+desativação e explica que ela preserva o histórico. A exclusão definitiva e a
+confirmação por senha aparecem apenas na área de clientes desativados, como uma
+ação progressiva de último recurso; as regras da Tenant API continuam sendo a
+fonte de verdade.
+
 O navegador não executa agrupamento nem calcula distâncias. Ele apresenta o
 plano retornado pela API para revisão, aprovação e publicação. Exportações usam
 uma versão aprovada e imutável. O arquivo operacional mantém centros de custo;

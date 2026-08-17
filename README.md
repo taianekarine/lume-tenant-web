@@ -114,6 +114,12 @@ mensagens; somente referências realmente ausentes são marcadas como
 indisponíveis. A gravação continua sob responsabilidade do importador oficial
 da Tenant API.
 
+A mesma tela aceita `msgstore.db.crypt15` para importar em lote o backup
+Android completo. A chave de 64 caracteres é encaminhada apenas à Tenant API e
+apagada do formulário assim que o arquivo é validado. A aplicação acompanha o
+processamento assíncrono por blocos; referências de mídia permanecem pendentes
+até a carga posterior da pasta `Media`.
+
 No MVP, uma proposta aprovada não impede o atendente de encerrar a conversa,
 desde que não exista outra proposta em coleta, aguardando cliente ou em análise.
 A política mais restritiva foi preservada no domínio, mas está explicitamente
@@ -182,6 +188,11 @@ Os modos de acesso são colaborador, candidato e cliente. Cliente PF ou PJ exige
 vínculo com o respectivo cadastro em **Clientes**. Funcionários internos com
 `passengers:import` selecionam o cliente na tela antes de baixar o modelo ou
 importar XLSX, CSV ou TSV; CPF/CNPJ não é repetido em cada linha.
+
+Em `/routing/companies`, o cadastro e as consultas são separados nas abas
+**Cadastrar cliente**, **Em operação** e **Desativados**. Um cliente ativo deve
+ser desativado para preservar o histórico antes que a opção progressiva de
+exclusão definitiva, protegida pela senha atual, seja exibida.
 
 ## Qualidade
 

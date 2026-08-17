@@ -15,6 +15,9 @@ export function resolveWhatsAppHistoryImportPath(
   if (path.length === 3 && path[2] === 'archives' && method === 'POST') {
     return `/${batchId}/archives`;
   }
+  if (path.length === 3 && path[2] === 'android-backup' && method === 'POST') {
+    return `/${batchId}/android-backup`;
+  }
   if (path.length === 4 && path[2] === 'archives' && method === 'PATCH') {
     return `/${batchId}/archives/${encodeURIComponent(path[3])}`;
   }
