@@ -6,6 +6,7 @@ const BATCH_ID = '11111111-1111-4111-8111-111111111111';
 describe('resolveWhatsAppHistoryImportPath', () => {
   it.each([
     ['GET', ['channels'], '/channels'],
+    ['GET', ['android-backups'], '/android-backups'],
     ['POST', ['batches'], ''],
     ['GET', ['batches', BATCH_ID], `/${BATCH_ID}`],
     ['POST', ['batches', BATCH_ID, 'archives'], `/${BATCH_ID}/archives`],

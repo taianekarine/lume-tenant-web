@@ -7,6 +7,9 @@ export function resolveWhatsAppHistoryImportPath(
   if (method === 'GET' && path.length === 1 && path[0] === 'channels') {
     return '/channels';
   }
+  if (method === 'GET' && path.length === 1 && path[0] === 'android-backups') {
+    return '/android-backups';
+  }
   if (path[0] !== 'batches') return null;
   const batchId = path[1];
   if (path.length === 1 && method === 'POST') return '';
