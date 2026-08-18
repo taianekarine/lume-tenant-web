@@ -383,7 +383,11 @@ export function WhatsAppHistoryImportPage() {
   }, []);
 
   useEffect(() => {
-    if (!batch || batch.status !== 'applying') return;
+    if (
+      !batch ||
+      (batch.status !== 'applying' && batch.androidBackup?.comparison?.status !== 'processing')
+    )
+      return;
     const interval = window.setInterval(() => {
       void fetch(`/api/whatsapp-history-import/batches/${batch.id}`, {
         cache: 'no-store',
@@ -770,8 +774,10 @@ export function WhatsAppHistoryImportPage() {
     batch.totals.archives > 0 &&
     batch.totals.needsReview === 0 &&
     (!batch.androidBackup ||
-      batch.androidBackup.summary.mediaReferences === 0 ||
-      batch.androidBackup.mediaImport?.status === 'ready');
+      (batch.androidBackup.comparison?.status === 'ready' &&
+        batch.androidBackup.comparison.messagesDivergent === 0 &&
+        (batch.androidBackup.summary.mediaReferences === 0 ||
+          batch.androidBackup.mediaImport?.status === 'ready')));
 
   return (
     <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
@@ -1344,6 +1350,52 @@ export function WhatsAppHistoryImportPage() {
                 <p>
                   <strong>{batch.androidBackup.summary.mediaReferences}</strong> mídias pendentes
                 </p>
+                <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2 xl:col-span-4 xl:grid-cols-3">
+                  {[
+                    [
+                      'Mensagens já existentes',
+                      batch.androidBackup.comparison?.messagesExisting ?? 0,
+                    ],
+                    ['Mensagens novas', batch.androidBackup.comparison?.messagesNew ?? 0],
+                    [
+                      'Mensagens divergentes',
+                      batch.androidBackup.comparison?.messagesDivergent ?? 0,
+                    ],
+                    ['Mídias já armazenadas', batch.androidBackup.comparison?.mediaStored ?? 0],
+                    ['Mídias novas', batch.androidBackup.comparison?.mediaNew ?? 0],
+                    [
+                      'Mídias ainda ausentes',
+                      batch.androidBackup.comparison?.mediaMissing ??
+                        batch.androidBackup.summary.mediaReferences,
+                    ],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg border bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-xl font-bold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+                {batch.androidBackup.comparison?.status === 'processing' ? (
+                  <p className="rounded-lg bg-primary/10 p-3 text-primary-emphasis sm:col-span-2 xl:col-span-4">
+                    Comparando este backup com o histórico já incorporado. Os totais serão
+                    atualizados automaticamente.
+                  </p>
+                ) : null}
+                {batch.androidBackup.comparison?.status === 'ready' &&
+                batch.androidBackup.comparison.messagesNew === 0 &&
+                batch.androidBackup.comparison.messagesDivergent === 0 ? (
+                  <p className="rounded-lg bg-success/10 p-3 text-success-emphasis sm:col-span-2 xl:col-span-4">
+                    Todas as mensagens já estão incorporadas no sistema; não há necessidade de uma
+                    nova importação. Se houver mídias pendentes, o ZIP selecionado ainda poderá
+                    preenchê-las.
+                  </p>
+                ) : null}
+                {batch.androidBackup.comparison?.status === 'failed' ? (
+                  <p className="rounded-lg bg-destructive/10 p-3 text-destructive-emphasis sm:col-span-2 xl:col-span-4">
+                    {batch.androidBackup.comparison.errorMessage ??
+                      'Não foi possível comparar este backup com o histórico atual.'}
+                  </p>
+                ) : null}
                 {batch.status === 'applying' ? (
                   <div className="sm:col-span-2 xl:col-span-4">
                     <div className="mb-2 flex justify-between text-muted-foreground">
@@ -1424,6 +1476,14 @@ export function WhatsAppHistoryImportPage() {
                   Revise{' '}
                   {plural(batch.totals.needsReview, 'conversa pendente', 'conversas pendentes')}{' '}
                   para liberar a aplicação.
+                </p>
+              ) : batch.androidBackup?.comparison?.status === 'processing' ? (
+                <p className="text-sm text-muted-foreground lg:col-span-2">
+                  Aguarde a comparação incremental antes de aplicar o backup.
+                </p>
+              ) : batch.androidBackup?.comparison?.messagesDivergent ? (
+                <p className="text-sm text-destructive-emphasis lg:col-span-2">
+                  Corrija as mensagens divergentes antes de continuar.
                 </p>
               ) : batch.androidBackup &&
                 batch.androidBackup.summary.mediaReferences > 0 &&
