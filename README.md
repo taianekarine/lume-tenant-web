@@ -122,7 +122,9 @@ A mesma tela aceita `msgstore.db.crypt15` para importar em lote o backup
 Android completo. A chave de 64 caracteres é encaminhada apenas à Tenant API e
 apagada do formulário assim que o arquivo é validado. A aplicação acompanha o
 processamento assíncrono por blocos; referências de mídia permanecem pendentes
-até a carga posterior da pasta `Media`.
+até a carga posterior da pasta `Media`. O ZIP de mídias é enviado em blocos
+retomáveis e vinculado em segundo plano, com progresso persistente na tela; o
+navegador não precisa manter o arquivo inteiro em memória.
 
 No MVP, uma proposta aprovada não impede o atendente de encerrar a conversa,
 desde que não exista outra proposta em coleta, aguardando cliente ou em análise.

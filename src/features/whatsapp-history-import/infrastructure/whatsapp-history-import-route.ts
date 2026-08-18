@@ -24,6 +24,27 @@ export function resolveWhatsAppHistoryImportPath(
   if (path.length === 3 && path[2] === 'android-media-archives' && method === 'POST') {
     return `/${batchId}/android-media-archives`;
   }
+  if (path.length === 3 && path[2] === 'android-media-uploads' && method === 'POST') {
+    return `/${batchId}/android-media-uploads`;
+  }
+  if (
+    path.length === 5 &&
+    path[2] === 'android-media-uploads' &&
+    UUID_PATTERN.test(path[3] ?? '') &&
+    path[4] === 'chunks' &&
+    method === 'POST'
+  ) {
+    return `/${batchId}/android-media-uploads/${path[3]}/chunks`;
+  }
+  if (
+    path.length === 5 &&
+    path[2] === 'android-media-uploads' &&
+    UUID_PATTERN.test(path[3] ?? '') &&
+    path[4] === 'complete' &&
+    method === 'POST'
+  ) {
+    return `/${batchId}/android-media-uploads/${path[3]}/complete`;
+  }
   if (path.length === 4 && path[2] === 'archives' && method === 'PATCH') {
     return `/${batchId}/archives/${encodeURIComponent(path[3])}`;
   }
