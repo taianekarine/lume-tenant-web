@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   MessageCircle,
+  ContactRound,
   Route,
   Users,
   type LucideIcon,
@@ -69,6 +70,14 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
     href: '/whatsapp-conversations',
     permission: 'whatsapp-conversations:manage',
     icon: MessageCircle,
+    group: 'commercial',
+  },
+  {
+    label: 'Contatos',
+    href: '/contacts',
+    permission: 'whatsapp-conversations:view',
+    alternativePermissions: ['whatsapp-conversations:manage'],
+    icon: ContactRound,
     group: 'commercial',
   },
   {
