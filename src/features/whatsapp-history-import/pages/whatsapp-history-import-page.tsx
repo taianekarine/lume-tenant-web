@@ -48,7 +48,7 @@ const androidMediaUploadSchema = z.object({
   totalBytes: z.number().int().positive(),
   uploadedBytes: z.number().int().nonnegative(),
   chunkSizeBytes: z.number().int().positive(),
-  status: z.enum(['uploading', 'processing', 'completed', 'failed']),
+  status: z.enum(['uploading', 'ready', 'processing', 'completed', 'failed']),
 });
 const PAGE_SIZE = 20;
 
@@ -447,9 +447,14 @@ export function WhatsAppHistoryImportPage() {
     currentPage * PAGE_SIZE,
   );
   const selectedChannel = channels.find((channel) => channel.id === channelId);
-  const selectedMediaBatch = appliedAndroidBackups.find((item) => item.id === selectedMediaBatchId);
+  const pendingAndroidMediaBatch =
+    batch?.androidBackup && batch.status !== 'applied' ? batch : undefined;
+  const selectedMediaBatch =
+    pendingAndroidMediaBatch ??
+    appliedAndroidBackups.find((item) => item.id === selectedMediaBatchId);
   const selectedMediaImport = selectedMediaBatch?.androidBackup?.mediaImport;
   const selectedMediaProcessing = selectedMediaImport?.status === 'processing';
+  const selectedMediaApplying = selectedMediaBatch?.status === 'applying';
   const currentBatchMediaImport = batch?.androidBackup?.mediaImport;
   const currentBatchMediaProcessing = currentBatchMediaImport?.status === 'processing';
 
@@ -617,7 +622,12 @@ export function WhatsAppHistoryImportPage() {
     files: FileList | null,
     inputRef: RefObject<HTMLInputElement | null>,
   ) {
-    if (!targetBatch.androidBackup || targetBatch.status !== 'applied' || !files?.length) return;
+    if (
+      !targetBatch.androidBackup ||
+      !['draft', 'failed', 'applied'].includes(targetBatch.status) ||
+      !files?.length
+    )
+      return;
     const selected = Array.from(files);
     const accepted = selected.filter((file) =>
       file.name.toLocaleLowerCase('pt-BR').endsWith('.zip'),
@@ -686,10 +696,12 @@ export function WhatsAppHistoryImportPage() {
           );
           currentBatch = await parseBatch(completeResponse);
           setBatch((current) => (current?.id === currentBatch.id ? currentBatch : current));
-          setAppliedAndroidBackups((current) => {
-            const withoutUpdated = current.filter((item) => item.id !== currentBatch.id);
-            return [currentBatch, ...withoutUpdated];
-          });
+          if (currentBatch.status === 'applied') {
+            setAppliedAndroidBackups((current) => {
+              const withoutUpdated = current.filter((item) => item.id !== currentBatch.id);
+              return [currentBatch, ...withoutUpdated];
+            });
+          }
           successes += 1;
           completedBytes += file.size;
           setMediaUploadBytes(completedBytes);
@@ -708,7 +720,9 @@ export function WhatsAppHistoryImportPage() {
         title: failures.length === selected.length ? 'Mídias não enviadas' : 'ZIP recebido',
         description:
           failures.length === 0
-            ? `${plural(successes, 'arquivo ZIP enviado', 'arquivos ZIP enviados')}. A vinculação continuará em segundo plano e o progresso será atualizado nesta tela.`
+            ? currentBatch.status === 'applied'
+              ? `${plural(successes, 'arquivo ZIP enviado', 'arquivos ZIP enviados')}. A vinculação continuará em segundo plano e o progresso será atualizado nesta tela.`
+              : 'O ZIP da pasta Media está validado. Ao aplicar, mensagens e mídias serão processadas no mesmo fluxo.'
             : `${plural(successes, 'arquivo enviado', 'arquivos enviados')} e ${plural(failures.length, 'arquivo com erro', 'arquivos com erro')}.`,
         type: failures.length === selected.length ? 'error' : 'success',
       });
@@ -754,7 +768,10 @@ export function WhatsAppHistoryImportPage() {
     batch !== null &&
     (batch.status === 'draft' || batch.status === 'failed') &&
     batch.totals.archives > 0 &&
-    batch.totals.needsReview === 0;
+    batch.totals.needsReview === 0 &&
+    (!batch.androidBackup ||
+      batch.androidBackup.summary.mediaReferences === 0 ||
+      batch.androidBackup.mediaImport?.status === 'ready');
 
   return (
     <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
@@ -888,9 +905,8 @@ export function WhatsAppHistoryImportPage() {
                   </label>
                 ) : null}
                 <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
-                  As mídias ausentes serão marcadas como pendentes. Depois que as mensagens forem
-                  aplicadas, a etapa 4 desta tela permitirá selecionar os ZIPs da pasta Media sem
-                  duplicar o histórico.
+                  Depois de validar o banco de mensagens, selecione o ZIP da pasta Media. A
+                  aplicação só será liberada quando os dois arquivos estiverem prontos.
                 </p>
               </div>
             ) : null}
@@ -961,63 +977,70 @@ export function WhatsAppHistoryImportPage() {
 
           <aside className="grid content-start gap-4 border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
             <div>
-              <h2 className="text-lg font-semibold">Importar mídias</h2>
+              <h2 className="text-lg font-semibold">
+                {pendingAndroidMediaBatch ? 'Adicionar mídias ao backup' : 'Importar mídias'}
+              </h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Selecione um backup Android já concluído e vincule o ZIP da pasta Media sem importar
-                novamente as mensagens.
+                {pendingAndroidMediaBatch
+                  ? 'Selecione o ZIP da pasta Media antes de aplicar. Mensagens e mídias serão processadas no mesmo fluxo.'
+                  : 'Selecione um backup Android já concluído e vincule mídias adicionais sem importar novamente as mensagens.'}
               </p>
             </div>
 
-            {loadingAppliedBackups ? (
+            {!pendingAndroidMediaBatch && loadingAppliedBackups ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <LoaderCircle className="size-4 animate-spin" /> Carregando backups concluídos
               </div>
-            ) : appliedBackupsError ? (
+            ) : !pendingAndroidMediaBatch && appliedBackupsError ? (
               <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
                 {appliedBackupsError}
               </p>
-            ) : appliedAndroidBackups.length === 0 ? (
+            ) : !pendingAndroidMediaBatch && appliedAndroidBackups.length === 0 ? (
               <p className="rounded-lg border border-dashed p-4 text-sm leading-6 text-muted-foreground">
                 Nenhum backup Android concluído está disponível. Depois de aplicar um backup, ele
                 aparecerá aqui e continuará disponível também na etapa 4.
               </p>
             ) : (
               <>
-                <label className="grid gap-1.5 text-sm font-medium">
-                  Backup já importado
-                  <Select
-                    value={selectedMediaBatchId}
-                    onValueChange={(value) => setSelectedMediaBatchId(value ?? '')}
-                  >
-                    <SelectTrigger className="h-auto min-h-9 w-full text-left">
-                      <SelectValue placeholder="Selecione o backup">
-                        {selectedMediaBatch?.androidBackup
-                          ? `${selectedMediaBatch.androidBackup.databaseFileName} · ${new Date(
-                              selectedMediaBatch.appliedAt ?? selectedMediaBatch.updatedAt,
-                            ).toLocaleString('pt-BR', {
-                              dateStyle: 'short',
-                              timeStyle: 'short',
-                            })}`
-                          : undefined}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent alignItemWithTrigger={false}>
-                      {appliedAndroidBackups.map((item) => {
-                        const android = item.androidBackup;
-                        if (!android) return null;
-                        const pending =
-                          android.mediaImport?.pending ?? android.summary.mediaReferences;
-                        return (
-                          <SelectItem key={item.id} value={item.id}>
-                            {android.databaseFileName} ·{' '}
-                            {new Date(item.appliedAt ?? item.updatedAt).toLocaleDateString('pt-BR')}{' '}
-                            · {plural(pending, 'mídia pendente', 'mídias pendentes')}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </label>
+                {!pendingAndroidMediaBatch ? (
+                  <label className="grid gap-1.5 text-sm font-medium">
+                    Backup já importado
+                    <Select
+                      value={selectedMediaBatchId}
+                      onValueChange={(value) => setSelectedMediaBatchId(value ?? '')}
+                    >
+                      <SelectTrigger className="h-auto min-h-9 w-full text-left">
+                        <SelectValue placeholder="Selecione o backup">
+                          {selectedMediaBatch?.androidBackup
+                            ? `${selectedMediaBatch.androidBackup.databaseFileName} · ${new Date(
+                                selectedMediaBatch.appliedAt ?? selectedMediaBatch.updatedAt,
+                              ).toLocaleString('pt-BR', {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })}`
+                            : undefined}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {appliedAndroidBackups.map((item) => {
+                          const android = item.androidBackup;
+                          if (!android) return null;
+                          const pending =
+                            android.mediaImport?.pending ?? android.summary.mediaReferences;
+                          return (
+                            <SelectItem key={item.id} value={item.id}>
+                              {android.databaseFileName} ·{' '}
+                              {new Date(item.appliedAt ?? item.updatedAt).toLocaleDateString(
+                                'pt-BR',
+                              )}{' '}
+                              · {plural(pending, 'mídia pendente', 'mídias pendentes')}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                ) : null}
 
                 {selectedMediaBatch?.androidBackup ? (
                   <>
@@ -1074,21 +1097,33 @@ export function WhatsAppHistoryImportPage() {
                     />
                     <Button
                       type="button"
-                      disabled={mediaUploading || selectedMediaProcessing}
+                      disabled={mediaUploading || selectedMediaProcessing || selectedMediaApplying}
                       onClick={() => historicalMediaInputRef.current?.click()}
                     >
                       {(mediaUploading && mediaUploadTargetId === selectedMediaBatch.id) ||
-                      selectedMediaProcessing ? (
+                      selectedMediaProcessing ||
+                      selectedMediaApplying ? (
                         <LoaderCircle className="animate-spin" />
                       ) : (
                         <Paperclip />
                       )}
                       {mediaUploading && mediaUploadTargetId === selectedMediaBatch.id
                         ? 'Enviando ZIP de mídias'
-                        : selectedMediaProcessing
-                          ? 'Vinculando mídias em segundo plano'
-                          : 'Selecionar ZIP da pasta Media'}
+                        : selectedMediaApplying
+                          ? 'Aplicando mensagens e mídias'
+                          : selectedMediaProcessing
+                            ? 'Vinculando mídias em segundo plano'
+                            : selectedMediaImport?.status === 'ready'
+                              ? 'Substituir ZIP da pasta Media'
+                              : 'Selecionar ZIP da pasta Media'}
                     </Button>
+
+                    {selectedMediaImport?.status === 'ready' ? (
+                      <p className="rounded-lg bg-success/10 p-3 text-sm font-medium text-success-emphasis">
+                        ZIP validado e pronto. Ao aplicar, as mensagens e as mídias serão
+                        processadas no mesmo fluxo.
+                      </p>
+                    ) : null}
 
                     {mediaUploadTargetId === selectedMediaBatch.id && mediaUploadTotal > 0 ? (
                       <div aria-live="polite">
@@ -1389,6 +1424,13 @@ export function WhatsAppHistoryImportPage() {
                   Revise{' '}
                   {plural(batch.totals.needsReview, 'conversa pendente', 'conversas pendentes')}{' '}
                   para liberar a aplicação.
+                </p>
+              ) : batch.androidBackup &&
+                batch.androidBackup.summary.mediaReferences > 0 &&
+                batch.androidBackup.mediaImport?.status !== 'ready' ? (
+                <p className="text-sm text-muted-foreground lg:col-span-2">
+                  Selecione e envie por completo o ZIP da pasta Media para liberar a aplicação do
+                  backup.
                 </p>
               ) : null}
             </CardContent>
