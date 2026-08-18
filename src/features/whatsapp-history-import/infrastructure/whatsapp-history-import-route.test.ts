@@ -11,6 +11,11 @@ describe('resolveWhatsAppHistoryImportPath', () => {
     ['POST', ['batches', BATCH_ID, 'archives'], `/${BATCH_ID}/archives`],
     ['POST', ['batches', BATCH_ID, 'android-backup'], `/${BATCH_ID}/android-backup`],
     [
+      'POST',
+      ['batches', BATCH_ID, 'android-media-archives'],
+      `/${BATCH_ID}/android-media-archives`,
+    ],
+    [
       'PATCH',
       ['batches', BATCH_ID, 'archives', 'archive/unsafe'],
       `/${BATCH_ID}/archives/archive%2Funsafe`,

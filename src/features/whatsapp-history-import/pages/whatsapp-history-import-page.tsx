@@ -9,6 +9,7 @@ import {
   Download,
   FileArchive,
   LoaderCircle,
+  Paperclip,
   Search,
   Upload,
 } from 'lucide-react';
@@ -248,6 +249,7 @@ function ArchiveReviewCard({ batchId, archive, onSaved }: ArchiveReviewCardProps
 
 export function WhatsAppHistoryImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
   const [importMode, setImportMode] = useState<'zip-exports' | 'android-backup'>('android-backup');
   const [channels, setChannels] = useState<z.infer<typeof channelsSchema>>([]);
   const [channelId, setChannelId] = useState('');
@@ -270,6 +272,12 @@ export function WhatsAppHistoryImportPage() {
   const [androidDepartment, setAndroidDepartment] =
     useState<WhatsAppHistoryDepartment>('commercial');
   const [androidOwnerUsername, setAndroidOwnerUsername] = useState('');
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaUploadCurrent, setMediaUploadCurrent] = useState(0);
+  const [mediaUploadTotal, setMediaUploadTotal] = useState(0);
+  const [mediaUploadErrors, setMediaUploadErrors] = useState<
+    readonly { fileName: string; message: string }[]
+  >([]);
 
   useEffect(() => {
     let active = true;
@@ -492,6 +500,62 @@ export function WhatsAppHistoryImportPage() {
     }
   }
 
+  async function uploadAndroidMedia(files: FileList | null) {
+    if (!batch?.androidBackup || batch.status !== 'applied' || !files?.length) return;
+    const selected = Array.from(files);
+    const accepted = selected.filter((file) =>
+      file.name.toLocaleLowerCase('pt-BR').endsWith('.zip'),
+    );
+    const failures: Array<{ fileName: string; message: string }> = selected
+      .filter((file) => !file.name.toLocaleLowerCase('pt-BR').endsWith('.zip'))
+      .map((file) => ({
+        fileName: file.name,
+        message: 'Selecione um arquivo ZIP criado a partir da pasta Media.',
+      }));
+    setMediaUploading(true);
+    setMediaUploadCurrent(failures.length);
+    setMediaUploadTotal(selected.length);
+    setMediaUploadErrors(failures);
+    let currentBatch = batch;
+    let successes = 0;
+    try {
+      for (let index = 0; index < accepted.length; index += 1) {
+        const file = accepted[index];
+        try {
+          const formData = new FormData();
+          formData.set('archive', file);
+          const response = await fetch(
+            `/api/whatsapp-history-import/batches/${batch.id}/android-media-archives`,
+            { method: 'POST', body: formData },
+          );
+          currentBatch = await parseBatch(response);
+          setBatch(currentBatch);
+          successes += 1;
+        } catch (error) {
+          failures.push({
+            fileName: file.name,
+            message:
+              error instanceof Error ? error.message : 'O ZIP de mídias não pôde ser processado.',
+          });
+          setMediaUploadErrors([...failures]);
+        } finally {
+          setMediaUploadCurrent(failures.length + successes);
+        }
+      }
+      toast.add({
+        title: failures.length === selected.length ? 'Mídias não vinculadas' : 'Mídias processadas',
+        description:
+          failures.length === 0
+            ? `${plural(successes, 'arquivo ZIP processado', 'arquivos ZIP processados')}. Os arquivos encontrados já estão disponíveis nas conversas.`
+            : `${plural(successes, 'arquivo processado', 'arquivos processados')} e ${plural(failures.length, 'arquivo com erro', 'arquivos com erro')}.`,
+        type: failures.length === selected.length ? 'error' : 'success',
+      });
+    } finally {
+      setMediaUploading(false);
+      if (mediaInputRef.current) mediaInputRef.current.value = '';
+    }
+  }
+
   async function applyImport() {
     if (!batch) return;
     setApplying(true);
@@ -660,8 +724,9 @@ export function WhatsAppHistoryImportPage() {
                 </label>
               ) : null}
               <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
-                As mídias ausentes serão marcadas como pendentes e poderão ser vinculadas depois,
-                sem duplicar as mensagens.
+                As mídias ausentes serão marcadas como pendentes. Depois que as mensagens forem
+                aplicadas, a etapa 4 desta tela permitirá selecionar os ZIPs da pasta Media sem
+                duplicar o histórico.
               </p>
             </div>
           ) : null}
@@ -952,6 +1017,115 @@ export function WhatsAppHistoryImportPage() {
               ) : null}
             </CardContent>
           </Card>
+
+          {batch.mode === 'android-backup' &&
+          batch.androidBackup &&
+          batch.status === 'applied' &&
+          batch.androidBackup.summary.mediaReferences > 0 ? (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>4. Vincular mídias das conversas</CardTitle>
+                <CardDescription>
+                  Envie um ou vários ZIPs da pasta Media. Arquivos já vinculados são ignorados e
+                  você pode retomar esta etapa depois.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-6">
+                  <p>
+                    Compacte a pasta <strong>WhatsApp/Media</strong> ou{' '}
+                    <strong>WhatsApp Business/Media</strong>. Se ela for muito grande, divida o
+                    conteúdo em vários ZIPs e selecione todos de uma vez.
+                  </p>
+                  <p className="mt-2 text-muted-foreground">
+                    O arquivo <strong>Backups.zip</strong> contém bancos auxiliares do Android e não
+                    contém as fotos, áudios, vídeos e documentos das conversas.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ['Mídias citadas', batch.androidBackup.summary.mediaReferences],
+                    ['Mídias armazenadas', batch.androidBackup.mediaImport?.stored ?? 0],
+                    [
+                      'Mídias pendentes',
+                      batch.androidBackup.mediaImport?.pending ??
+                        batch.androidBackup.summary.mediaReferences,
+                    ],
+                    ['ZIPs processados', batch.androidBackup.mediaImport?.archivesProcessed ?? 0],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg border p-3">
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="mt-1 text-xl font-bold">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="max-w-2xl">
+                  <div className="mb-2 flex justify-between text-sm text-muted-foreground">
+                    <span>Arquivos disponíveis nas conversas</span>
+                    <span>
+                      {batch.androidBackup.mediaImport?.stored ?? 0} de{' '}
+                      {batch.androidBackup.summary.mediaReferences}
+                    </span>
+                  </div>
+                  <Progress
+                    value={
+                      (100 * (batch.androidBackup.mediaImport?.stored ?? 0)) /
+                      batch.androidBackup.summary.mediaReferences
+                    }
+                  />
+                </div>
+
+                <input
+                  ref={mediaInputRef}
+                  type="file"
+                  accept=".zip,application/zip"
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => void uploadAndroidMedia(event.target.files)}
+                />
+                <div>
+                  <Button
+                    type="button"
+                    size="lg"
+                    disabled={mediaUploading}
+                    onClick={() => mediaInputRef.current?.click()}
+                  >
+                    {mediaUploading ? <LoaderCircle className="animate-spin" /> : <Paperclip />}
+                    {mediaUploading ? 'Processando mídias' : 'Selecionar ZIPs da pasta Media'}
+                  </Button>
+                </div>
+
+                {mediaUploadTotal > 0 ? (
+                  <div className="max-w-2xl" aria-live="polite">
+                    <div className="mb-2 flex justify-between text-sm text-muted-foreground">
+                      <span>ZIPs enviados nesta tentativa</span>
+                      <span>
+                        {mediaUploadCurrent} de {mediaUploadTotal}
+                      </span>
+                    </div>
+                    <Progress
+                      value={mediaUploadTotal ? (mediaUploadCurrent / mediaUploadTotal) * 100 : 0}
+                    />
+                  </div>
+                ) : null}
+
+                {mediaUploadErrors.length > 0 ? (
+                  <div className="max-w-3xl rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
+                    <p className="font-semibold">Arquivos que não foram processados</p>
+                    <ul className="mt-2 grid gap-1">
+                      {mediaUploadErrors.map((failure) => (
+                        <li key={`${failure.fileName}:${failure.message}`}>
+                          <strong>{failure.fileName}:</strong> {failure.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
         </>
       ) : null}
     </main>
