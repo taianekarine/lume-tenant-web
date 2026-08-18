@@ -41,10 +41,31 @@ import {
 
 const channelsSchema = z.array(whatsAppHistoryChannelSchema);
 const appliedAndroidBackupsSchema = z.array(whatsAppHistoryImportBatchSchema);
+const androidMediaUploadSchema = z.object({
+  schemaVersion: z.literal('1.0'),
+  uploadId: z.string().uuid(),
+  fileName: z.string().min(1),
+  totalBytes: z.number().int().positive(),
+  uploadedBytes: z.number().int().nonnegative(),
+  chunkSizeBytes: z.number().int().positive(),
+  status: z.enum(['uploading', 'processing', 'completed', 'failed']),
+});
 const PAGE_SIZE = 20;
 
 function plural(value: number, singular: string, pluralForm: string): string {
   return `${value} ${value === 1 ? singular : pluralForm}`;
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let amount = value / 1024;
+  let unit = units[0];
+  for (let index = 1; amount >= 1024 && index < units.length; index += 1) {
+    amount /= 1024;
+    unit = units[index];
+  }
+  return `${amount.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} ${unit}`;
 }
 
 async function responseMessage(response: Response, fallback: string): Promise<string> {
@@ -277,6 +298,8 @@ export function WhatsAppHistoryImportPage() {
   const [mediaUploading, setMediaUploading] = useState(false);
   const [mediaUploadCurrent, setMediaUploadCurrent] = useState(0);
   const [mediaUploadTotal, setMediaUploadTotal] = useState(0);
+  const [mediaUploadBytes, setMediaUploadBytes] = useState(0);
+  const [mediaUploadBytesTotal, setMediaUploadBytesTotal] = useState(0);
   const [mediaUploadErrors, setMediaUploadErrors] = useState<
     readonly { fileName: string; message: string }[]
   >([]);
@@ -375,6 +398,35 @@ export function WhatsAppHistoryImportPage() {
     return () => window.clearInterval(interval);
   }, [batch, rememberAppliedBackup]);
 
+  useEffect(() => {
+    const processingIds = appliedAndroidBackups
+      .filter((item) => item.androidBackup?.mediaImport?.status === 'processing')
+      .map((item) => item.id);
+    if (processingIds.length === 0) return;
+    const refresh = () => {
+      void Promise.all(
+        processingIds.map((batchId) =>
+          fetch(`/api/whatsapp-history-import/batches/${batchId}`, {
+            cache: 'no-store',
+          }).then(parseBatch),
+        ),
+      )
+        .then((updatedBatches) => {
+          setAppliedAndroidBackups((current) => {
+            const updatedById = new Map(updatedBatches.map((item) => [item.id, item]));
+            return current.map((item) => updatedById.get(item.id) ?? item);
+          });
+          setBatch((current) => {
+            if (!current) return current;
+            return updatedBatches.find((item) => item.id === current.id) ?? current;
+          });
+        })
+        .catch(() => undefined);
+    };
+    const interval = window.setInterval(refresh, 3_000);
+    return () => window.clearInterval(interval);
+  }, [appliedAndroidBackups]);
+
   const filteredArchives = useMemo(() => {
     if (!batch) return [];
     const query = search.trim().toLocaleLowerCase('pt-BR');
@@ -396,6 +448,10 @@ export function WhatsAppHistoryImportPage() {
   );
   const selectedChannel = channels.find((channel) => channel.id === channelId);
   const selectedMediaBatch = appliedAndroidBackups.find((item) => item.id === selectedMediaBatchId);
+  const selectedMediaImport = selectedMediaBatch?.androidBackup?.mediaImport;
+  const selectedMediaProcessing = selectedMediaImport?.status === 'processing';
+  const currentBatchMediaImport = batch?.androidBackup?.mediaImport;
+  const currentBatchMediaProcessing = currentBatchMediaImport?.status === 'processing';
 
   async function ensureBatch(): Promise<WhatsAppHistoryImportBatch> {
     if (batch) return batch;
@@ -575,27 +631,68 @@ export function WhatsAppHistoryImportPage() {
     setMediaUploading(true);
     setMediaUploadCurrent(failures.length);
     setMediaUploadTotal(selected.length);
+    setMediaUploadBytes(0);
+    setMediaUploadBytesTotal(accepted.reduce((total, file) => total + file.size, 0));
     setMediaUploadErrors(failures);
     setMediaUploadTargetId(targetBatch.id);
     let currentBatch = targetBatch;
     let successes = 0;
+    let completedBytes = 0;
     try {
       for (let index = 0; index < accepted.length; index += 1) {
         const file = accepted[index];
         try {
-          const formData = new FormData();
-          formData.set('archive', file);
-          const response = await fetch(
-            `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-archives`,
-            { method: 'POST', body: formData },
+          const startResponse = await fetch(
+            `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-uploads`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fileName: file.name, sizeBytes: file.size }),
+            },
           );
-          currentBatch = await parseBatch(response);
+          if (!startResponse.ok) {
+            throw new Error(
+              await responseMessage(startResponse, 'Não foi possível iniciar o envio do ZIP.'),
+            );
+          }
+          let upload = androidMediaUploadSchema.parse(await startResponse.json());
+          let offset = upload.uploadedBytes;
+          setMediaUploadBytes(completedBytes + offset);
+          while (offset < file.size) {
+            const end = Math.min(file.size, offset + upload.chunkSizeBytes);
+            const formData = new FormData();
+            formData.set('offsetBytes', String(offset));
+            formData.set('chunk', file.slice(offset, end), `${file.name}.part`);
+            const chunkResponse = await fetch(
+              `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-uploads/${upload.uploadId}/chunks`,
+              { method: 'POST', body: formData },
+            );
+            if (!chunkResponse.ok) {
+              throw new Error(
+                await responseMessage(chunkResponse, 'Não foi possível continuar o envio do ZIP.'),
+              );
+            }
+            const previousOffset = offset;
+            upload = androidMediaUploadSchema.parse(await chunkResponse.json());
+            offset = upload.uploadedBytes;
+            if (offset <= previousOffset || offset > file.size) {
+              throw new Error('O servidor não confirmou o avanço do envio. Tente novamente.');
+            }
+            setMediaUploadBytes(completedBytes + offset);
+          }
+          const completeResponse = await fetch(
+            `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-uploads/${upload.uploadId}/complete`,
+            { method: 'POST' },
+          );
+          currentBatch = await parseBatch(completeResponse);
           setBatch((current) => (current?.id === currentBatch.id ? currentBatch : current));
           setAppliedAndroidBackups((current) => {
             const withoutUpdated = current.filter((item) => item.id !== currentBatch.id);
             return [currentBatch, ...withoutUpdated];
           });
           successes += 1;
+          completedBytes += file.size;
+          setMediaUploadBytes(completedBytes);
         } catch (error) {
           failures.push({
             fileName: file.name,
@@ -608,11 +705,11 @@ export function WhatsAppHistoryImportPage() {
         }
       }
       toast.add({
-        title: failures.length === selected.length ? 'Mídias não vinculadas' : 'Mídias processadas',
+        title: failures.length === selected.length ? 'Mídias não enviadas' : 'ZIP recebido',
         description:
           failures.length === 0
-            ? `${plural(successes, 'arquivo ZIP processado', 'arquivos ZIP processados')}. Os arquivos encontrados já estão disponíveis nas conversas.`
-            : `${plural(successes, 'arquivo processado', 'arquivos processados')} e ${plural(failures.length, 'arquivo com erro', 'arquivos com erro')}.`,
+            ? `${plural(successes, 'arquivo ZIP enviado', 'arquivos ZIP enviados')}. A vinculação continuará em segundo plano e o progresso será atualizado nesta tela.`
+            : `${plural(successes, 'arquivo enviado', 'arquivos enviados')} e ${plural(failures.length, 'arquivo com erro', 'arquivos com erro')}.`,
         type: failures.length === selected.length ? 'error' : 'success',
       });
     } finally {
@@ -866,8 +963,8 @@ export function WhatsAppHistoryImportPage() {
             <div>
               <h2 className="text-lg font-semibold">Importar mídias</h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                Selecione um backup Android já concluído e vincule os ZIPs da pasta Media sem
-                importar novamente as mensagens.
+                Selecione um backup Android já concluído e vincule o ZIP da pasta Media sem importar
+                novamente as mensagens.
               </p>
             </div>
 
@@ -966,7 +1063,6 @@ export function WhatsAppHistoryImportPage() {
                       ref={historicalMediaInputRef}
                       type="file"
                       accept=".zip,application/zip"
-                      multiple
                       className="sr-only"
                       onChange={(event) =>
                         void uploadAndroidMedia(
@@ -978,33 +1074,81 @@ export function WhatsAppHistoryImportPage() {
                     />
                     <Button
                       type="button"
-                      disabled={mediaUploading}
+                      disabled={mediaUploading || selectedMediaProcessing}
                       onClick={() => historicalMediaInputRef.current?.click()}
                     >
-                      {mediaUploading && mediaUploadTargetId === selectedMediaBatch.id ? (
+                      {(mediaUploading && mediaUploadTargetId === selectedMediaBatch.id) ||
+                      selectedMediaProcessing ? (
                         <LoaderCircle className="animate-spin" />
                       ) : (
                         <Paperclip />
                       )}
                       {mediaUploading && mediaUploadTargetId === selectedMediaBatch.id
-                        ? 'Processando mídias'
-                        : 'Selecionar ZIPs da pasta Media'}
+                        ? 'Enviando ZIP de mídias'
+                        : selectedMediaProcessing
+                          ? 'Vinculando mídias em segundo plano'
+                          : 'Selecionar ZIP da pasta Media'}
                     </Button>
 
                     {mediaUploadTargetId === selectedMediaBatch.id && mediaUploadTotal > 0 ? (
                       <div aria-live="polite">
                         <div className="mb-2 flex justify-between text-xs text-muted-foreground">
-                          <span>ZIPs enviados nesta tentativa</span>
+                          <span>{mediaUploading ? 'Dados enviados' : 'Envio concluído'}</span>
                           <span>
-                            {mediaUploadCurrent} de {mediaUploadTotal}
+                            {mediaUploading && mediaUploadBytesTotal > 0
+                              ? `${formatBytes(mediaUploadBytes)} de ${formatBytes(mediaUploadBytesTotal)}`
+                              : `${mediaUploadCurrent} de ${mediaUploadTotal}`}
                           </span>
                         </div>
                         <Progress
                           value={
-                            mediaUploadTotal ? (mediaUploadCurrent / mediaUploadTotal) * 100 : 0
+                            mediaUploading && mediaUploadBytesTotal > 0
+                              ? (mediaUploadBytes / mediaUploadBytesTotal) * 100
+                              : mediaUploadTotal
+                                ? (mediaUploadCurrent / mediaUploadTotal) * 100
+                                : 0
                           }
                         />
                       </div>
+                    ) : null}
+
+                    {selectedMediaProcessing ? (
+                      <div className="rounded-lg border p-3" aria-live="polite">
+                        <div className="mb-2 flex justify-between text-xs text-muted-foreground">
+                          <span>
+                            {selectedMediaImport?.phase === 'storing'
+                              ? 'Vinculando arquivos encontrados'
+                              : 'Conferindo conteúdo do ZIP'}
+                          </span>
+                          <span>
+                            {selectedMediaImport?.processingFilesTotal
+                              ? `${selectedMediaImport.processingFilesProcessed ?? selectedMediaImport.processingFilesScanned ?? 0} de ${selectedMediaImport.processingFilesTotal}`
+                              : 'Preparando'}
+                          </span>
+                        </div>
+                        <Progress
+                          value={
+                            selectedMediaImport?.processingFilesTotal
+                              ? (100 *
+                                  (selectedMediaImport.phase === 'storing'
+                                    ? (selectedMediaImport.processingFilesProcessed ?? 0)
+                                    : (selectedMediaImport.processingFilesScanned ?? 0))) /
+                                selectedMediaImport.processingFilesTotal
+                              : 0
+                          }
+                        />
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Você pode sair desta página. O processamento continuará na API.
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {selectedMediaImport?.status === 'failed' &&
+                    selectedMediaImport.errorMessage ? (
+                      <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
+                        {selectedMediaImport.errorMessage} Selecione o mesmo arquivo para tentar
+                        novamente.
+                      </p>
                     ) : null}
 
                     {mediaUploadTargetId === selectedMediaBatch.id &&
@@ -1313,7 +1457,6 @@ export function WhatsAppHistoryImportPage() {
                   ref={mediaInputRef}
                   type="file"
                   accept=".zip,application/zip"
-                  multiple
                   className="sr-only"
                   onChange={(event) =>
                     void uploadAndroidMedia(batch, event.target.files, mediaInputRef)
@@ -1323,7 +1466,7 @@ export function WhatsAppHistoryImportPage() {
                   <Button
                     type="button"
                     size="lg"
-                    disabled={mediaUploading}
+                    disabled={mediaUploading || currentBatchMediaProcessing}
                     onClick={() => mediaInputRef.current?.click()}
                   >
                     {mediaUploading && mediaUploadTargetId === batch.id ? (
@@ -1332,23 +1475,72 @@ export function WhatsAppHistoryImportPage() {
                       <Paperclip />
                     )}
                     {mediaUploading && mediaUploadTargetId === batch.id
-                      ? 'Processando mídias'
-                      : 'Selecionar ZIPs da pasta Media'}
+                      ? 'Enviando ZIP de mídias'
+                      : currentBatchMediaProcessing
+                        ? 'Vinculando mídias em segundo plano'
+                        : 'Selecionar ZIP da pasta Media'}
                   </Button>
                 </div>
 
                 {mediaUploadTargetId === batch.id && mediaUploadTotal > 0 ? (
                   <div className="max-w-2xl" aria-live="polite">
                     <div className="mb-2 flex justify-between text-sm text-muted-foreground">
-                      <span>ZIPs enviados nesta tentativa</span>
+                      <span>{mediaUploading ? 'Dados enviados' : 'Envio concluído'}</span>
                       <span>
-                        {mediaUploadCurrent} de {mediaUploadTotal}
+                        {mediaUploading && mediaUploadBytesTotal > 0
+                          ? `${formatBytes(mediaUploadBytes)} de ${formatBytes(mediaUploadBytesTotal)}`
+                          : `${mediaUploadCurrent} de ${mediaUploadTotal}`}
                       </span>
                     </div>
                     <Progress
-                      value={mediaUploadTotal ? (mediaUploadCurrent / mediaUploadTotal) * 100 : 0}
+                      value={
+                        mediaUploading && mediaUploadBytesTotal > 0
+                          ? (mediaUploadBytes / mediaUploadBytesTotal) * 100
+                          : mediaUploadTotal
+                            ? (mediaUploadCurrent / mediaUploadTotal) * 100
+                            : 0
+                      }
                     />
                   </div>
+                ) : null}
+
+                {currentBatchMediaProcessing ? (
+                  <div className="max-w-2xl rounded-lg border p-3" aria-live="polite">
+                    <div className="mb-2 flex justify-between text-sm text-muted-foreground">
+                      <span>
+                        {currentBatchMediaImport?.phase === 'storing'
+                          ? 'Vinculando arquivos encontrados'
+                          : 'Conferindo conteúdo do ZIP'}
+                      </span>
+                      <span>
+                        {currentBatchMediaImport?.processingFilesTotal
+                          ? `${currentBatchMediaImport.processingFilesProcessed ?? currentBatchMediaImport.processingFilesScanned ?? 0} de ${currentBatchMediaImport.processingFilesTotal}`
+                          : 'Preparando'}
+                      </span>
+                    </div>
+                    <Progress
+                      value={
+                        currentBatchMediaImport?.processingFilesTotal
+                          ? (100 *
+                              (currentBatchMediaImport.phase === 'storing'
+                                ? (currentBatchMediaImport.processingFilesProcessed ?? 0)
+                                : (currentBatchMediaImport.processingFilesScanned ?? 0))) /
+                            currentBatchMediaImport.processingFilesTotal
+                          : 0
+                      }
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Você pode sair desta página. O processamento continuará na API.
+                    </p>
+                  </div>
+                ) : null}
+
+                {currentBatchMediaImport?.status === 'failed' &&
+                currentBatchMediaImport.errorMessage ? (
+                  <p className="max-w-2xl rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
+                    {currentBatchMediaImport.errorMessage} Selecione o mesmo arquivo para retomar ou
+                    tentar novamente.
+                  </p>
                 ) : null}
 
                 {mediaUploadTargetId === batch.id && mediaUploadErrors.length > 0 ? (

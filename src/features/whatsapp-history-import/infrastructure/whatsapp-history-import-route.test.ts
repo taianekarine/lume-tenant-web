@@ -2,6 +2,7 @@ import { sanitizeWhatsAppHistoryImportResponse } from './tenant-api-whatsapp-his
 import { resolveWhatsAppHistoryImportPath } from './whatsapp-history-import-route';
 
 const BATCH_ID = '11111111-1111-4111-8111-111111111111';
+const UPLOAD_ID = '22222222-2222-4222-8222-222222222222';
 
 describe('resolveWhatsAppHistoryImportPath', () => {
   it.each([
@@ -15,6 +16,17 @@ describe('resolveWhatsAppHistoryImportPath', () => {
       'POST',
       ['batches', BATCH_ID, 'android-media-archives'],
       `/${BATCH_ID}/android-media-archives`,
+    ],
+    ['POST', ['batches', BATCH_ID, 'android-media-uploads'], `/${BATCH_ID}/android-media-uploads`],
+    [
+      'POST',
+      ['batches', BATCH_ID, 'android-media-uploads', UPLOAD_ID, 'chunks'],
+      `/${BATCH_ID}/android-media-uploads/${UPLOAD_ID}/chunks`,
+    ],
+    [
+      'POST',
+      ['batches', BATCH_ID, 'android-media-uploads', UPLOAD_ID, 'complete'],
+      `/${BATCH_ID}/android-media-uploads/${UPLOAD_ID}/complete`,
     ],
     [
       'PATCH',

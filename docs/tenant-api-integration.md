@@ -66,6 +66,13 @@ confirmados. A resposta nunca devolve a chave. Depois da validação, a tela
 consulta o lote enquanto o status for `applying` e apresenta mensagens,
 conversas e blocos já processados.
 
+Depois da aplicação, o ZIP da pasta `Media` usa um protocolo retomável: a tela
+inicia o envio, transmite blocos de 16 MiB a partir do deslocamento confirmado
+pela API e solicita a conclusão. A vinculação ocorre em segundo plano; a tela
+consulta o manifesto periodicamente para mostrar arquivos conferidos e
+armazenados. Selecionar novamente o mesmo nome e tamanho retoma o envio parcial
+sem reiniciá-lo.
+
 Uma conversa já aplicada pode participar de um novo lote sem duplicar mensagens
 nem bloquear as demais. Arquivos realmente presentes em cada ZIP são retidos
 pela Tenant API e passam a usar a mesma rota autenticada das mídias correntes.

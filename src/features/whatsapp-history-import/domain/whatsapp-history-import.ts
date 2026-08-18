@@ -134,6 +134,16 @@ export const whatsAppHistoryImportBatchSchema = z.object({
           skippedOversize: z.number().int().nonnegative(),
           updatedAt: z.string().datetime(),
           lastArchiveName: z.string().min(1),
+          status: z.enum(['uploading', 'processing', 'completed', 'failed']).optional(),
+          phase: z.enum(['uploading', 'scanning', 'storing']).nullable().optional(),
+          uploadId: z.string().uuid().nullable().optional(),
+          uploadBytesReceived: z.number().int().nonnegative().optional(),
+          uploadBytesTotal: z.number().int().nonnegative().optional(),
+          processingFilesScanned: z.number().int().nonnegative().optional(),
+          processingFilesTotal: z.number().int().nonnegative().optional(),
+          processingFilesProcessed: z.number().int().nonnegative().optional(),
+          processingAttached: z.number().int().nonnegative().optional(),
+          errorMessage: z.string().nullable().optional(),
         })
         .nullable()
         .default(null),
