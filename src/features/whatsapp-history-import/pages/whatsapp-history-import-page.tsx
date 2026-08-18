@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -40,6 +40,7 @@ import {
 } from '../domain';
 
 const channelsSchema = z.array(whatsAppHistoryChannelSchema);
+const appliedAndroidBackupsSchema = z.array(whatsAppHistoryImportBatchSchema);
 const PAGE_SIZE = 20;
 
 function plural(value: number, singular: string, pluralForm: string): string {
@@ -250,6 +251,7 @@ function ArchiveReviewCard({ batchId, archive, onSaved }: ArchiveReviewCardProps
 export function WhatsAppHistoryImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  const historicalMediaInputRef = useRef<HTMLInputElement>(null);
   const [importMode, setImportMode] = useState<'zip-exports' | 'android-backup'>('android-backup');
   const [channels, setChannels] = useState<z.infer<typeof channelsSchema>>([]);
   const [channelId, setChannelId] = useState('');
@@ -278,6 +280,22 @@ export function WhatsAppHistoryImportPage() {
   const [mediaUploadErrors, setMediaUploadErrors] = useState<
     readonly { fileName: string; message: string }[]
   >([]);
+  const [mediaUploadTargetId, setMediaUploadTargetId] = useState('');
+  const [appliedAndroidBackups, setAppliedAndroidBackups] = useState<
+    readonly WhatsAppHistoryImportBatch[]
+  >([]);
+  const [selectedMediaBatchId, setSelectedMediaBatchId] = useState('');
+  const [loadingAppliedBackups, setLoadingAppliedBackups] = useState(true);
+  const [appliedBackupsError, setAppliedBackupsError] = useState('');
+
+  const rememberAppliedBackup = useCallback((updated: WhatsAppHistoryImportBatch) => {
+    if (updated.status !== 'applied' || !updated.androidBackup) return;
+    setAppliedAndroidBackups((current) => {
+      const withoutUpdated = current.filter((item) => item.id !== updated.id);
+      return [updated, ...withoutUpdated];
+    });
+    setSelectedMediaBatchId((current) => current || updated.id);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -309,17 +327,53 @@ export function WhatsAppHistoryImportPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    void fetch('/api/whatsapp-history-import/android-backups', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            await responseMessage(response, 'Não foi possível carregar os backups concluídos.'),
+          );
+        }
+        return appliedAndroidBackupsSchema.parse(await response.json());
+      })
+      .then((result) => {
+        if (!active) return;
+        setAppliedAndroidBackups(result);
+        setSelectedMediaBatchId((current) =>
+          result.some((item) => item.id === current) ? current : (result[0]?.id ?? ''),
+        );
+        setAppliedBackupsError('');
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setAppliedBackupsError(
+          error instanceof Error ? error.message : 'Não foi possível carregar os backups.',
+        );
+      })
+      .finally(() => {
+        if (active) setLoadingAppliedBackups(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!batch || batch.status !== 'applying') return;
     const interval = window.setInterval(() => {
       void fetch(`/api/whatsapp-history-import/batches/${batch.id}`, {
         cache: 'no-store',
       })
         .then(parseBatch)
-        .then(setBatch)
+        .then((updated) => {
+          setBatch(updated);
+          rememberAppliedBackup(updated);
+        })
         .catch(() => undefined);
     }, 3_000);
     return () => window.clearInterval(interval);
-  }, [batch]);
+  }, [batch, rememberAppliedBackup]);
 
   const filteredArchives = useMemo(() => {
     if (!batch) return [];
@@ -341,6 +395,7 @@ export function WhatsAppHistoryImportPage() {
     currentPage * PAGE_SIZE,
   );
   const selectedChannel = channels.find((channel) => channel.id === channelId);
+  const selectedMediaBatch = appliedAndroidBackups.find((item) => item.id === selectedMediaBatchId);
 
   async function ensureBatch(): Promise<WhatsAppHistoryImportBatch> {
     if (batch) return batch;
@@ -481,6 +536,7 @@ export function WhatsAppHistoryImportPage() {
       );
       const updated = await parseBatch(response);
       setBatch(updated);
+      rememberAppliedBackup(updated);
       setImportMode('android-backup');
       setRootKey('');
       setUploadSuccess(1);
@@ -500,8 +556,12 @@ export function WhatsAppHistoryImportPage() {
     }
   }
 
-  async function uploadAndroidMedia(files: FileList | null) {
-    if (!batch?.androidBackup || batch.status !== 'applied' || !files?.length) return;
+  async function uploadAndroidMedia(
+    targetBatch: WhatsAppHistoryImportBatch,
+    files: FileList | null,
+    inputRef: RefObject<HTMLInputElement | null>,
+  ) {
+    if (!targetBatch.androidBackup || targetBatch.status !== 'applied' || !files?.length) return;
     const selected = Array.from(files);
     const accepted = selected.filter((file) =>
       file.name.toLocaleLowerCase('pt-BR').endsWith('.zip'),
@@ -516,7 +576,8 @@ export function WhatsAppHistoryImportPage() {
     setMediaUploadCurrent(failures.length);
     setMediaUploadTotal(selected.length);
     setMediaUploadErrors(failures);
-    let currentBatch = batch;
+    setMediaUploadTargetId(targetBatch.id);
+    let currentBatch = targetBatch;
     let successes = 0;
     try {
       for (let index = 0; index < accepted.length; index += 1) {
@@ -525,11 +586,15 @@ export function WhatsAppHistoryImportPage() {
           const formData = new FormData();
           formData.set('archive', file);
           const response = await fetch(
-            `/api/whatsapp-history-import/batches/${batch.id}/android-media-archives`,
+            `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-archives`,
             { method: 'POST', body: formData },
           );
           currentBatch = await parseBatch(response);
-          setBatch(currentBatch);
+          setBatch((current) => (current?.id === currentBatch.id ? currentBatch : current));
+          setAppliedAndroidBackups((current) => {
+            const withoutUpdated = current.filter((item) => item.id !== currentBatch.id);
+            return [currentBatch, ...withoutUpdated];
+          });
           successes += 1;
         } catch (error) {
           failures.push({
@@ -552,7 +617,7 @@ export function WhatsAppHistoryImportPage() {
       });
     } finally {
       setMediaUploading(false);
-      if (mediaInputRef.current) mediaInputRef.current.value = '';
+      if (inputRef.current) inputRef.current.value = '';
     }
   }
 
@@ -568,6 +633,7 @@ export function WhatsAppHistoryImportPage() {
       });
       const updated = await parseBatch(response);
       setBatch(updated);
+      rememberAppliedBackup(updated);
       toast.add({
         title: updated.status === 'applying' ? 'Importação iniciada' : 'Históricos importados',
         description:
@@ -620,179 +686,345 @@ export function WhatsAppHistoryImportPage() {
             ignorados com segurança.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="flex flex-wrap gap-2" aria-label="Tipo de importação">
-            <Button
-              type="button"
-              variant={importMode === 'android-backup' ? 'default' : 'outline'}
-              disabled={Boolean(batch)}
-              onClick={() => setImportMode('android-backup')}
-            >
-              <Database /> Backup Android completo
-            </Button>
-            <Button
-              type="button"
-              variant={importMode === 'zip-exports' ? 'default' : 'outline'}
-              disabled={Boolean(batch)}
-              onClick={() => setImportMode('zip-exports')}
-            >
-              <FileArchive /> ZIPs individuais
-            </Button>
-          </div>
-          <label className="grid max-w-xl gap-1.5 text-sm font-medium">
-            Canal de destino
-            <Select
-              value={channelId}
-              onValueChange={(value) => setChannelId(value ?? '')}
-              disabled={Boolean(batch)}
-            >
-              <SelectTrigger className="h-9 w-full">
-                <SelectValue placeholder={loadingChannels ? 'Carregando' : 'Selecione o canal'}>
-                  {selectedChannel
-                    ? `${selectedChannel.name} · ${selectedChannel.phoneNumber}`
-                    : undefined}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                {channels.map((channel) => (
-                  <SelectItem key={channel.id} value={channel.id}>
-                    {channel.name} · {channel.phoneNumber}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-          {importMode === 'android-backup' && !batch?.androidBackup ? (
-            <div className="grid max-w-3xl gap-4 rounded-lg border p-4 md:grid-cols-2">
-              <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
-                Chave crypt15 de 64 caracteres
-                <Input
-                  type="password"
-                  autoComplete="off"
-                  value={rootKey}
-                  onChange={(event) => setRootKey(event.target.value.replace(/\s/g, ''))}
-                  placeholder="A chave não será armazenada"
-                />
-              </label>
-              <label className="grid gap-1.5 text-sm font-medium">
-                Situação das conversas importadas
-                <Select
-                  value={androidState}
-                  onValueChange={(value) => setAndroidState(value as WhatsAppHistoryState)}
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue>{WHATSAPP_HISTORY_STATE_LABELS[androidState]}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    {WHATSAPP_HISTORY_STATES.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {WHATSAPP_HISTORY_STATE_LABELS[value]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              <label className="grid gap-1.5 text-sm font-medium">
-                Departamento responsável
-                <Select
-                  value={androidDepartment}
-                  onValueChange={(value) =>
-                    setAndroidDepartment(value as WhatsAppHistoryDepartment)
-                  }
-                >
-                  <SelectTrigger className="h-9 w-full">
-                    <SelectValue>
-                      {WHATSAPP_HISTORY_DEPARTMENT_LABELS[androidDepartment]}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    {WHATSAPP_HISTORY_DEPARTMENTS.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {WHATSAPP_HISTORY_DEPARTMENT_LABELS[value]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-              {androidState === 'human-active' ? (
+        <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
+          <div className="grid content-start gap-4">
+            <div className="flex flex-wrap gap-2" aria-label="Tipo de importação">
+              <Button
+                type="button"
+                variant={importMode === 'android-backup' ? 'default' : 'outline'}
+                disabled={Boolean(batch)}
+                onClick={() => setImportMode('android-backup')}
+              >
+                <Database /> Backup Android completo
+              </Button>
+              <Button
+                type="button"
+                variant={importMode === 'zip-exports' ? 'default' : 'outline'}
+                disabled={Boolean(batch)}
+                onClick={() => setImportMode('zip-exports')}
+              >
+                <FileArchive /> ZIPs individuais
+              </Button>
+            </div>
+            <label className="grid max-w-xl gap-1.5 text-sm font-medium">
+              Canal de destino
+              <Select
+                value={channelId}
+                onValueChange={(value) => setChannelId(value ?? '')}
+                disabled={Boolean(batch)}
+              >
+                <SelectTrigger className="h-9 w-full">
+                  <SelectValue placeholder={loadingChannels ? 'Carregando' : 'Selecione o canal'}>
+                    {selectedChannel
+                      ? `${selectedChannel.name} · ${selectedChannel.phoneNumber}`
+                      : undefined}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  {channels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      {channel.name} · {channel.phoneNumber}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            {importMode === 'android-backup' && !batch?.androidBackup ? (
+              <div className="grid max-w-3xl gap-4 rounded-lg border p-4 md:grid-cols-2">
                 <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
-                  Usuário do atendente responsável
+                  Chave crypt15 de 64 caracteres
                   <Input
-                    value={androidOwnerUsername}
-                    onChange={(event) => setAndroidOwnerUsername(event.target.value)}
+                    type="password"
+                    autoComplete="off"
+                    value={rootKey}
+                    onChange={(event) => setRootKey(event.target.value.replace(/\s/g, ''))}
+                    placeholder="A chave não será armazenada"
                   />
                 </label>
-              ) : null}
-              <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
-                As mídias ausentes serão marcadas como pendentes. Depois que as mensagens forem
-                aplicadas, a etapa 4 desta tela permitirá selecionar os ZIPs da pasta Media sem
-                duplicar o histórico.
-              </p>
-            </div>
-          ) : null}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={
-              importMode === 'android-backup'
-                ? '.crypt15,application/octet-stream'
-                : '.zip,application/zip'
-            }
-            multiple={importMode === 'zip-exports'}
-            className="sr-only"
-            onChange={(event) =>
-              void (importMode === 'android-backup'
-                ? uploadAndroid(event.target.files)
-                : upload(event.target.files))
-            }
-          />
-          <div>
-            <Button
-              type="button"
-              size="lg"
-              disabled={
-                uploading ||
-                !channelId ||
-                batch?.status === 'applied' ||
-                Boolean(batch?.androidBackup)
-              }
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}
-              {uploading
-                ? 'Processando backup'
-                : importMode === 'android-backup'
-                  ? 'Selecionar msgstore.db.crypt15'
-                  : 'Selecionar arquivos ZIP'}
-            </Button>
-          </div>
-          {uploadTotal > 0 ? (
-            <div className="max-w-xl" aria-live="polite">
-              <div className="mb-2 flex justify-between text-sm text-muted-foreground">
-                <span>Arquivos processados</span>
-                <span>
-                  {uploadCurrent} de {uploadTotal}
-                </span>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Situação das conversas importadas
+                  <Select
+                    value={androidState}
+                    onValueChange={(value) => setAndroidState(value as WhatsAppHistoryState)}
+                  >
+                    <SelectTrigger className="h-9 w-full">
+                      <SelectValue>{WHATSAPP_HISTORY_STATE_LABELS[androidState]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {WHATSAPP_HISTORY_STATES.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {WHATSAPP_HISTORY_STATE_LABELS[value]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Departamento responsável
+                  <Select
+                    value={androidDepartment}
+                    onValueChange={(value) =>
+                      setAndroidDepartment(value as WhatsAppHistoryDepartment)
+                    }
+                  >
+                    <SelectTrigger className="h-9 w-full">
+                      <SelectValue>
+                        {WHATSAPP_HISTORY_DEPARTMENT_LABELS[androidDepartment]}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {WHATSAPP_HISTORY_DEPARTMENTS.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {WHATSAPP_HISTORY_DEPARTMENT_LABELS[value]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                {androidState === 'human-active' ? (
+                  <label className="grid gap-1.5 text-sm font-medium md:col-span-2">
+                    Usuário do atendente responsável
+                    <Input
+                      value={androidOwnerUsername}
+                      onChange={(event) => setAndroidOwnerUsername(event.target.value)}
+                    />
+                  </label>
+                ) : null}
+                <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
+                  As mídias ausentes serão marcadas como pendentes. Depois que as mensagens forem
+                  aplicadas, a etapa 4 desta tela permitirá selecionar os ZIPs da pasta Media sem
+                  duplicar o histórico.
+                </p>
               </div>
-              <Progress value={uploadTotal ? (uploadCurrent / uploadTotal) * 100 : 0} />
-              <p className="mt-2 text-xs text-muted-foreground">
-                {plural(uploadSuccess, 'arquivo válido', 'arquivos válidos')} ·{' '}
-                {plural(uploadErrors.length, 'arquivo com erro', 'arquivos com erro')}
+            ) : null}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={
+                importMode === 'android-backup'
+                  ? '.crypt15,application/octet-stream'
+                  : '.zip,application/zip'
+              }
+              multiple={importMode === 'zip-exports'}
+              className="sr-only"
+              onChange={(event) =>
+                void (importMode === 'android-backup'
+                  ? uploadAndroid(event.target.files)
+                  : upload(event.target.files))
+              }
+            />
+            <div>
+              <Button
+                type="button"
+                size="lg"
+                disabled={
+                  uploading ||
+                  !channelId ||
+                  batch?.status === 'applied' ||
+                  Boolean(batch?.androidBackup)
+                }
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}
+                {uploading
+                  ? 'Processando backup'
+                  : importMode === 'android-backup'
+                    ? 'Selecionar msgstore.db.crypt15'
+                    : 'Selecionar arquivos ZIP'}
+              </Button>
+            </div>
+            {uploadTotal > 0 ? (
+              <div className="max-w-xl" aria-live="polite">
+                <div className="mb-2 flex justify-between text-sm text-muted-foreground">
+                  <span>Arquivos processados</span>
+                  <span>
+                    {uploadCurrent} de {uploadTotal}
+                  </span>
+                </div>
+                <Progress value={uploadTotal ? (uploadCurrent / uploadTotal) * 100 : 0} />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {plural(uploadSuccess, 'arquivo válido', 'arquivos válidos')} ·{' '}
+                  {plural(uploadErrors.length, 'arquivo com erro', 'arquivos com erro')}
+                </p>
+              </div>
+            ) : null}
+            {uploadErrors.length > 0 ? (
+              <div className="max-w-3xl rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
+                <p className="font-semibold">Arquivos que precisam de correção</p>
+                <ul className="mt-2 grid gap-1">
+                  {uploadErrors.map((failure) => (
+                    <li key={`${failure.fileName}:${failure.message}`}>
+                      <strong>{failure.fileName}:</strong> {failure.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+
+          <aside className="grid content-start gap-4 border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+            <div>
+              <h2 className="text-lg font-semibold">Importar mídias</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Selecione um backup Android já concluído e vincule os ZIPs da pasta Media sem
+                importar novamente as mensagens.
               </p>
             </div>
-          ) : null}
-          {uploadErrors.length > 0 ? (
-            <div className="max-w-3xl rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
-              <p className="font-semibold">Arquivos que precisam de correção</p>
-              <ul className="mt-2 grid gap-1">
-                {uploadErrors.map((failure) => (
-                  <li key={`${failure.fileName}:${failure.message}`}>
-                    <strong>{failure.fileName}:</strong> {failure.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+
+            {loadingAppliedBackups ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <LoaderCircle className="size-4 animate-spin" /> Carregando backups concluídos
+              </div>
+            ) : appliedBackupsError ? (
+              <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
+                {appliedBackupsError}
+              </p>
+            ) : appliedAndroidBackups.length === 0 ? (
+              <p className="rounded-lg border border-dashed p-4 text-sm leading-6 text-muted-foreground">
+                Nenhum backup Android concluído está disponível. Depois de aplicar um backup, ele
+                aparecerá aqui e continuará disponível também na etapa 4.
+              </p>
+            ) : (
+              <>
+                <label className="grid gap-1.5 text-sm font-medium">
+                  Backup já importado
+                  <Select
+                    value={selectedMediaBatchId}
+                    onValueChange={(value) => setSelectedMediaBatchId(value ?? '')}
+                  >
+                    <SelectTrigger className="h-auto min-h-9 w-full text-left">
+                      <SelectValue placeholder="Selecione o backup">
+                        {selectedMediaBatch?.androidBackup
+                          ? `${selectedMediaBatch.androidBackup.databaseFileName} · ${new Date(
+                              selectedMediaBatch.appliedAt ?? selectedMediaBatch.updatedAt,
+                            ).toLocaleString('pt-BR', {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            })}`
+                          : undefined}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      {appliedAndroidBackups.map((item) => {
+                        const android = item.androidBackup;
+                        if (!android) return null;
+                        const pending =
+                          android.mediaImport?.pending ?? android.summary.mediaReferences;
+                        return (
+                          <SelectItem key={item.id} value={item.id}>
+                            {android.databaseFileName} ·{' '}
+                            {new Date(item.appliedAt ?? item.updatedAt).toLocaleDateString('pt-BR')}{' '}
+                            · {plural(pending, 'mídia pendente', 'mídias pendentes')}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </label>
+
+                {selectedMediaBatch?.androidBackup ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Mídias armazenadas</p>
+                        <p className="mt-1 text-xl font-bold">
+                          {selectedMediaBatch.androidBackup.mediaImport?.stored ?? 0}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border p-3">
+                        <p className="text-xs text-muted-foreground">Mídias pendentes</p>
+                        <p className="mt-1 text-xl font-bold">
+                          {selectedMediaBatch.androidBackup.mediaImport?.pending ??
+                            selectedMediaBatch.androidBackup.summary.mediaReferences}
+                        </p>
+                      </div>
+                    </div>
+
+                    {selectedMediaBatch.androidBackup.summary.mediaReferences > 0 ? (
+                      <div>
+                        <div className="mb-2 flex justify-between text-xs text-muted-foreground">
+                          <span>Arquivos disponíveis</span>
+                          <span>
+                            {selectedMediaBatch.androidBackup.mediaImport?.stored ?? 0} de{' '}
+                            {selectedMediaBatch.androidBackup.summary.mediaReferences}
+                          </span>
+                        </div>
+                        <Progress
+                          value={
+                            (100 * (selectedMediaBatch.androidBackup.mediaImport?.stored ?? 0)) /
+                            selectedMediaBatch.androidBackup.summary.mediaReferences
+                          }
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Este backup não contém mídias citadas nas mensagens.
+                      </p>
+                    )}
+
+                    <input
+                      ref={historicalMediaInputRef}
+                      type="file"
+                      accept=".zip,application/zip"
+                      multiple
+                      className="sr-only"
+                      onChange={(event) =>
+                        void uploadAndroidMedia(
+                          selectedMediaBatch,
+                          event.target.files,
+                          historicalMediaInputRef,
+                        )
+                      }
+                    />
+                    <Button
+                      type="button"
+                      disabled={mediaUploading}
+                      onClick={() => historicalMediaInputRef.current?.click()}
+                    >
+                      {mediaUploading && mediaUploadTargetId === selectedMediaBatch.id ? (
+                        <LoaderCircle className="animate-spin" />
+                      ) : (
+                        <Paperclip />
+                      )}
+                      {mediaUploading && mediaUploadTargetId === selectedMediaBatch.id
+                        ? 'Processando mídias'
+                        : 'Selecionar ZIPs da pasta Media'}
+                    </Button>
+
+                    {mediaUploadTargetId === selectedMediaBatch.id && mediaUploadTotal > 0 ? (
+                      <div aria-live="polite">
+                        <div className="mb-2 flex justify-between text-xs text-muted-foreground">
+                          <span>ZIPs enviados nesta tentativa</span>
+                          <span>
+                            {mediaUploadCurrent} de {mediaUploadTotal}
+                          </span>
+                        </div>
+                        <Progress
+                          value={
+                            mediaUploadTotal ? (mediaUploadCurrent / mediaUploadTotal) * 100 : 0
+                          }
+                        />
+                      </div>
+                    ) : null}
+
+                    {mediaUploadTargetId === selectedMediaBatch.id &&
+                    mediaUploadErrors.length > 0 ? (
+                      <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
+                        <p className="font-semibold">Arquivos que não foram processados</p>
+                        <ul className="mt-2 grid gap-1">
+                          {mediaUploadErrors.map((failure) => (
+                            <li key={`${failure.fileName}:${failure.message}`}>
+                              <strong>{failure.fileName}:</strong> {failure.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+              </>
+            )}
+          </aside>
         </CardContent>
       </Card>
 
@@ -1083,7 +1315,9 @@ export function WhatsAppHistoryImportPage() {
                   accept=".zip,application/zip"
                   multiple
                   className="sr-only"
-                  onChange={(event) => void uploadAndroidMedia(event.target.files)}
+                  onChange={(event) =>
+                    void uploadAndroidMedia(batch, event.target.files, mediaInputRef)
+                  }
                 />
                 <div>
                   <Button
@@ -1092,12 +1326,18 @@ export function WhatsAppHistoryImportPage() {
                     disabled={mediaUploading}
                     onClick={() => mediaInputRef.current?.click()}
                   >
-                    {mediaUploading ? <LoaderCircle className="animate-spin" /> : <Paperclip />}
-                    {mediaUploading ? 'Processando mídias' : 'Selecionar ZIPs da pasta Media'}
+                    {mediaUploading && mediaUploadTargetId === batch.id ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Paperclip />
+                    )}
+                    {mediaUploading && mediaUploadTargetId === batch.id
+                      ? 'Processando mídias'
+                      : 'Selecionar ZIPs da pasta Media'}
                   </Button>
                 </div>
 
-                {mediaUploadTotal > 0 ? (
+                {mediaUploadTargetId === batch.id && mediaUploadTotal > 0 ? (
                   <div className="max-w-2xl" aria-live="polite">
                     <div className="mb-2 flex justify-between text-sm text-muted-foreground">
                       <span>ZIPs enviados nesta tentativa</span>
@@ -1111,7 +1351,7 @@ export function WhatsAppHistoryImportPage() {
                   </div>
                 ) : null}
 
-                {mediaUploadErrors.length > 0 ? (
+                {mediaUploadTargetId === batch.id && mediaUploadErrors.length > 0 ? (
                   <div className="max-w-3xl rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
                     <p className="font-semibold">Arquivos que não foram processados</p>
                     <ul className="mt-2 grid gap-1">
