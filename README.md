@@ -121,8 +121,11 @@ da Tenant API.
 A mesma tela aceita `msgstore.db.crypt15` para importar em lote o backup
 Android completo. A chave de 64 caracteres é encaminhada apenas à Tenant API e
 apagada do formulário assim que o arquivo é validado. A aplicação acompanha o
-processamento assíncrono por blocos; referências de mídia permanecem pendentes
-até a carga posterior da pasta `Media`. O ZIP de mídias é enviado em blocos
+processamento assíncrono por blocos. Antes da confirmação, a tela separa
+mensagens já existentes, novas e divergentes e também mídias já armazenadas,
+novas e ainda ausentes. Repetir o mesmo backup não duplica o histórico; um
+backup posterior acrescenta somente mensagens novas e pode completar mídias
+pendentes de importações anteriores. O ZIP de mídias é enviado em blocos
 retomáveis e vinculado em segundo plano, com progresso persistente na tela; o
 navegador não precisa manter o arquivo inteiro em memória.
 

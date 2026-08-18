@@ -124,6 +124,20 @@ export const whatsAppHistoryImportBatchSchema = z.object({
       conversationsProcessed: z.number().int().nonnegative(),
       messagesProcessed: z.number().int().nonnegative(),
       errorMessage: z.string().nullable(),
+      comparison: z
+        .object({
+          status: z.enum(['processing', 'ready', 'failed']),
+          messagesExisting: z.number().int().nonnegative(),
+          messagesNew: z.number().int().nonnegative(),
+          messagesDivergent: z.number().int().nonnegative(),
+          mediaStored: z.number().int().nonnegative(),
+          mediaNew: z.number().int().nonnegative(),
+          mediaMissing: z.number().int().nonnegative(),
+          updatedAt: z.string().datetime(),
+          errorMessage: z.string().nullable(),
+        })
+        .nullable()
+        .default(null),
       mediaImport: z
         .object({
           archivesProcessed: z.number().int().nonnegative(),
