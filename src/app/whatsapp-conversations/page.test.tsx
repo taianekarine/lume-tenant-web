@@ -10,7 +10,7 @@ import {
 import { getCurrentAuthenticatedSession } from '@/features/auth/server';
 import { WhatsAppConversationRepositoryError } from '@/features/whatsapp-conversations/application';
 import { WhatsAppConversationsPage } from '@/features/whatsapp-conversations/pages';
-import { getWhatsAppConversationsForDashboard } from '@/features/whatsapp-conversations/server';
+import { getWhatsAppConversationPageForDashboard } from '@/features/whatsapp-conversations/server';
 
 import Page from './page';
 
@@ -23,11 +23,11 @@ jest.mock('@/features/auth/server', () => ({
 }));
 
 jest.mock('@/features/whatsapp-conversations/server', () => ({
-  getWhatsAppConversationsForDashboard: jest.fn(),
+  getWhatsAppConversationPageForDashboard: jest.fn(),
 }));
 
 const mockedGetCurrentAuthenticatedSession = jest.mocked(getCurrentAuthenticatedSession);
-const mockedGetConversations = jest.mocked(getWhatsAppConversationsForDashboard);
+const mockedGetConversations = jest.mocked(getWhatsAppConversationPageForDashboard);
 const mockedRedirect = jest.mocked(redirect);
 
 function createSession(
@@ -95,13 +95,42 @@ describe('WhatsApp conversations page route', () => {
   it('loads data through the server layer for an authorized user', async () => {
     const session = createSession(['dashboard:view', 'whatsapp-conversations:manage']);
     mockedGetCurrentAuthenticatedSession.mockResolvedValue(session);
-    mockedGetConversations.mockResolvedValue([]);
+    mockedGetConversations.mockResolvedValue({
+      conversations: [],
+      page: 1,
+      pageSize: 25,
+      total: 0,
+      totalPages: 0,
+      metrics: {
+        total: 0,
+        botActive: 0,
+        attendantActive: 0,
+        automationPaused: 0,
+        unreadMessages: 0,
+        unreadConversations: 0,
+        awaitingProposal: 0,
+      },
+    });
 
     const page = await Page();
 
     expect(mockedGetConversations).toHaveBeenCalledTimes(1);
     expect(page.type).toBe(WhatsAppConversationsPage);
-    expect(page.props).toEqual({ session, conversations: [], initialError: null });
+    expect(page.props).toEqual({
+      session,
+      conversations: [],
+      pagination: { page: 1, pageSize: 25, total: 0, totalPages: 0 },
+      metrics: {
+        total: 0,
+        botActive: 0,
+        attendantActive: 0,
+        automationPaused: 0,
+        unreadMessages: 0,
+        unreadConversations: 0,
+        awaitingProposal: 0,
+      },
+      initialError: null,
+    });
     expect(mockedRedirect).not.toHaveBeenCalled();
   });
 
@@ -117,6 +146,16 @@ describe('WhatsApp conversations page route', () => {
     expect(page.props).toEqual({
       session,
       conversations: [],
+      pagination: { page: 1, pageSize: 25, total: 0, totalPages: 0 },
+      metrics: {
+        total: 0,
+        botActive: 0,
+        attendantActive: 0,
+        automationPaused: 0,
+        unreadMessages: 0,
+        unreadConversations: 0,
+        awaitingProposal: 0,
+      },
       initialError: 'Tenant API indisponível.',
     });
   });

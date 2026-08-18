@@ -4,9 +4,13 @@ import { redirect } from 'next/navigation';
 import { hasCommercialScope, hasPermission } from '@/features/auth/domain';
 import { getCurrentAuthenticatedSession } from '@/features/auth/server';
 import { WhatsAppConversationRepositoryError } from '@/features/whatsapp-conversations/application';
-import type { WhatsAppConversation } from '@/features/whatsapp-conversations/domain';
+import {
+  getWhatsAppConversationMetrics,
+  type WhatsAppConversation,
+  type WhatsAppConversationMetrics,
+} from '@/features/whatsapp-conversations/domain';
 import { WhatsAppConversationsPage } from '@/features/whatsapp-conversations/pages';
-import { getWhatsAppConversationsForDashboard } from '@/features/whatsapp-conversations/server';
+import { getWhatsAppConversationPageForDashboard } from '@/features/whatsapp-conversations/server';
 
 export const metadata: Metadata = {
   title: 'Painel WhatsApp | Lume',
@@ -28,10 +32,20 @@ export default async function Page() {
   }
 
   let conversations: readonly WhatsAppConversation[] = [];
+  let pagination = { page: 1, pageSize: 25, total: 0, totalPages: 0 };
+  let metrics: WhatsAppConversationMetrics = getWhatsAppConversationMetrics([]);
   let initialError: string | null = null;
 
   try {
-    conversations = await getWhatsAppConversationsForDashboard();
+    const result = await getWhatsAppConversationPageForDashboard({ page: 1, pageSize: 25 });
+    conversations = result.conversations;
+    pagination = {
+      page: result.page,
+      pageSize: result.pageSize,
+      total: result.total,
+      totalPages: result.totalPages,
+    };
+    metrics = result.metrics;
   } catch (error) {
     if (error instanceof WhatsAppConversationRepositoryError && error.code === 'unauthorized') {
       redirect('/auth/session-expired');
@@ -47,6 +61,8 @@ export default async function Page() {
     <WhatsAppConversationsPage
       session={session}
       conversations={conversations}
+      pagination={pagination}
+      metrics={metrics}
       initialError={initialError}
     />
   );

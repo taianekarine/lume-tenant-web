@@ -1,5 +1,6 @@
 import type {
   WhatsAppConversation,
+  WhatsAppConversationMetrics,
   WhatsAppConversationDepartment,
   WhatsAppMessage,
   WhatsAppConversationState,
@@ -20,7 +21,17 @@ export interface GetWhatsAppConversationsFilters {
   readonly search?: string;
   readonly department?: WhatsAppConversationDepartment;
   readonly state?: WhatsAppConversationState;
+  readonly control?: 'bot' | 'human' | 'paused' | 'closed';
   readonly requestStatus?: WhatsAppRequestStatus;
+}
+
+export interface WhatsAppConversationPage {
+  readonly conversations: readonly WhatsAppConversation[];
+  readonly page: number;
+  readonly pageSize: number;
+  readonly total: number;
+  readonly totalPages: number;
+  readonly metrics: WhatsAppConversationMetrics;
 }
 
 export type WhatsAppConversationRepositoryErrorCode =
@@ -30,6 +41,7 @@ export type WhatsAppConversationRepositoryErrorCode =
   | 'conflict'
   | 'not-found'
   | 'invalid-response'
+  | 'too-many-requests'
   | 'service-unavailable';
 
 export class WhatsAppConversationRepositoryError extends Error {
@@ -69,6 +81,10 @@ export interface WhatsAppConversationRepository {
   getDashboardConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]>;
+  getConversationPage(filters?: GetWhatsAppConversationsFilters): Promise<WhatsAppConversationPage>;
+  getDashboardConversationPage(
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<WhatsAppConversationPage>;
   getConversationById(
     conversationId: string,
     messagePage?: number,

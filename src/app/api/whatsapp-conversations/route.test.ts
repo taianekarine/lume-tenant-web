@@ -5,10 +5,11 @@ import {
   type AuthenticatedSession,
   type Permission,
 } from '@/features/auth/domain';
+import { WhatsAppConversationRepositoryError } from '@/features/whatsapp-conversations/application';
 import { getCurrentAuthenticatedSession } from '@/features/auth/server';
 import {
   pollWhatsAppConversationForDashboard,
-  pollWhatsAppConversationsForDashboard,
+  pollWhatsAppConversationPageForDashboard,
   searchWhatsAppMessagesForDashboard,
 } from '@/features/whatsapp-conversations/server';
 import { createWhatsAppConversationFixture } from '@/features/whatsapp-conversations/testing/whatsapp-conversation-fixture';
@@ -20,13 +21,13 @@ jest.mock('@/features/auth/server', () => ({
 }));
 jest.mock('@/features/whatsapp-conversations/server', () => ({
   pollWhatsAppConversationForDashboard: jest.fn(),
-  pollWhatsAppConversationsForDashboard: jest.fn(),
+  pollWhatsAppConversationPageForDashboard: jest.fn(),
   searchWhatsAppMessagesForDashboard: jest.fn(),
 }));
 
 const mockedSession = jest.mocked(getCurrentAuthenticatedSession);
 const mockedPollDetail = jest.mocked(pollWhatsAppConversationForDashboard);
-const mockedPollList = jest.mocked(pollWhatsAppConversationsForDashboard);
+const mockedPollList = jest.mocked(pollWhatsAppConversationPageForDashboard);
 const mockedSearch = jest.mocked(searchWhatsAppMessagesForDashboard);
 
 function session(permissions: readonly Permission[]): AuthenticatedSession {
@@ -65,13 +66,99 @@ describe('WhatsApp polling route', () => {
   it('returns the tenant-scoped list through the authenticated server layer', async () => {
     const conversation = createWhatsAppConversationFixture();
     mockedSession.mockResolvedValue(session(['whatsapp-conversations:manage']));
-    mockedPollList.mockResolvedValue([conversation]);
+    mockedPollList.mockResolvedValue({
+      conversations: [conversation],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+      totalPages: 1,
+      metrics: {
+        total: 1,
+        botActive: 1,
+        attendantActive: 0,
+        automationPaused: 0,
+        unreadMessages: 0,
+        unreadConversations: 0,
+        awaitingProposal: 0,
+      },
+    });
 
     const response = await GET(new Request('http://localhost/api/whatsapp-conversations'));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       conversations: [conversation],
+      pagination: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+      metrics: {
+        total: 1,
+        botActive: 1,
+        attendantActive: 0,
+        automationPaused: 0,
+        unreadMessages: 0,
+        unreadConversations: 0,
+        awaitingProposal: 0,
+      },
+    });
+    expect(mockedPollList).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 25,
+      search: undefined,
+      department: undefined,
+      control: undefined,
+      requestStatus: undefined,
+    });
+  });
+
+  it('forwards pagination and humanized filters without loading every page', async () => {
+    mockedSession.mockResolvedValue(session(['whatsapp-conversations:manage']));
+    mockedPollList.mockResolvedValue({
+      conversations: [],
+      page: 4,
+      pageSize: 25,
+      total: 126,
+      totalPages: 6,
+      metrics: {
+        total: 0,
+        botActive: 0,
+        attendantActive: 0,
+        automationPaused: 0,
+        unreadMessages: 0,
+        unreadConversations: 0,
+        awaitingProposal: 0,
+      },
+    });
+
+    const response = await GET(
+      new Request(
+        'http://localhost/api/whatsapp-conversations?page=4&pageSize=25&search=Ana&department=commercial&control=paused&requestStatus=under-review',
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockedPollList).toHaveBeenCalledWith({
+      page: 4,
+      pageSize: 25,
+      search: 'Ana',
+      department: 'commercial',
+      control: 'paused',
+      requestStatus: 'under-review',
+    });
+  });
+
+  it('preserves the rate-limit response so polling can apply backoff', async () => {
+    mockedSession.mockResolvedValue(session(['whatsapp-conversations:manage']));
+    mockedPollList.mockRejectedValue(
+      new WhatsAppConversationRepositoryError(
+        'too-many-requests',
+        'Aguarde alguns instantes antes de atualizar novamente.',
+      ),
+    );
+
+    const response = await GET(new Request('http://localhost/api/whatsapp-conversations'));
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({
+      message: 'Aguarde alguns instantes antes de atualizar novamente.',
     });
   });
 

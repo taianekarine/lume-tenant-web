@@ -89,7 +89,11 @@ O empacotamento, as sondas e o procedimento de publicação/rollback estão em
 
 O Painel WhatsApp usa somente a Lume Tenant API, com histórico real, comandos
 versionados, resposta do atendente idempotente e polling server-side com
-backoff. O detalhe compacto exibe canal e responsável no cabeçalho; quando a
+backoff. A caixa de entrada consulta uma página por vez e envia pesquisa e
+filtros ao servidor; os indicadores agregados chegam no mesmo contrato. Assim,
+uma importação com milhares de conversas não dispara uma requisição por página
+nem excede o limite de chamadas da API. O detalhe compacto exibe canal e
+responsável no cabeçalho; quando a
 conversa está encerrada, projeta ali o atendente que executou o encerramento. Separa as
 ações operacionais em duas colunas e abre encaminhamento, status comercial,
 histórico de ações e orçamentos em modais. O botão **Abrir chat** abre o painel

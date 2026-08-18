@@ -18,10 +18,14 @@ import {
 import { canReadQuoteProposals } from '@/features/quote-proposals/server/quote-proposal-access';
 import { WhatsAppConversationRepositoryError } from '@/features/whatsapp-conversations/application';
 import {
+  getWhatsAppConversationMetrics,
   isWhatsAppConversationDepartment,
   type WhatsAppConversation,
+  type WhatsAppConversationDepartment,
+  type WhatsAppConversationMetrics,
+  WHATSAPP_ROUTABLE_DEPARTMENTS,
 } from '@/features/whatsapp-conversations/domain';
-import { getWhatsAppConversationsForOperationalDashboard } from '@/features/whatsapp-conversations/server';
+import { getWhatsAppConversationPageForOperationalDashboard } from '@/features/whatsapp-conversations/server';
 
 export const metadata: Metadata = {
   title: 'Dashboard | Lume',
@@ -39,7 +43,12 @@ export default async function Page() {
     redirect(session.user.documentAccessMode === 'document-portal' ? '/documents' : '/');
   }
 
-  let conversations: readonly WhatsAppConversation[] = [];
+  const conversations: readonly WhatsAppConversation[] = [];
+  let operationalMetrics: WhatsAppConversationMetrics = getWhatsAppConversationMetrics([]);
+  let departmentVolumes: readonly {
+    readonly department: WhatsAppConversationDepartment;
+    readonly value: number;
+  }[] = [];
   let initialError: string | null = null;
   let quoteMetrics: QuoteProposalDashboardMetrics | null = null;
   let quoteInitialError: string | null = null;
@@ -52,16 +61,35 @@ export default async function Page() {
     hasPermission(session.user, 'whatsapp-conversations:manage')
   ) {
     try {
-      const departmentQueues =
-        assignedDepartments.length > 0
-          ? await Promise.all(
-              assignedDepartments.map((department) =>
-                getWhatsAppConversationsForOperationalDashboard({ department }),
-              ),
-            )
-          : [await getWhatsAppConversationsForOperationalDashboard()];
+      const visibleDepartments =
+        assignedDepartments.length > 0 ? assignedDepartments : WHATSAPP_ROUTABLE_DEPARTMENTS;
+      const departmentPages = await Promise.all(
+        visibleDepartments.map(async (department) => ({
+          department,
+          page: await getWhatsAppConversationPageForOperationalDashboard({
+            department,
+            page: 1,
+            pageSize: 1,
+          }),
+        })),
+      );
 
-      conversations = departmentQueues.flat();
+      operationalMetrics = departmentPages.reduce<WhatsAppConversationMetrics>(
+        (total, current) => ({
+          total: total.total + current.page.metrics.total,
+          botActive: total.botActive + current.page.metrics.botActive,
+          attendantActive: total.attendantActive + current.page.metrics.attendantActive,
+          automationPaused: total.automationPaused + current.page.metrics.automationPaused,
+          unreadMessages: total.unreadMessages + current.page.metrics.unreadMessages,
+          unreadConversations: total.unreadConversations + current.page.metrics.unreadConversations,
+          awaitingProposal: total.awaitingProposal + current.page.metrics.awaitingProposal,
+        }),
+        getWhatsAppConversationMetrics([]),
+      );
+      departmentVolumes = departmentPages.map(({ department, page }) => ({
+        department,
+        value: page.metrics.total,
+      }));
     } catch (error) {
       if (error instanceof WhatsAppConversationRepositoryError && error.code === 'unauthorized') {
         redirect('/auth/session-expired');
@@ -117,6 +145,8 @@ export default async function Page() {
     <DashboardPage
       session={session}
       conversations={conversations}
+      operationalMetrics={operationalMetrics}
+      departmentVolumes={departmentVolumes}
       initialError={initialError}
       quoteMetrics={quoteMetrics}
       quoteInitialError={quoteInitialError}
