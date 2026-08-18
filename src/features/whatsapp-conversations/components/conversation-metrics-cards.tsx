@@ -3,18 +3,24 @@ import { Bot, Headset, MessageCircle, PauseCircle } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 
-import { getWhatsAppConversationMetrics, type WhatsAppConversation } from '../domain';
+import {
+  getWhatsAppConversationMetrics,
+  type WhatsAppConversation,
+  type WhatsAppConversationMetrics,
+} from '../domain';
 
 export interface ConversationMetricsCardsProps {
   readonly conversations: readonly WhatsAppConversation[];
+  readonly metrics?: WhatsAppConversationMetrics;
   readonly className?: string;
 }
 
 export function ConversationMetricsCards({
   conversations,
+  metrics: providedMetrics,
   className,
 }: ConversationMetricsCardsProps) {
-  const metrics = getWhatsAppConversationMetrics(conversations);
+  const metrics = providedMetrics ?? getWhatsAppConversationMetrics(conversations);
   const items = [
     {
       label: 'Bot ativo',

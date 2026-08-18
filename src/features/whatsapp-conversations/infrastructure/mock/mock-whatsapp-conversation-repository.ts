@@ -6,10 +6,15 @@ import {
   type SendHumanWhatsAppMessageCommand,
   type SendHumanWhatsAppMessageResult,
   type WhatsAppConversationRepository,
+  type WhatsAppConversationPage,
   type WhatsAppMediaContent,
   type WhatsAppMessageSearchResult,
 } from '../../application';
-import type { WhatsAppConversation, WhatsAppConversationDepartment } from '../../domain';
+import {
+  getWhatsAppConversationMetrics,
+  type WhatsAppConversation,
+  type WhatsAppConversationDepartment,
+} from '../../domain';
 import { INITIAL_MOCK_WHATSAPP_CONVERSATIONS } from './mock-whatsapp-conversations';
 
 let mockConversations: WhatsAppConversation[] = [
@@ -107,28 +112,58 @@ export class MockWhatsAppConversationRepository implements WhatsAppConversationR
   async getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]> {
-    const search = filters?.search?.trim().toLocaleLowerCase('pt-BR');
+    return (await this.getConversationPage(filters)).conversations;
+  }
 
-    return mockConversations
-      .filter(
-        (conversation) =>
-          (!filters?.department || conversation.department === filters.department) &&
-          (!filters?.state || conversation.conversationState === filters.state) &&
-          (!filters?.requestStatus ||
-            (conversation.department === 'commercial' &&
-              conversation.requestStatus === filters.requestStatus)) &&
-          (!search ||
-            `${conversation.contact.name} ${conversation.contact.phone}`
-              .toLocaleLowerCase('pt-BR')
-              .includes(search)),
-      )
+  async getConversationPage(
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<WhatsAppConversationPage> {
+    const search = filters?.search?.trim().toLocaleLowerCase('pt-BR');
+    const filtered = mockConversations.filter(
+      (conversation) =>
+        (!filters?.department || conversation.department === filters.department) &&
+        (!filters?.state || conversation.conversationState === filters.state) &&
+        (!filters?.control ||
+          (filters.control === 'bot' && conversation.conversationState === 'bot-active') ||
+          (filters.control === 'human' && conversation.conversationState === 'human-active') ||
+          (filters.control === 'paused' &&
+            (conversation.conversationState === 'waiting-for-customer' ||
+              conversation.conversationState === 'sent-to-human')) ||
+          (filters.control === 'closed' && conversation.conversationState === 'closed')) &&
+        (!filters?.requestStatus ||
+          (conversation.department === 'commercial' &&
+            conversation.requestStatus === filters.requestStatus)) &&
+        (!search ||
+          `${conversation.contact.name} ${conversation.contact.phone}`
+            .toLocaleLowerCase('pt-BR')
+            .includes(search)),
+    );
+    const page = filters?.page ?? 1;
+    const pageSize = filters?.pageSize ?? 100;
+    const conversations = filtered
+      .slice((page - 1) * pageSize, page * pageSize)
       .map(cloneConversation);
+
+    return {
+      conversations,
+      page,
+      pageSize,
+      total: filtered.length,
+      totalPages: Math.ceil(filtered.length / pageSize),
+      metrics: getWhatsAppConversationMetrics(filtered),
+    };
   }
 
   getDashboardConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]> {
     return this.getConversations(filters);
+  }
+
+  getDashboardConversationPage(
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<WhatsAppConversationPage> {
+    return this.getConversationPage(filters);
   }
 
   async getConversationById(conversationId: string): Promise<WhatsAppConversation | null> {

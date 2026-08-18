@@ -6,6 +6,8 @@ import {
   forwardWhatsAppConversation,
   getWhatsAppConversationById,
   getWhatsAppDashboardConversations,
+  getWhatsAppDashboardConversationPage,
+  getWhatsAppConversationPage,
   getWhatsAppConversations,
   markWhatsAppConversationAsRead,
   returnWhatsAppConversationToBot,
@@ -26,6 +28,12 @@ export function getWhatsAppConversationsForDashboard(filters?: GetWhatsAppConver
   );
 }
 
+export function getWhatsAppConversationPageForDashboard(filters?: GetWhatsAppConversationsFilters) {
+  return executeAuthenticatedWhatsAppRequest((repository) =>
+    getWhatsAppConversationPage(repository, filters),
+  );
+}
+
 export function startWhatsAppConversationForDashboard(phone: unknown) {
   return executeAuthenticatedWhatsAppMutation((repository) =>
     startWhatsAppConversation(repository, phone),
@@ -40,9 +48,25 @@ export function getWhatsAppConversationsForOperationalDashboard(
   );
 }
 
+export function getWhatsAppConversationPageForOperationalDashboard(
+  filters?: GetWhatsAppConversationsFilters,
+) {
+  return executeAuthenticatedWhatsAppRequest((repository) =>
+    getWhatsAppDashboardConversationPage(repository, filters),
+  );
+}
+
 export function pollWhatsAppConversationsForDashboard(filters?: GetWhatsAppConversationsFilters) {
   return executeAuthenticatedWhatsAppMutation((repository) =>
     getWhatsAppConversations(repository, filters),
+  );
+}
+
+export function pollWhatsAppConversationPageForDashboard(
+  filters?: GetWhatsAppConversationsFilters,
+) {
+  return executeAuthenticatedWhatsAppMutation((repository) =>
+    getWhatsAppConversationPage(repository, filters),
   );
 }
 

@@ -8,6 +8,8 @@ import {
   Bot,
   Building2,
   CircleStop,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   FileText,
   FileUp,
@@ -62,6 +64,7 @@ import {
   canReturnWhatsAppConversationToBot,
   canSendHumanWhatsAppMessage,
   canTakeOverWhatsAppConversation,
+  getWhatsAppConversationMetrics,
   isWhatsAppAwaitingProposal,
   isWhatsAppBotBlocked,
   isWhatsAppConversationDepartment,
@@ -69,6 +72,7 @@ import {
   WHATSAPP_ROUTABLE_DEPARTMENTS,
   WHATSAPP_REQUEST_STATUSES,
   type WhatsAppConversation,
+  type WhatsAppConversationMetrics,
   type WhatsAppConversationDepartment,
   type WhatsAppRequestStatus,
 } from '../domain';
@@ -89,6 +93,13 @@ import { conversationWorkspaceStyles as styles } from './conversation-workspace.
 
 export interface ConversationWorkspaceProps {
   readonly initialConversations: readonly WhatsAppConversation[];
+  readonly initialPagination?: {
+    readonly page: number;
+    readonly pageSize: number;
+    readonly total: number;
+    readonly totalPages: number;
+  };
+  readonly initialMetrics?: WhatsAppConversationMetrics;
   readonly initialError?: string | null;
   readonly currentUserId?: string | null;
 }
@@ -281,15 +292,28 @@ async function responseMessage(response: Response): Promise<string> {
 
 export function ConversationWorkspace({
   initialConversations,
+  initialPagination = {
+    page: 1,
+    pageSize: 25,
+    total: initialConversations.length,
+    totalPages: initialConversations.length > 0 ? 1 : 0,
+  },
+  initialMetrics,
   initialError = null,
   currentUserId = null,
 }: ConversationWorkspaceProps) {
   const [conversations, setConversations] = useState(initialConversations);
+  const [pagination, setPagination] = useState(initialPagination);
+  const [metrics, setMetrics] = useState(
+    initialMetrics ?? getWhatsAppConversationMetrics(initialConversations),
+  );
   const [selectedConversationId, setSelectedConversationId] = useState(
     initialConversations[0]?.id ?? null,
   );
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [listPage, setListPage] = useState(initialPagination.page);
   const [departmentFilter, setDepartmentFilter] = useState<WhatsAppConversationDepartment | 'all'>(
     'all',
   );
@@ -330,6 +354,8 @@ export function ConversationWorkspace({
   const conversationsRef = useRef(conversations);
   const selectedConversationIdRef = useRef(selectedConversationId);
   const pollingFailureCountRef = useRef(0);
+  const listAbortControllerRef = useRef<AbortController | null>(null);
+  const skipImmediateListRefreshRef = useRef(true);
   const humanMessageSubmissionRef = useRef<HumanMessageSubmission | null>(null);
   const humanMediaSubmissionRef = useRef<HumanMediaSubmission | null>(null);
 
@@ -452,26 +478,55 @@ export function ConversationWorkspace({
   );
 
   const refreshList = useCallback(
-    async (showProgress = false): Promise<void> => {
+    async (showProgress = false): Promise<boolean> => {
       if (showProgress) setIsRefreshing(true);
+      listAbortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      listAbortControllerRef.current = abortController;
 
       try {
-        const response = await fetch('/api/whatsapp-conversations', {
+        const searchParams = new URLSearchParams({
+          page: String(listPage),
+          pageSize: String(pagination.pageSize),
+        });
+        if (debouncedSearchTerm.trim()) searchParams.set('search', debouncedSearchTerm.trim());
+        if (departmentFilter !== 'all') searchParams.set('department', departmentFilter);
+        if (controlFilter !== 'all') searchParams.set('control', controlFilter);
+        if (requestStatusFilter !== 'all') {
+          searchParams.set('requestStatus', requestStatusFilter);
+        }
+
+        const response = await fetch(`/api/whatsapp-conversations?${searchParams.toString()}`, {
           cache: 'no-store',
+          signal: abortController.signal,
         });
 
         if (response.status === 401) {
           window.location.assign('/auth/session-expired');
-          return;
+          return false;
         }
         if (!response.ok) throw new Error(await responseMessage(response));
 
         const body = (await response.json()) as {
           readonly conversations?: readonly WhatsAppConversation[];
+          readonly pagination?: {
+            readonly page: number;
+            readonly pageSize: number;
+            readonly total: number;
+            readonly totalPages: number;
+          };
+          readonly metrics?: WhatsAppConversationMetrics;
         };
         if (!Array.isArray(body.conversations)) {
           throw new Error('A lista de conversas retornada é inválida.');
         }
+        const nextPagination = body.pagination ?? {
+          page: listPage,
+          pageSize: pagination.pageSize,
+          total: body.conversations.length,
+          totalPages: body.conversations.length > 0 ? 1 : 0,
+        };
+        const nextMetrics = body.metrics ?? getWhatsAppConversationMetrics(body.conversations);
 
         const previous = conversationsRef.current;
         const selectedId = selectedConversationIdRef.current;
@@ -483,7 +538,14 @@ export function ConversationWorkspace({
         setConversations((current) =>
           preserveLoadedConversationHistory(current, body.conversations ?? []),
         );
+        setPagination(nextPagination);
+        setMetrics(nextMetrics);
         setListError('');
+
+        if (selectedId && !incomingSelected) {
+          setSelectedConversationId(body.conversations[0]?.id ?? null);
+          setMobileDetailOpen(false);
+        }
 
         if (
           selectedId &&
@@ -495,19 +557,49 @@ export function ConversationWorkspace({
         ) {
           await loadConversationDetail(selectedId);
         }
+        return true;
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return false;
         const message =
           error instanceof Error
             ? error.message
             : 'Não foi possível atualizar a lista de conversas.';
         setListError(message);
-        throw error;
+        return false;
       } finally {
+        if (listAbortControllerRef.current === abortController) {
+          listAbortControllerRef.current = null;
+        }
         if (showProgress) setIsRefreshing(false);
       }
     },
-    [loadConversationDetail],
+    [
+      controlFilter,
+      debouncedSearchTerm,
+      departmentFilter,
+      listPage,
+      loadConversationDetail,
+      pagination.pageSize,
+      requestStatusFilter,
+    ],
   );
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setListPage(1);
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (skipImmediateListRefreshRef.current) {
+      skipImmediateListRefreshRef.current = false;
+      return;
+    }
+    void refreshList();
+  }, [refreshList]);
 
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -525,10 +617,10 @@ export function ConversationWorkspace({
         return;
       }
 
-      try {
-        await refreshList();
+      const succeeded = await refreshList();
+      if (succeeded) {
         pollingFailureCountRef.current = 0;
-      } catch {
+      } else {
         pollingFailureCountRef.current += 1;
       }
 
@@ -551,6 +643,7 @@ export function ConversationWorkspace({
     return () => {
       stopped = true;
       if (timeout) clearTimeout(timeout);
+      listAbortControllerRef.current?.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [refreshList]);
@@ -1009,7 +1102,7 @@ export function ConversationWorkspace({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <ConversationMetricsCards conversations={conversations} className="mt-4" />
+      <ConversationMetricsCards conversations={conversations} metrics={metrics} className="mt-4" />
       <section aria-labelledby="conversation-workspace-title" className={styles.section()}>
         <h2 id="conversation-workspace-title" className={styles.visuallyHidden()}>
           Caixa de entrada de conversas
@@ -1021,9 +1114,7 @@ export function ConversationWorkspace({
               <div>
                 <p className={styles.sidebarEyebrow()}>Caixa de entrada</p>
                 <p className={styles.sidebarTitle()}>
-                  {filteredConversations.length === 1
-                    ? '1 conversa'
-                    : `${filteredConversations.length} conversas`}
+                  {pagination.total === 1 ? '1 conversa' : `${pagination.total} conversas`}
                 </p>
               </div>
               <button
@@ -1070,6 +1161,7 @@ export function ConversationWorkspace({
                 <Select
                   value={departmentFilter}
                   onValueChange={(value) => {
+                    setListPage(1);
                     setDepartmentFilter(isWhatsAppConversationDepartment(value) ? value : 'all');
                   }}
                 >
@@ -1096,6 +1188,7 @@ export function ConversationWorkspace({
                 <Select
                   value={controlFilter}
                   onValueChange={(value) => {
+                    setListPage(1);
                     setControlFilter(
                       value === 'bot' ||
                         value === 'human' ||
@@ -1136,6 +1229,7 @@ export function ConversationWorkspace({
                 <Select
                   value={requestStatusFilter}
                   onValueChange={(value) => {
+                    setListPage(1);
                     setRequestStatusFilter(
                       typeof value === 'string' &&
                         (WHATSAPP_REQUEST_STATUSES as readonly string[]).includes(value)
@@ -1249,6 +1343,36 @@ export function ConversationWorkspace({
               </div>
             )}
           </div>
+          {pagination.totalPages > 1 ? (
+            <nav className={styles.pagination()} aria-label="Paginação das conversas">
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                onClick={() => setListPage((current) => Math.max(1, current - 1))}
+                disabled={isRefreshing || pagination.page <= 1}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft aria-hidden="true" />
+              </Button>
+              <span>
+                Página <strong>{pagination.page}</strong> de{' '}
+                <strong>{pagination.totalPages}</strong>
+              </span>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                onClick={() =>
+                  setListPage((current) => Math.min(pagination.totalPages, current + 1))
+                }
+                disabled={isRefreshing || pagination.page >= pagination.totalPages}
+                aria-label="Próxima página"
+              >
+                <ChevronRight aria-hidden="true" />
+              </Button>
+            </nav>
+          ) : null}
         </aside>
 
         <div className={cn(styles.detail(), mobileDetailOpen ? 'flex' : 'hidden xl:flex')}>

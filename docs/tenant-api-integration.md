@@ -212,7 +212,11 @@ Leitura da API exige `whatsapp-conversations:view` ou
 
 Não há SSE publicado. O MVP atualiza a lista por polling server-side a cada
 quatro segundos quando a aba está visível, usa backoff exponencial até trinta
-segundos em falhas e reduz consultas com a aba oculta. O detalhe completo só é
+segundos em falhas e reduz consultas com a aba oculta. Cada ciclo solicita
+somente uma página de 25 conversas com filtros server-side; `meta` e `summary`
+fornecem paginação e indicadores sem percorrer as demais páginas. Requisições
+substituídas são canceladas e HTTP 429 permanece 429 para acionar o backoff. O
+detalhe completo só é
 recarregado quando a conversa selecionada muda de versão ou `updatedAt`, ou
 enquanto há uma mensagem outbound `pending`. A última condição é necessária
 porque uma falha de entrega pode atualizar a mensagem sem incrementar a versão

@@ -47,6 +47,12 @@ Server Actions e a Route Handler de polling são os únicos consumidores desse
 adapter. O datasource padrão é a Tenant API; mock exige flag explícita fora de
 produção e é recusado em `production`.
 
+A caixa de entrada nunca materializa todas as conversas do tenant. A Route
+Handler encaminha página, pesquisa e filtros para a Tenant API, recebe no
+máximo 25 resumos por vez e preserva os totais agregados publicados pelo
+backend. As atualizações não se sobrepõem; falhas e HTTP 429 usam backoff sem
+gerar rejeições não tratadas no navegador.
+
 O painel envia `expectedVersion` em toda escrita e nunca calcula estados de
 destino. A matriz e o isolamento por `companyId` permanecem sob autoridade da
 Tenant API. Em conflito 409, o frontend recarrega a conversa antes de permitir
