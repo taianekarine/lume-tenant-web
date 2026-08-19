@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Bell, BotOff, FileClock, RefreshCw } from 'lucide-react';
 
 import { hasCommercialScope, hasPermission, type User } from '@/features/auth/domain';
@@ -190,7 +191,8 @@ function countUnseenNotifications(
 }
 
 export function CommercialNotificationCenter({ user }: { readonly user: User }) {
-  const visible = user.isActive;
+  const pathname = usePathname();
+  const visible = user.isActive && pathname !== '/whatsapp-conversations/import';
   const commercialEnabled = hasCommercialScope(user);
   const canInspectPausedAutomations =
     commercialEnabled && hasPermission(user, 'whatsapp-conversations:manage');
