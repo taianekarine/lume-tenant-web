@@ -13,6 +13,7 @@ import {
   Paperclip,
   Search,
   Upload,
+  X,
 } from 'lucide-react';
 import { z } from 'zod';
 
@@ -52,10 +53,24 @@ const resumableUploadSchema = z.object({
   fileName: z.string().min(1),
   totalBytes: z.number().int().positive(),
   uploadedBytes: z.number().int().nonnegative(),
-  chunkSizeBytes: z.number().int().positive(),
-  status: z.enum(['uploading', 'ready', 'processing', 'completed', 'failed']),
+  chunkSizeBytes: z.number().int().positive().optional(),
+  status: z.enum([
+    'uploading',
+    'ready',
+    'processing',
+    'completed',
+    'failed',
+    'cancelled',
+    'expired',
+  ]),
+  fingerprint: z.string().min(1).optional(),
+  checksumSha256: z.string().nullable().optional(),
+  errorCode: z.string().nullable().optional(),
+  errorMessage: z.string().nullable().optional(),
 });
 const PAGE_SIZE = 20;
+const ACTIVE_BATCH_STORAGE_KEY = 'lume.whatsapp-history-import.active-batch';
+const FILE_FINGERPRINT_SAMPLE_BYTES = 64 * 1024;
 
 function plural(value: number, singular: string, pluralForm: string): string {
   return `${value} ${value === 1 ? singular : pluralForm}`;
@@ -116,9 +131,111 @@ async function parseBatch(response: Response): Promise<WhatsAppHistoryImportBatc
   return whatsAppHistoryImportBatchSchema.parse(await response.json());
 }
 
+async function sha256Blob(blob: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function fileFingerprint(file: File): Promise<string> {
+  const sample = FILE_FINGERPRINT_SAMPLE_BYTES;
+  const first = file.slice(0, Math.min(sample, file.size));
+  const last = file.slice(Math.max(0, file.size - sample), file.size);
+  const metadata = new TextEncoder().encode(
+    `${file.name}\u0000${file.size}\u0000${file.lastModified}\u0000${file.type}`,
+  );
+  const payload = new Uint8Array(metadata.byteLength + first.size + last.size);
+  payload.set(metadata, 0);
+  payload.set(new Uint8Array(await first.arrayBuffer()), metadata.byteLength);
+  payload.set(new Uint8Array(await last.arrayBuffer()), metadata.byteLength + first.size);
+  const digest = await crypto.subtle.digest('SHA-256', payload);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+type ResumableUpload = z.infer<typeof resumableUploadSchema>;
+
+async function sendResumableChunk(input: {
+  batchId: string;
+  upload: ResumableUpload;
+  offset: number;
+  chunk: Blob;
+  fileName: string;
+  kind: 'android-database-uploads' | 'android-media-uploads';
+}): Promise<ResumableUpload> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const formData = new FormData();
+    formData.set('offsetBytes', String(input.offset));
+    formData.set('checksumSha256', await sha256Blob(input.chunk));
+    formData.set('chunk', input.chunk, `${input.fileName}.part`);
+    try {
+      const response = await fetch(
+        `/api/whatsapp-history-import/batches/${input.batchId}/${input.kind}/${input.upload.uploadId}/chunks`,
+        { method: 'POST', body: formData },
+      );
+      if (response.ok) {
+        const updated = resumableUploadSchema.parse(await response.json());
+        return {
+          ...updated,
+          chunkSizeBytes: updated.chunkSizeBytes ?? input.upload.chunkSizeBytes,
+        };
+      }
+      if (!TRANSIENT_UPLOAD_STATUSES.has(response.status) && response.status !== 409) {
+        throw new Error(
+          await responseMessage(response, 'Não foi possível continuar o envio do arquivo.'),
+        );
+      }
+      await response.body?.cancel().catch(() => undefined);
+    } catch (error) {
+      lastError = error;
+    }
+
+    try {
+      const statusResponse = await fetch(
+        `/api/whatsapp-history-import/batches/${input.batchId}/uploads/${input.upload.uploadId}`,
+        { cache: 'no-store' },
+      );
+      if (statusResponse.ok) {
+        const status = resumableUploadSchema.parse(await statusResponse.json());
+        if (status.uploadedBytes > input.offset) {
+          return { ...status, chunkSizeBytes: input.upload.chunkSizeBytes };
+        }
+        if (['cancelled', 'expired'].includes(status.status)) {
+          throw new Error('Este envio foi cancelado ou expirou. Selecione o arquivo novamente.');
+        }
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) =>
+      window.setTimeout(resolve, Math.min(8_000, 500 * 2 ** (attempt - 1))),
+    );
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('A conexão foi interrompida durante o envio. Tente novamente.');
+}
+
 function localDateTimeValue(): string {
   const now = new Date();
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
+function importPhaseLabel(phase: string): string {
+  return (
+    {
+      draft: 'Preparação',
+      uploading: 'Envio dos arquivos',
+      validating: 'Validação do backup',
+      ready: 'Pronto para aplicar',
+      applying: 'Importação das mensagens',
+      'processing-preview': 'Comparação das mensagens',
+      'processing-media': 'Vinculação das mídias',
+      completed: 'Concluída',
+      failed: 'Aguardando nova tentativa',
+      cancelled: 'Cancelada',
+      expired: 'Expirada',
+    }[phase] ?? 'Processamento'
+  );
 }
 
 function divergenceMessageText(message: WhatsAppHistoryDivergence['existing']): string {
@@ -446,6 +563,11 @@ export function WhatsAppHistoryImportPage() {
   const [loadedDivergencesBatchId, setLoadedDivergencesBatchId] = useState('');
   const [divergencesError, setDivergencesError] = useState('');
   const [savingDivergenceId, setSavingDivergenceId] = useState<string | null>(null);
+  const [recoveringBatch, setRecoveringBatch] = useState(true);
+  const [connectionState, setConnectionState] = useState<'connected' | 'recovering' | 'offline'>(
+    'connected',
+  );
+  const [lastSynchronizedAt, setLastSynchronizedAt] = useState<Date | null>(null);
 
   const rememberAppliedBackup = useCallback((updated: WhatsAppHistoryImportBatch) => {
     if (updated.status !== 'applied' || !updated.androidBackup) return;
@@ -455,6 +577,72 @@ export function WhatsAppHistoryImportPage() {
     });
     setSelectedMediaBatchId((current) => current || updated.id);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const recover = async () => {
+      const queryBatchId = new URL(window.location.href).searchParams.get('batch');
+      const storedBatchId = window.localStorage.getItem(ACTIVE_BATCH_STORAGE_KEY);
+      const requestedBatchId = queryBatchId || storedBatchId;
+      const path = requestedBatchId
+        ? `/api/whatsapp-history-import/batches/${requestedBatchId}`
+        : '/api/whatsapp-history-import/batches/active';
+      try {
+        const response = await fetch(path, { cache: 'no-store' });
+        if (!response.ok) {
+          if (response.status === 404 && requestedBatchId) {
+            window.localStorage.removeItem(ACTIVE_BATCH_STORAGE_KEY);
+            window.history.replaceState(null, '', window.location.pathname);
+            return;
+          }
+          throw new Error(
+            await responseMessage(
+              response,
+              'Não foi possível recuperar a importação em andamento.',
+            ),
+          );
+        }
+        const payload: unknown = await response.json();
+        if (!payload || !active) return;
+        const recovered = whatsAppHistoryImportBatchSchema.parse(payload);
+        setBatch(recovered);
+        setChannelId(recovered.channel.id);
+        setImportMode(recovered.mode);
+        setLastSynchronizedAt(new Date());
+        setConnectionState('connected');
+      } catch (error) {
+        if (!active) return;
+        setConnectionState('offline');
+        toast.add({
+          title: 'Importação não recuperada',
+          description: error instanceof Error ? error.message : 'Tente novamente.',
+          type: 'error',
+        });
+      } finally {
+        if (active) setRecoveringBatch(false);
+      }
+    };
+    void recover();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!batch || ['applied', 'cancelled', 'expired'].includes(batch.status)) {
+      window.localStorage.removeItem(ACTIVE_BATCH_STORAGE_KEY);
+      if (new URL(window.location.href).searchParams.has('batch')) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      return;
+    }
+    window.localStorage.setItem(ACTIVE_BATCH_STORAGE_KEY, batch.id);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('batch') !== batch.id) {
+      url.searchParams.set('batch', batch.id);
+      window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+    }
+  }, [batch]);
 
   useEffect(() => {
     let active = true;
@@ -468,7 +656,7 @@ export function WhatsAppHistoryImportPage() {
       .then((result) => {
         if (!active) return;
         setChannels(result);
-        setChannelId(result[0]?.id ?? '');
+        setChannelId((current) => current || result[0]?.id || '');
       })
       .catch((error: unknown) => {
         toast.add({
@@ -518,25 +706,43 @@ export function WhatsAppHistoryImportPage() {
     };
   }, []);
 
+  const activeBatchId = batch?.id;
+  const activeBatchStatus = batch?.status;
+
   useEffect(() => {
-    if (
-      !batch ||
-      (batch.status !== 'applying' && batch.androidBackup?.comparison?.status !== 'processing')
-    )
+    if (!activeBatchId || ['applied', 'cancelled', 'expired'].includes(activeBatchStatus ?? '')) {
       return;
-    const interval = window.setInterval(() => {
-      void fetch(`/api/whatsapp-history-import/batches/${batch.id}`, {
-        cache: 'no-store',
-      })
-        .then(parseBatch)
-        .then((updated) => {
-          setBatch(updated);
-          rememberAppliedBackup(updated);
-        })
-        .catch(() => undefined);
-    }, 3_000);
-    return () => window.clearInterval(interval);
-  }, [batch, rememberAppliedBackup]);
+    }
+    let active = true;
+    let timer: number | undefined;
+    let failures = 0;
+    const refresh = async () => {
+      try {
+        const response = await fetch(`/api/whatsapp-history-import/batches/${activeBatchId}`, {
+          cache: 'no-store',
+        });
+        const updated = await parseBatch(response);
+        if (!active) return;
+        failures = 0;
+        setBatch(updated);
+        rememberAppliedBackup(updated);
+        setConnectionState('connected');
+        setLastSynchronizedAt(new Date());
+      } catch {
+        if (!active) return;
+        failures += 1;
+        setConnectionState(failures >= 4 ? 'offline' : 'recovering');
+      }
+      if (!active) return;
+      const delay = failures === 0 ? 3_000 : Math.min(30_000, 1_000 * 2 ** failures);
+      timer = window.setTimeout(() => void refresh(), delay);
+    };
+    timer = window.setTimeout(() => void refresh(), 1_000);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [activeBatchId, activeBatchStatus, rememberAppliedBackup]);
 
   const divergenceBatchId = batch?.androidBackup ? batch.id : undefined;
   const divergenceComparisonStatus = batch?.androidBackup?.comparison?.status;
@@ -778,12 +984,13 @@ export function WhatsAppHistoryImportPage() {
     setUploadErrors([]);
     try {
       const currentBatch = await ensureBatch();
+      const fingerprint = await fileFingerprint(file);
       const startResponse = await uploadFetch(
         `/api/whatsapp-history-import/batches/${currentBatch.id}/android-database-uploads`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName: file.name, sizeBytes: file.size }),
+          body: JSON.stringify({ fileName: file.name, sizeBytes: file.size, fingerprint }),
         },
       );
       if (!startResponse.ok) {
@@ -796,21 +1003,17 @@ export function WhatsAppHistoryImportPage() {
       let offset = upload.uploadedBytes;
       setDatabaseUploadBytes(offset);
       while (offset < file.size) {
-        const end = Math.min(file.size, offset + upload.chunkSizeBytes);
-        const formData = new FormData();
-        formData.set('offsetBytes', String(offset));
-        formData.set('chunk', file.slice(offset, end), `${file.name}.part`);
-        const chunkResponse = await uploadFetch(
-          `/api/whatsapp-history-import/batches/${currentBatch.id}/android-database-uploads/${upload.uploadId}/chunks`,
-          { method: 'POST', body: formData },
-        );
-        if (!chunkResponse.ok) {
-          throw new Error(
-            await responseMessage(chunkResponse, 'Não foi possível continuar o envio do backup.'),
-          );
-        }
+        const end = Math.min(file.size, offset + (upload.chunkSizeBytes ?? 16 * 1024 * 1024));
+        const chunk = file.slice(offset, end);
         const previousOffset = offset;
-        upload = resumableUploadSchema.parse(await chunkResponse.json());
+        upload = await sendResumableChunk({
+          batchId: currentBatch.id,
+          upload,
+          offset,
+          chunk,
+          fileName: file.name,
+          kind: 'android-database-uploads',
+        });
         offset = upload.uploadedBytes;
         if (offset <= previousOffset || offset > file.size) {
           throw new Error('O servidor não confirmou o avanço do envio. Tente novamente.');
@@ -888,12 +1091,13 @@ export function WhatsAppHistoryImportPage() {
       for (let index = 0; index < accepted.length; index += 1) {
         const file = accepted[index];
         try {
+          const fingerprint = await fileFingerprint(file);
           const startResponse = await uploadFetch(
             `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-uploads`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fileName: file.name, sizeBytes: file.size }),
+              body: JSON.stringify({ fileName: file.name, sizeBytes: file.size, fingerprint }),
             },
           );
           if (!startResponse.ok) {
@@ -905,21 +1109,17 @@ export function WhatsAppHistoryImportPage() {
           let offset = upload.uploadedBytes;
           setMediaUploadBytes(completedBytes + offset);
           while (offset < file.size) {
-            const end = Math.min(file.size, offset + upload.chunkSizeBytes);
-            const formData = new FormData();
-            formData.set('offsetBytes', String(offset));
-            formData.set('chunk', file.slice(offset, end), `${file.name}.part`);
-            const chunkResponse = await uploadFetch(
-              `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-uploads/${upload.uploadId}/chunks`,
-              { method: 'POST', body: formData },
-            );
-            if (!chunkResponse.ok) {
-              throw new Error(
-                await responseMessage(chunkResponse, 'Não foi possível continuar o envio do ZIP.'),
-              );
-            }
+            const end = Math.min(file.size, offset + (upload.chunkSizeBytes ?? 16 * 1024 * 1024));
+            const chunk = file.slice(offset, end);
             const previousOffset = offset;
-            upload = resumableUploadSchema.parse(await chunkResponse.json());
+            upload = await sendResumableChunk({
+              batchId: targetBatch.id,
+              upload,
+              offset,
+              chunk,
+              fileName: file.name,
+              kind: 'android-media-uploads',
+            });
             offset = upload.uploadedBytes;
             if (offset <= previousOffset || offset > file.size) {
               throw new Error('O servidor não confirmou o avanço do envio. Tente novamente.');
@@ -997,6 +1197,37 @@ export function WhatsAppHistoryImportPage() {
       });
     } finally {
       setApplying(false);
+    }
+  }
+
+  async function cancelImport() {
+    if (!batch || ['applied', 'cancelled', 'expired'].includes(batch.status)) return;
+    try {
+      const response = await fetch(`/api/whatsapp-history-import/batches/${batch.id}`, {
+        method: 'DELETE',
+      });
+      const cancelled = await parseBatch(response);
+      setBatch(null);
+      setUploadTotal(0);
+      setUploadCurrent(0);
+      setUploadErrors([]);
+      setMediaUploadErrors([]);
+      window.localStorage.removeItem(ACTIVE_BATCH_STORAGE_KEY);
+      window.history.replaceState(null, '', window.location.pathname);
+      toast.add({
+        title: 'Importação cancelada',
+        description:
+          cancelled.status === 'cancelled'
+            ? 'Os arquivos temporários deste lote foram removidos.'
+            : 'A importação foi encerrada.',
+        type: 'success',
+      });
+    } catch (error) {
+      toast.add({
+        title: 'Não foi possível cancelar',
+        description: error instanceof Error ? error.message : 'Tente novamente.',
+        type: 'error',
+      });
     }
   }
 
@@ -1094,6 +1325,40 @@ export function WhatsAppHistoryImportPage() {
           gravada antes da confirmação final.
         </p>
       </div>
+
+      {recoveringBatch ? (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+          <LoaderCircle className="size-4 animate-spin" /> Recuperando a importação em andamento
+        </div>
+      ) : batch ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
+          <div>
+            <p className="font-semibold">
+              {connectionState === 'connected'
+                ? 'Importação sincronizada'
+                : connectionState === 'recovering'
+                  ? 'Reconectando à importação'
+                  : 'Sem conexão com a importação'}
+            </p>
+            <p className="text-muted-foreground">
+              Etapa: {importPhaseLabel(batch.operation.phase)} ·{' '}
+              {batch.operation.processed.toLocaleString('pt-BR')} de{' '}
+              {batch.operation.total.toLocaleString('pt-BR')} processados
+              {lastSynchronizedAt
+                ? ` · Atualizado às ${lastSynchronizedAt.toLocaleTimeString('pt-BR')}`
+                : ''}
+            </p>
+            {batch.operation.lastError ? (
+              <p className="mt-1 text-destructive-emphasis">{batch.operation.lastError.message}</p>
+            ) : null}
+          </div>
+          {!['applied', 'cancelled', 'expired'].includes(batch.status) ? (
+            <Button type="button" variant="outline" onClick={() => void cancelImport()}>
+              <X /> Cancelar importação
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <Card className="mt-6">
         <CardHeader>

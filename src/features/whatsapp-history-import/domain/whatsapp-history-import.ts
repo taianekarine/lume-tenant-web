@@ -97,11 +97,28 @@ export const whatsAppHistoryImportBatchSchema = z.object({
     name: z.string().min(1),
     phoneE164: z.string().min(1),
   }),
-  status: z.enum(['draft', 'applying', 'applied', 'failed']),
+  status: z.enum(['draft', 'applying', 'applied', 'failed', 'cancelled', 'expired']),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   expiresAt: z.string().datetime(),
   appliedAt: z.string().datetime().nullable(),
+  operation: z.object({
+    phase: z.string().min(1),
+    heartbeatAt: z.string().datetime(),
+    attempts: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    processed: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    lastError: z
+      .object({
+        code: z.string().min(1),
+        message: z.string().min(1),
+        retryable: z.boolean(),
+        occurredAt: z.string().datetime(),
+      })
+      .nullable(),
+    cancelledAt: z.string().datetime().nullable(),
+  }),
   totals: z.object({
     archives: z.number().int().nonnegative(),
     ready: z.number().int().nonnegative(),

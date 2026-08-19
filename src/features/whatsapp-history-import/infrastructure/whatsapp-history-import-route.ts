@@ -11,10 +11,20 @@ export function resolveWhatsAppHistoryImportPath(
     return '/android-backups';
   }
   if (path[0] !== 'batches') return null;
+  if (path.length === 2 && path[1] === 'active' && method === 'GET') return '/active';
   const batchId = path[1];
   if (path.length === 1 && method === 'POST') return '';
   if (!batchId || !UUID_PATTERN.test(batchId)) return null;
   if (path.length === 2 && method === 'GET') return `/${batchId}`;
+  if (path.length === 2 && method === 'DELETE') return `/${batchId}`;
+  if (
+    path.length === 4 &&
+    path[2] === 'uploads' &&
+    UUID_PATTERN.test(path[3] ?? '') &&
+    (method === 'GET' || method === 'DELETE')
+  ) {
+    return `/${batchId}/uploads/${path[3]}`;
+  }
   if (path.length === 3 && path[2] === 'archives' && method === 'POST') {
     return `/${batchId}/archives`;
   }

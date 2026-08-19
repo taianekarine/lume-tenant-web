@@ -9,7 +9,11 @@ describe('resolveWhatsAppHistoryImportPath', () => {
     ['GET', ['channels'], '/channels'],
     ['GET', ['android-backups'], '/android-backups'],
     ['POST', ['batches'], ''],
+    ['GET', ['batches', 'active'], '/active'],
     ['GET', ['batches', BATCH_ID], `/${BATCH_ID}`],
+    ['DELETE', ['batches', BATCH_ID], `/${BATCH_ID}`],
+    ['GET', ['batches', BATCH_ID, 'uploads', UPLOAD_ID], `/${BATCH_ID}/uploads/${UPLOAD_ID}`],
+    ['DELETE', ['batches', BATCH_ID, 'uploads', UPLOAD_ID], `/${BATCH_ID}/uploads/${UPLOAD_ID}`],
     ['POST', ['batches', BATCH_ID, 'archives'], `/${BATCH_ID}/archives`],
     ['POST', ['batches', BATCH_ID, 'android-backup'], `/${BATCH_ID}/android-backup`],
     [
@@ -61,7 +65,6 @@ describe('resolveWhatsAppHistoryImportPath', () => {
   });
 
   it.each([
-    ['DELETE', ['batches', BATCH_ID]],
     ['GET', ['batches', 'not-a-uuid']],
     ['GET', ['unknown']],
     ['POST', ['batches', BATCH_ID, 'workbook']],
