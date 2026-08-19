@@ -9,6 +9,7 @@ import {
   Download,
   FileArchive,
   LoaderCircle,
+  MessageSquareWarning,
   Paperclip,
   Search,
   Upload,
@@ -30,12 +31,16 @@ import {
   WHATSAPP_HISTORY_REVIEW_FILTER_LABELS,
   WHATSAPP_HISTORY_STATES,
   WHATSAPP_HISTORY_STATE_LABELS,
+  WHATSAPP_IMPORT_MESSAGE_KIND_LABELS,
   type WhatsAppHistoryArchive,
   type WhatsAppHistoryDepartment,
+  type WhatsAppHistoryDivergence,
   type WhatsAppHistoryImportBatch,
   type WhatsAppHistoryReviewFilter,
   type WhatsAppHistoryState,
   whatsAppHistoryChannelSchema,
+  whatsAppHistoryDivergenceListSchema,
+  whatsAppHistoryDivergenceResolutionSchema,
   whatsAppHistoryImportBatchSchema,
 } from '../domain';
 
@@ -87,6 +92,104 @@ async function parseBatch(response: Response): Promise<WhatsAppHistoryImportBatc
 function localDateTimeValue(): string {
   const now = new Date();
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
+function divergenceMessageText(message: WhatsAppHistoryDivergence['existing']): string {
+  const text = message.text?.trim();
+  if (text) return text;
+  if (message.hasMedia) return `${WHATSAPP_IMPORT_MESSAGE_KIND_LABELS[message.kind]} anexado`;
+  return 'Mensagem sem texto';
+}
+
+interface DivergenceReviewCardProps {
+  readonly divergence: WhatsAppHistoryDivergence;
+  readonly saving: boolean;
+  readonly onResolve: (
+    externalMessageId: string,
+    resolution: 'keep-existing' | 'use-backup',
+  ) => void;
+}
+
+function DivergenceReviewCard({ divergence, saving, onResolve }: DivergenceReviewCardProps) {
+  const contact = divergence.contactName?.trim() || divergence.phoneE164 || 'Contato não informado';
+  return (
+    <article className="grid gap-4 rounded-xl border bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold">{contact}</p>
+          <p className="text-xs text-muted-foreground">
+            {new Intl.DateTimeFormat('pt-BR', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            }).format(new Date(divergence.occurredAt))}
+            {divergence.senderName ? ` · Enviada por ${divergence.senderName}` : ''}
+          </p>
+        </div>
+        <span
+          className={cn(
+            'rounded-full px-2 py-1 text-xs font-semibold',
+            divergence.resolution
+              ? 'bg-success/15 text-success-emphasis'
+              : 'bg-warning/15 text-warning-emphasis',
+          )}
+        >
+          {divergence.resolution ? 'Decisão registrada' : 'Decisão necessária'}
+        </span>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid content-start gap-2 rounded-lg border bg-muted/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Mensagem que já está no Lume
+          </p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6">
+            {divergenceMessageText(divergence.existing)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {WHATSAPP_IMPORT_MESSAGE_KIND_LABELS[divergence.existing.kind]}
+          </p>
+        </div>
+        <div className="grid content-start gap-2 rounded-lg border bg-muted/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Mensagem encontrada no backup
+          </p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6">
+            {divergenceMessageText(divergence.backup)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {WHATSAPP_IMPORT_MESSAGE_KIND_LABELS[divergence.backup.kind]}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={divergence.resolution === 'keep-existing' ? 'default' : 'outline'}
+          disabled={saving}
+          onClick={() => onResolve(divergence.externalMessageId, 'keep-existing')}
+        >
+          {saving ? <LoaderCircle className="animate-spin" /> : <CheckCircle2 />}
+          Manter mensagem do Lume
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={divergence.resolution === 'use-backup' ? 'default' : 'outline'}
+          disabled={saving}
+          onClick={() => onResolve(divergence.externalMessageId, 'use-backup')}
+        >
+          Usar mensagem do backup
+        </Button>
+      </div>
+      {divergence.decidedByUsername ? (
+        <p className="text-xs text-muted-foreground">
+          Revisada por {divergence.decidedByUsername}.
+        </p>
+      ) : null}
+    </article>
+  );
 }
 
 interface ArchiveReviewCardProps {
@@ -310,6 +413,10 @@ export function WhatsAppHistoryImportPage() {
   const [selectedMediaBatchId, setSelectedMediaBatchId] = useState('');
   const [loadingAppliedBackups, setLoadingAppliedBackups] = useState(true);
   const [appliedBackupsError, setAppliedBackupsError] = useState('');
+  const [divergences, setDivergences] = useState<readonly WhatsAppHistoryDivergence[]>([]);
+  const [loadedDivergencesBatchId, setLoadedDivergencesBatchId] = useState('');
+  const [divergencesError, setDivergencesError] = useState('');
+  const [savingDivergenceId, setSavingDivergenceId] = useState<string | null>(null);
 
   const rememberAppliedBackup = useCallback((updated: WhatsAppHistoryImportBatch) => {
     if (updated.status !== 'applied' || !updated.androidBackup) return;
@@ -401,6 +508,58 @@ export function WhatsAppHistoryImportPage() {
     }, 3_000);
     return () => window.clearInterval(interval);
   }, [batch, rememberAppliedBackup]);
+
+  const divergenceBatchId = batch?.androidBackup ? batch.id : undefined;
+  const divergenceComparisonStatus = batch?.androidBackup?.comparison?.status;
+  const divergenceCount = batch?.androidBackup?.comparison?.messagesDivergent;
+  const divergenceComparisonUpdatedAt = batch?.androidBackup?.comparison?.updatedAt;
+  const loadingDivergences = Boolean(
+    divergenceBatchId &&
+    divergenceComparisonStatus === 'ready' &&
+    divergenceCount !== 0 &&
+    loadedDivergencesBatchId !== divergenceBatchId,
+  );
+
+  useEffect(() => {
+    if (!divergenceBatchId || divergenceComparisonStatus !== 'ready' || divergenceCount === 0) {
+      return;
+    }
+    let active = true;
+    void fetch(`/api/whatsapp-history-import/batches/${divergenceBatchId}/android-divergences`, {
+      cache: 'no-store',
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(
+            await responseMessage(response, 'Não foi possível carregar as mensagens divergentes.'),
+          );
+        }
+        return whatsAppHistoryDivergenceListSchema.parse(await response.json());
+      })
+      .then((result) => {
+        if (!active) return;
+        setDivergences(result.items);
+        setLoadedDivergencesBatchId(divergenceBatchId);
+        setDivergencesError('');
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setLoadedDivergencesBatchId(divergenceBatchId);
+        setDivergencesError(
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar as mensagens divergentes.',
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    divergenceBatchId,
+    divergenceComparisonStatus,
+    divergenceCount,
+    divergenceComparisonUpdatedAt,
+  ]);
 
   useEffect(() => {
     const processingIds = appliedAndroidBackups
@@ -768,6 +927,70 @@ export function WhatsAppHistoryImportPage() {
     }
   }
 
+  async function resolveDivergence(
+    externalMessageId: string,
+    resolution: 'keep-existing' | 'use-backup',
+  ) {
+    if (!batch) return;
+    setSavingDivergenceId(externalMessageId);
+    try {
+      const response = await fetch(
+        `/api/whatsapp-history-import/batches/${batch.id}/android-divergences/${encodeURIComponent(externalMessageId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resolution }),
+        },
+      );
+      if (!response.ok) {
+        throw new Error(
+          await responseMessage(response, 'Não foi possível registrar a decisão desta mensagem.'),
+        );
+      }
+      const result = whatsAppHistoryDivergenceResolutionSchema.parse(await response.json());
+      setDivergences((current) =>
+        current.map((item) =>
+          item.externalMessageId === externalMessageId ? result.divergence : item,
+        ),
+      );
+      setBatch((current) => {
+        const androidBackup = current?.androidBackup;
+        const comparison = androidBackup?.comparison;
+        if (!current || !androidBackup || !comparison) return current;
+        return {
+          ...current,
+          androidBackup: {
+            ...androidBackup,
+            comparison: {
+              ...comparison,
+              messagesDivergentPending: result.pending,
+            },
+          },
+        };
+      });
+      toast.add({
+        title: 'Decisão registrada',
+        description:
+          result.pending === 0
+            ? 'Todas as mensagens divergentes foram corrigidas.'
+            : plural(
+                result.pending,
+                'mensagem ainda precisa de revisão',
+                'mensagens ainda precisam de revisão',
+              ),
+        type: 'success',
+      });
+    } catch (error) {
+      toast.add({
+        title: 'Não foi possível salvar a decisão',
+        description: error instanceof Error ? error.message : 'Tente novamente.',
+        type: 'error',
+      });
+    } finally {
+      setSavingDivergenceId(null);
+    }
+  }
+
   const readyToApply =
     batch !== null &&
     (batch.status === 'draft' || batch.status === 'failed') &&
@@ -775,7 +998,8 @@ export function WhatsAppHistoryImportPage() {
     batch.totals.needsReview === 0 &&
     (!batch.androidBackup ||
       (batch.androidBackup.comparison?.status === 'ready' &&
-        batch.androidBackup.comparison.messagesDivergent === 0 &&
+        (batch.androidBackup.comparison.messagesDivergentPending ??
+          batch.androidBackup.comparison.messagesDivergent) === 0 &&
         (batch.androidBackup.summary.mediaReferences === 0 ||
           batch.androidBackup.mediaImport?.status === 'ready')));
 
@@ -1382,6 +1606,56 @@ export function WhatsAppHistoryImportPage() {
                   </p>
                 ) : null}
                 {batch.androidBackup.comparison?.status === 'ready' &&
+                batch.androidBackup.comparison.messagesDivergent > 0 ? (
+                  <section className="grid gap-4 rounded-xl border border-warning/30 bg-warning/5 p-4 sm:col-span-2 xl:col-span-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex gap-3">
+                        <MessageSquareWarning
+                          aria-hidden="true"
+                          className="mt-0.5 size-5 shrink-0 text-warning-emphasis"
+                        />
+                        <div>
+                          <h3 className="font-semibold">Revisar mensagens divergentes</h3>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Compare o conteúdo atual com o backup e escolha qual versão deve ser
+                            mantida. Nenhuma mensagem será alterada antes de aplicar a importação.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-warning/15 px-2 py-1 text-xs font-semibold text-warning-emphasis">
+                        {plural(
+                          batch.androidBackup.comparison.messagesDivergentPending ??
+                            batch.androidBackup.comparison.messagesDivergent,
+                          'decisão pendente',
+                          'decisões pendentes',
+                        )}
+                      </span>
+                    </div>
+                    {loadingDivergences ? (
+                      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <LoaderCircle className="size-4 animate-spin" /> Carregando diferenças
+                      </p>
+                    ) : divergencesError ? (
+                      <p className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive-emphasis">
+                        {divergencesError}
+                      </p>
+                    ) : (
+                      <div className="grid gap-3">
+                        {divergences.map((divergence) => (
+                          <DivergenceReviewCard
+                            key={divergence.externalMessageId}
+                            divergence={divergence}
+                            saving={savingDivergenceId === divergence.externalMessageId}
+                            onResolve={(externalMessageId, resolution) =>
+                              void resolveDivergence(externalMessageId, resolution)
+                            }
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ) : null}
+                {batch.androidBackup.comparison?.status === 'ready' &&
                 batch.androidBackup.comparison.messagesNew === 0 &&
                 batch.androidBackup.comparison.messagesDivergent === 0 ? (
                   <p className="rounded-lg bg-success/10 p-3 text-success-emphasis sm:col-span-2 xl:col-span-4">
@@ -1481,9 +1755,11 @@ export function WhatsAppHistoryImportPage() {
                 <p className="text-sm text-muted-foreground lg:col-span-2">
                   Aguarde a comparação incremental antes de aplicar o backup.
                 </p>
-              ) : batch.androidBackup?.comparison?.messagesDivergent ? (
+              ) : (batch.androidBackup?.comparison?.messagesDivergentPending ??
+                  batch.androidBackup?.comparison?.messagesDivergent ??
+                  0) > 0 ? (
                 <p className="text-sm text-destructive-emphasis lg:col-span-2">
-                  Corrija as mensagens divergentes antes de continuar.
+                  Use a seção de revisão acima para corrigir as mensagens divergentes.
                 </p>
               ) : batch.androidBackup &&
                 batch.androidBackup.summary.mediaReferences > 0 &&
