@@ -189,6 +189,69 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     );
   });
 
+  it('does not present a telephone number as the contact name', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse({
+        data: [
+          apiConversation({
+            contact: {
+              id: '00000000-0000-4000-8000-000000000301',
+              phone: '+91 94126-76488',
+              displayName: '+919412676488',
+              profilePictureUrl: null,
+            },
+            currentQuoteRequest: null,
+          }),
+        ],
+        meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+      }),
+    );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'http://localhost:3333/api/v1/',
+      'access-token',
+      fetcher,
+      1_500,
+    );
+
+    const [conversation] = await repository.getConversations();
+
+    expect(conversation?.contact).toEqual(
+      expect.objectContaining({
+        name: 'Contato não identificado',
+        phone: '+91 94126-76488',
+      }),
+    );
+  });
+
+  it('uses the confirmed quote contact when the imported contact has no real name', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse({
+        data: [
+          apiConversation({
+            contact: {
+              id: '00000000-0000-4000-8000-000000000301',
+              phone: '(34) 99999-1001',
+              displayName: '5534999991001',
+              profilePictureUrl: null,
+            },
+            currentQuoteRequest: apiQuote(),
+          }),
+        ],
+        meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+      }),
+    );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'http://localhost:3333/api/v1/',
+      'access-token',
+      fetcher,
+      1_500,
+    );
+
+    const [conversation] = await repository.getConversations();
+
+    expect(conversation?.contact.name).toBe('Ana Paula');
+  });
+
   it('loads only the requested page even when the tenant has thousands of conversations', async () => {
     const fetcher = jest.fn().mockResolvedValue(
       jsonResponse({

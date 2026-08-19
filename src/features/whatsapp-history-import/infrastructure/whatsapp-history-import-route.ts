@@ -21,15 +21,31 @@ export function resolveWhatsAppHistoryImportPath(
   if (path.length === 3 && path[2] === 'android-backup' && method === 'POST') {
     return `/${batchId}/android-backup`;
   }
+  if (path.length === 3 && path[2] === 'android-database-uploads' && method === 'POST') {
+    return `/${batchId}/android-database-uploads`;
+  }
+  if (
+    path.length === 5 &&
+    path[2] === 'android-database-uploads' &&
+    UUID_PATTERN.test(path[3] ?? '') &&
+    path[4] === 'chunks' &&
+    method === 'POST'
+  ) {
+    return `/${batchId}/android-database-uploads/${path[3]}/chunks`;
+  }
+  if (
+    path.length === 5 &&
+    path[2] === 'android-database-uploads' &&
+    UUID_PATTERN.test(path[3] ?? '') &&
+    path[4] === 'complete' &&
+    method === 'POST'
+  ) {
+    return `/${batchId}/android-database-uploads/${path[3]}/complete`;
+  }
   if (path.length === 3 && path[2] === 'android-divergences' && method === 'GET') {
     return `/${batchId}/android-divergences`;
   }
-  if (
-    path.length === 4 &&
-    path[2] === 'android-divergences' &&
-    path[3] &&
-    method === 'PATCH'
-  ) {
+  if (path.length === 4 && path[2] === 'android-divergences' && path[3] && method === 'PATCH') {
     return `/${batchId}/android-divergences/${encodeURIComponent(path[3])}`;
   }
   if (path.length === 3 && path[2] === 'android-media-archives' && method === 'POST') {

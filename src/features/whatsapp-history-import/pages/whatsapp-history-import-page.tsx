@@ -46,7 +46,7 @@ import {
 
 const channelsSchema = z.array(whatsAppHistoryChannelSchema);
 const appliedAndroidBackupsSchema = z.array(whatsAppHistoryImportBatchSchema);
-const androidMediaUploadSchema = z.object({
+const resumableUploadSchema = z.object({
   schemaVersion: z.literal('1.0'),
   uploadId: z.string().uuid(),
   fileName: z.string().min(1),
@@ -411,6 +411,8 @@ export function WhatsAppHistoryImportPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadCurrent, setUploadCurrent] = useState(0);
   const [uploadTotal, setUploadTotal] = useState(0);
+  const [databaseUploadBytes, setDatabaseUploadBytes] = useState(0);
+  const [databaseUploadBytesTotal, setDatabaseUploadBytesTotal] = useState(0);
   const [uploadSuccess, setUploadSuccess] = useState(0);
   const [uploadErrors, setUploadErrors] = useState<
     readonly { fileName: string; message: string }[]
@@ -770,20 +772,64 @@ export function WhatsAppHistoryImportPage() {
     setUploading(true);
     setUploadTotal(1);
     setUploadCurrent(0);
+    setDatabaseUploadBytes(0);
+    setDatabaseUploadBytesTotal(file.size);
+    setUploadSuccess(0);
     setUploadErrors([]);
     try {
       const currentBatch = await ensureBatch();
-      const formData = new FormData();
-      formData.set('database', file);
-      formData.set('rootKey', rootKey.trim());
-      formData.set('state', androidState);
-      formData.set('departmentCode', androidDepartment);
-      if (androidOwnerUsername.trim()) {
-        formData.set('ownerUsername', androidOwnerUsername.trim());
+      const startResponse = await uploadFetch(
+        `/api/whatsapp-history-import/batches/${currentBatch.id}/android-database-uploads`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName: file.name, sizeBytes: file.size }),
+        },
+      );
+      if (!startResponse.ok) {
+        throw new Error(
+          await responseMessage(startResponse, 'Não foi possível iniciar o envio do backup.'),
+        );
       }
-      const response = await fetch(
-        `/api/whatsapp-history-import/batches/${currentBatch.id}/android-backup`,
-        { method: 'POST', body: formData },
+
+      let upload = resumableUploadSchema.parse(await startResponse.json());
+      let offset = upload.uploadedBytes;
+      setDatabaseUploadBytes(offset);
+      while (offset < file.size) {
+        const end = Math.min(file.size, offset + upload.chunkSizeBytes);
+        const formData = new FormData();
+        formData.set('offsetBytes', String(offset));
+        formData.set('chunk', file.slice(offset, end), `${file.name}.part`);
+        const chunkResponse = await uploadFetch(
+          `/api/whatsapp-history-import/batches/${currentBatch.id}/android-database-uploads/${upload.uploadId}/chunks`,
+          { method: 'POST', body: formData },
+        );
+        if (!chunkResponse.ok) {
+          throw new Error(
+            await responseMessage(chunkResponse, 'Não foi possível continuar o envio do backup.'),
+          );
+        }
+        const previousOffset = offset;
+        upload = resumableUploadSchema.parse(await chunkResponse.json());
+        offset = upload.uploadedBytes;
+        if (offset <= previousOffset || offset > file.size) {
+          throw new Error('O servidor não confirmou o avanço do envio. Tente novamente.');
+        }
+        setDatabaseUploadBytes(offset);
+      }
+
+      const response = await uploadFetch(
+        `/api/whatsapp-history-import/batches/${currentBatch.id}/android-database-uploads/${upload.uploadId}/complete`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rootKey: rootKey.trim(),
+            state: androidState,
+            departmentCode: androidDepartment,
+            ...(androidOwnerUsername.trim() ? { ownerUsername: androidOwnerUsername.trim() } : {}),
+          }),
+        },
       );
       const updated = await parseBatch(response);
       setBatch(updated);
@@ -855,7 +901,7 @@ export function WhatsAppHistoryImportPage() {
               await responseMessage(startResponse, 'Não foi possível iniciar o envio do ZIP.'),
             );
           }
-          let upload = androidMediaUploadSchema.parse(await startResponse.json());
+          let upload = resumableUploadSchema.parse(await startResponse.json());
           let offset = upload.uploadedBytes;
           setMediaUploadBytes(completedBytes + offset);
           while (offset < file.size) {
@@ -873,7 +919,7 @@ export function WhatsAppHistoryImportPage() {
               );
             }
             const previousOffset = offset;
-            upload = androidMediaUploadSchema.parse(await chunkResponse.json());
+            upload = resumableUploadSchema.parse(await chunkResponse.json());
             offset = upload.uploadedBytes;
             if (offset <= previousOffset || offset > file.size) {
               throw new Error('O servidor não confirmou o avanço do envio. Tente novamente.');
@@ -1206,12 +1252,28 @@ export function WhatsAppHistoryImportPage() {
             {uploadTotal > 0 ? (
               <div className="max-w-xl" aria-live="polite">
                 <div className="mb-2 flex justify-between text-sm text-muted-foreground">
-                  <span>Arquivos processados</span>
                   <span>
-                    {uploadCurrent} de {uploadTotal}
+                    {importMode === 'android-backup' && uploading
+                      ? databaseUploadBytes < databaseUploadBytesTotal
+                        ? 'Dados enviados'
+                        : 'Validando o backup'
+                      : 'Arquivos processados'}
+                  </span>
+                  <span>
+                    {importMode === 'android-backup' && databaseUploadBytesTotal > 0
+                      ? `${formatBytes(databaseUploadBytes)} de ${formatBytes(databaseUploadBytesTotal)}`
+                      : `${uploadCurrent} de ${uploadTotal}`}
                   </span>
                 </div>
-                <Progress value={uploadTotal ? (uploadCurrent / uploadTotal) * 100 : 0} />
+                <Progress
+                  value={
+                    importMode === 'android-backup' && databaseUploadBytesTotal > 0
+                      ? (databaseUploadBytes / databaseUploadBytesTotal) * 100
+                      : uploadTotal
+                        ? (uploadCurrent / uploadTotal) * 100
+                        : 0
+                  }
+                />
                 <p className="mt-2 text-xs text-muted-foreground">
                   {plural(uploadSuccess, 'arquivo válido', 'arquivos válidos')} ·{' '}
                   {plural(uploadErrors.length, 'arquivo com erro', 'arquivos com erro')}
