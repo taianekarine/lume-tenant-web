@@ -82,6 +82,33 @@ async function responseMessage(response: Response, fallback: string): Promise<st
   }
 }
 
+const TRANSIENT_UPLOAD_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+async function uploadFetch(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  maximumAttempts = 5,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    try {
+      const response = await fetch(input, init);
+      if (!TRANSIENT_UPLOAD_STATUSES.has(response.status) || attempt === maximumAttempts) {
+        return response;
+      }
+      await response.body?.cancel().catch(() => undefined);
+    } catch (error) {
+      lastError = error;
+      if (attempt === maximumAttempts) throw error;
+    }
+    const delay = Math.min(8_000, 500 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 250);
+    await new Promise((resolve) => window.setTimeout(resolve, delay));
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('A conexão foi interrompida durante o envio. Tente novamente.');
+}
+
 async function parseBatch(response: Response): Promise<WhatsAppHistoryImportBatch> {
   if (!response.ok) {
     throw new Error(await responseMessage(response, 'Não foi possível processar a importação.'));
@@ -815,7 +842,7 @@ export function WhatsAppHistoryImportPage() {
       for (let index = 0; index < accepted.length; index += 1) {
         const file = accepted[index];
         try {
-          const startResponse = await fetch(
+          const startResponse = await uploadFetch(
             `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-uploads`,
             {
               method: 'POST',
@@ -836,7 +863,7 @@ export function WhatsAppHistoryImportPage() {
             const formData = new FormData();
             formData.set('offsetBytes', String(offset));
             formData.set('chunk', file.slice(offset, end), `${file.name}.part`);
-            const chunkResponse = await fetch(
+            const chunkResponse = await uploadFetch(
               `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-uploads/${upload.uploadId}/chunks`,
               { method: 'POST', body: formData },
             );
@@ -853,7 +880,7 @@ export function WhatsAppHistoryImportPage() {
             }
             setMediaUploadBytes(completedBytes + offset);
           }
-          const completeResponse = await fetch(
+          const completeResponse = await uploadFetch(
             `/api/whatsapp-history-import/batches/${targetBatch.id}/android-media-uploads/${upload.uploadId}/complete`,
             { method: 'POST' },
           );
