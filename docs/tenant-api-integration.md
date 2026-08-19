@@ -59,11 +59,13 @@ manual, o download e a aplicação usam uma única planilha consolidada. Configu
 `LUME_TENANT_API_WHATSAPP_IMPORT_TIMEOUT_MS` acima da janela esperada para um ZIP
 grande, sem remover os limites de segurança da Tenant API.
 
-No modo Android completo, a mesma fronteira encaminha
-`POST /whatsapp/history-imports/:batchId/android-backup` em streaming. O corpo
-contém o `msgstore.db.crypt15`, a chave efêmera e a situação/departamento
-confirmados. A resposta nunca devolve a chave. Depois da validação, a tela
-consulta o lote enquanto o status for `applying` e apresenta mensagens,
+No modo Android completo, a mesma fronteira usa as rotas
+`android-database-uploads`: inicia ou retoma o envio, transmite o
+`msgstore.db.crypt15` em blocos de 16 MiB e confirma cada deslocamento. A tela
+mostra os bytes efetivamente recebidos e uma interrupção continua do último
+bloco confirmado. A chave efêmera e a situação/departamento são enviados apenas
+na confirmação final; a resposta nunca devolve a chave. Depois da validação, a
+tela consulta o lote enquanto o status for `applying` e apresenta mensagens,
 conversas e blocos já processados.
 
 Depois da aplicação, o ZIP da pasta `Media` usa um protocolo retomável: a tela
@@ -173,6 +175,12 @@ Os valores legados ainda reconhecidos pelo contrato de leitura nunca são
 mostrados como códigos. A interface usa rótulos em português e restringe
 seletores, filtros e encaminhamentos às nove filas do MVP. O departamento atual
 também é removido das opções de encaminhamento.
+
+O nome exibido na caixa de entrada prioriza o contato salvo na agenda do Lume.
+Quando a importação histórica ainda possui somente o telefone, o painel tenta o
+nome confirmado no orçamento atual e, se ele também não existir, apresenta
+`Contato não identificado`. O telefone permanece em seu campo próprio e nunca é
+promovido a nome do contato.
 
 Toda escrita envia:
 

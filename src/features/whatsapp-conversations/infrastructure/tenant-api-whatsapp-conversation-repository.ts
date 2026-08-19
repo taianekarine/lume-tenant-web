@@ -276,6 +276,21 @@ function mapQuoteRequest(
   };
 }
 
+function isTelephoneLabel(value: string): boolean {
+  const normalized = value.trim();
+  return normalized.length > 0 && /^[+\d\s().-]+$/u.test(normalized);
+}
+
+function contactDisplayName(conversation: ApiConversation): string {
+  const savedName = conversation.contact.displayName?.trim();
+  if (savedName && !isTelephoneLabel(savedName)) return savedName;
+
+  const confirmedName = conversation.currentQuoteRequest?.contactName?.trim();
+  if (confirmedName && !isTelephoneLabel(confirmedName)) return confirmedName;
+
+  return 'Contato não identificado';
+}
+
 function mapAttachment(message: ApiMessage): WhatsAppMessageAttachment | null {
   if (message.kind === 'text') return null;
 
@@ -334,7 +349,7 @@ function mapConversation(
     channel: conversation.channel,
     contact: {
       id: conversation.contact.id,
-      name: conversation.contact.displayName?.trim() || conversation.contact.phone,
+      name: contactDisplayName(conversation),
       phone: conversation.contact.phone,
       profilePictureUrl: conversation.contact.profilePictureUrl,
     },

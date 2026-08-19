@@ -12,6 +12,21 @@ describe('resolveWhatsAppHistoryImportPath', () => {
     ['GET', ['batches', BATCH_ID], `/${BATCH_ID}`],
     ['POST', ['batches', BATCH_ID, 'archives'], `/${BATCH_ID}/archives`],
     ['POST', ['batches', BATCH_ID, 'android-backup'], `/${BATCH_ID}/android-backup`],
+    [
+      'POST',
+      ['batches', BATCH_ID, 'android-database-uploads'],
+      `/${BATCH_ID}/android-database-uploads`,
+    ],
+    [
+      'POST',
+      ['batches', BATCH_ID, 'android-database-uploads', UPLOAD_ID, 'chunks'],
+      `/${BATCH_ID}/android-database-uploads/${UPLOAD_ID}/chunks`,
+    ],
+    [
+      'POST',
+      ['batches', BATCH_ID, 'android-database-uploads', UPLOAD_ID, 'complete'],
+      `/${BATCH_ID}/android-database-uploads/${UPLOAD_ID}/complete`,
+    ],
     ['GET', ['batches', BATCH_ID, 'android-divergences'], `/${BATCH_ID}/android-divergences`],
     [
       'PATCH',
