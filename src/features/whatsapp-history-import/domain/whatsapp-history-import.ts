@@ -50,6 +50,18 @@ export const WHATSAPP_HISTORY_REVIEW_FILTER_LABELS = {
   all: 'Todos',
 } as const;
 
+export const WHATSAPP_IMPORT_MESSAGE_KIND_LABELS = {
+  text: 'Texto',
+  image: 'Imagem',
+  document: 'Documento',
+  audio: 'Áudio',
+  video: 'Vídeo',
+  sticker: 'Figurinha',
+  location: 'Localização',
+  contact: 'Contato',
+  unknown: 'Outro conteúdo',
+} as const;
+
 export type WhatsAppHistoryReviewFilter = keyof typeof WHATSAPP_HISTORY_REVIEW_FILTER_LABELS;
 
 const senderSchema = z.object({
@@ -130,6 +142,7 @@ export const whatsAppHistoryImportBatchSchema = z.object({
           messagesExisting: z.number().int().nonnegative(),
           messagesNew: z.number().int().nonnegative(),
           messagesDivergent: z.number().int().nonnegative(),
+          messagesDivergentPending: z.number().int().nonnegative().optional(),
           mediaStored: z.number().int().nonnegative(),
           mediaNew: z.number().int().nonnegative(),
           mediaMissing: z.number().int().nonnegative(),
@@ -171,8 +184,53 @@ export const whatsAppHistoryChannelSchema = z.object({
   phoneNumber: z.string().min(1),
 });
 
+const whatsAppHistoryDivergenceMessageSchema = z.object({
+  direction: z.enum(['inbound', 'outbound']),
+  deliveryStatus: z.enum(['received', 'pending', 'sent', 'delivered', 'read', 'failed']),
+  kind: z.enum([
+    'text',
+    'image',
+    'document',
+    'audio',
+    'video',
+    'sticker',
+    'location',
+    'contact',
+    'unknown',
+  ]),
+  text: z.string().nullable(),
+  occurredAt: z.string().datetime(),
+  hasMedia: z.boolean(),
+});
+
+export const whatsAppHistoryDivergenceSchema = z.object({
+  externalMessageId: z.string().min(1),
+  externalConversationId: z.string().min(1),
+  contactName: z.string().nullable(),
+  phoneE164: z.string().nullable(),
+  senderName: z.string().nullable(),
+  occurredAt: z.string().datetime(),
+  existing: whatsAppHistoryDivergenceMessageSchema,
+  backup: whatsAppHistoryDivergenceMessageSchema,
+  resolution: z.enum(['keep-existing', 'use-backup']).nullable(),
+  decidedByUsername: z.string().nullable(),
+  decidedAt: z.string().datetime().nullable(),
+});
+
+export const whatsAppHistoryDivergenceListSchema = z.object({
+  items: z.array(whatsAppHistoryDivergenceSchema),
+  total: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+});
+
+export const whatsAppHistoryDivergenceResolutionSchema = z.object({
+  divergence: whatsAppHistoryDivergenceSchema,
+  pending: z.number().int().nonnegative(),
+});
+
 export type WhatsAppHistoryImportBatch = z.infer<typeof whatsAppHistoryImportBatchSchema>;
 export type WhatsAppHistoryArchive = z.infer<typeof whatsAppHistoryArchiveSchema>;
 export type WhatsAppHistoryChannel = z.infer<typeof whatsAppHistoryChannelSchema>;
+export type WhatsAppHistoryDivergence = z.infer<typeof whatsAppHistoryDivergenceSchema>;
 export type WhatsAppHistoryState = (typeof WHATSAPP_HISTORY_STATES)[number];
 export type WhatsAppHistoryDepartment = (typeof WHATSAPP_HISTORY_DEPARTMENTS)[number];
