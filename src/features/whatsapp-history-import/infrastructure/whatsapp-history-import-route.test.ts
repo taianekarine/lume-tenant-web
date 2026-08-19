@@ -12,6 +12,12 @@ describe('resolveWhatsAppHistoryImportPath', () => {
     ['GET', ['batches', BATCH_ID], `/${BATCH_ID}`],
     ['POST', ['batches', BATCH_ID, 'archives'], `/${BATCH_ID}/archives`],
     ['POST', ['batches', BATCH_ID, 'android-backup'], `/${BATCH_ID}/android-backup`],
+    ['GET', ['batches', BATCH_ID, 'android-divergences'], `/${BATCH_ID}/android-divergences`],
+    [
+      'PATCH',
+      ['batches', BATCH_ID, 'android-divergences', 'message/unsafe'],
+      `/${BATCH_ID}/android-divergences/message%2Funsafe`,
+    ],
     [
       'POST',
       ['batches', BATCH_ID, 'android-media-archives'],
@@ -44,6 +50,8 @@ describe('resolveWhatsAppHistoryImportPath', () => {
     ['GET', ['batches', 'not-a-uuid']],
     ['GET', ['unknown']],
     ['POST', ['batches', BATCH_ID, 'workbook']],
+    ['POST', ['batches', BATCH_ID, 'android-divergences']],
+    ['PATCH', ['batches', BATCH_ID, 'android-divergences']],
   ])('rejeita rota fora da lista permitida: %s %j', (method, path) => {
     expect(resolveWhatsAppHistoryImportPath(method, path)).toBeNull();
   });
