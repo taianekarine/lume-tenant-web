@@ -230,9 +230,8 @@ async function sendResumableChunk(input: {
     : new Error('A conexão foi interrompida durante o envio. Tente novamente.');
 }
 
-function localDateTimeValue(): string {
-  const now = new Date();
-  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+function localDateTimeValue(value = new Date()): string {
+  return new Date(value.getTime() - value.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
 function importPhaseLabel(phase: string): string {
@@ -623,6 +622,13 @@ export function WhatsAppHistoryImportPage() {
         setBatch(recovered);
         setChannelId(recovered.channel.id);
         setImportMode(recovered.mode);
+        const savedCutoffAt = recovered.androidBackup?.cutoffAt;
+        if (savedCutoffAt) {
+          const savedCutoffDate = new Date(savedCutoffAt);
+          if (!Number.isNaN(savedCutoffDate.getTime())) {
+            setCutoffAt(localDateTimeValue(savedCutoffDate));
+          }
+        }
         setLastSynchronizedAt(new Date());
         setConnectionState('connected');
       } catch (error) {

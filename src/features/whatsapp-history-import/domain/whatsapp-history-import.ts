@@ -149,6 +149,7 @@ export const whatsAppHistoryImportBatchSchema = z.object({
       state: z.enum(WHATSAPP_HISTORY_STATES),
       departmentCode: z.enum(WHATSAPP_HISTORY_DEPARTMENTS),
       ownerUsername: z.string().nullable(),
+      cutoffAt: z.string().datetime().nullable().optional(),
       chunksCompleted: z.number().int().nonnegative(),
       conversationsProcessed: z.number().int().nonnegative(),
       messagesProcessed: z.number().int().nonnegative(),
