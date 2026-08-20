@@ -56,6 +56,7 @@ const resumableUploadSchema = z.object({
   chunkSizeBytes: z.number().int().positive().optional(),
   status: z.enum([
     'uploading',
+    'validating',
     'ready',
     'processing',
     'completed',
@@ -97,6 +98,16 @@ async function responseMessage(response: Response, fallback: string): Promise<st
   }
 }
 
+async function responseJson(response: Response): Promise<unknown | null> {
+  const content = await response.text();
+  if (!content.trim()) return null;
+  try {
+    return JSON.parse(content) as unknown;
+  } catch {
+    throw new Error('O servidor retornou uma resposta incompleta. Tente novamente.');
+  }
+}
+
 const TRANSIENT_UPLOAD_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 async function uploadFetch(
@@ -128,7 +139,11 @@ async function parseBatch(response: Response): Promise<WhatsAppHistoryImportBatc
   if (!response.ok) {
     throw new Error(await responseMessage(response, 'Não foi possível processar a importação.'));
   }
-  return whatsAppHistoryImportBatchSchema.parse(await response.json());
+  const payload = await responseJson(response);
+  if (!payload) {
+    throw new Error('O servidor não confirmou o estado da importação. Tente novamente.');
+  }
+  return whatsAppHistoryImportBatchSchema.parse(payload);
 }
 
 async function sha256Blob(blob: Blob): Promise<string> {
@@ -602,7 +617,7 @@ export function WhatsAppHistoryImportPage() {
             ),
           );
         }
-        const payload: unknown = await response.json();
+        const payload = await responseJson(response);
         if (!payload || !active) return;
         const recovered = whatsAppHistoryImportBatchSchema.parse(payload);
         setBatch(recovered);
@@ -798,7 +813,9 @@ export function WhatsAppHistoryImportPage() {
 
   useEffect(() => {
     const processingIds = appliedAndroidBackups
-      .filter((item) => item.androidBackup?.mediaImport?.status === 'processing')
+      .filter((item) =>
+        ['validating', 'processing'].includes(item.androidBackup?.mediaImport?.status ?? ''),
+      )
       .map((item) => item.id);
     if (processingIds.length === 0) return;
     const refresh = () => {
@@ -851,10 +868,14 @@ export function WhatsAppHistoryImportPage() {
     pendingAndroidMediaBatch ??
     appliedAndroidBackups.find((item) => item.id === selectedMediaBatchId);
   const selectedMediaImport = selectedMediaBatch?.androidBackup?.mediaImport;
-  const selectedMediaProcessing = selectedMediaImport?.status === 'processing';
+  const selectedMediaProcessing = ['validating', 'processing'].includes(
+    selectedMediaImport?.status ?? '',
+  );
   const selectedMediaApplying = selectedMediaBatch?.status === 'applying';
   const currentBatchMediaImport = batch?.androidBackup?.mediaImport;
-  const currentBatchMediaProcessing = currentBatchMediaImport?.status === 'processing';
+  const currentBatchMediaProcessing = ['validating', 'processing'].includes(
+    currentBatchMediaImport?.status ?? '',
+  );
 
   async function ensureBatch(): Promise<WhatsAppHistoryImportBatch> {
     if (batch) return batch;
