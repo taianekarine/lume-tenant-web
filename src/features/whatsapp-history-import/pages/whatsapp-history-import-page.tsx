@@ -235,21 +235,39 @@ function localDateTimeValue(value = new Date()): string {
 }
 
 function importPhaseLabel(phase: string): string {
+  if (phase.startsWith('processing-media:')) {
+    const mediaPhase = phase.split(':')[1];
+    return mediaPhase === 'storing' ? 'Armazenamento das mídias' : 'Leitura das mídias';
+  }
   return (
     {
       draft: 'Preparação',
       uploading: 'Envio dos arquivos',
+      'uploading-database': 'Envio do banco de mensagens',
+      'uploading-media': 'Envio das mídias',
       validating: 'Validação do backup',
+      'validating-database': 'Validação do banco de mensagens',
+      'validating-media': 'Validação do arquivo de mídias',
       ready: 'Pronto para aplicar',
       applying: 'Importação das mensagens',
+      'applying-messages': 'Importação das mensagens',
+      'finalizing-import': 'Finalização da importação',
       'processing-preview': 'Comparação das mensagens',
+      'comparing-messages': 'Comparação das mensagens',
       'processing-media': 'Vinculação das mídias',
+      'awaiting-divergence-resolution': 'Revisão das mensagens divergentes',
       completed: 'Concluída',
       failed: 'Aguardando nova tentativa',
       cancelled: 'Cancelada',
       expired: 'Expirada',
     }[phase] ?? 'Processamento'
   );
+}
+
+function importPollDelay(phase: string): number {
+  if (phase === 'ready' || phase === 'awaiting-divergence-resolution') return 15_000;
+  if (phase.startsWith('uploading-')) return 10_000;
+  return 5_000;
 }
 
 function divergenceMessageText(message: WhatsAppHistoryDivergence['existing']): string {
@@ -729,6 +747,7 @@ export function WhatsAppHistoryImportPage() {
 
   const activeBatchId = batch?.id;
   const activeBatchStatus = batch?.status;
+  const activeBatchPhase = batch?.operation.phase;
 
   useEffect(() => {
     if (!activeBatchId || ['applied', 'cancelled', 'expired'].includes(activeBatchStatus ?? '')) {
@@ -738,6 +757,10 @@ export function WhatsAppHistoryImportPage() {
     let timer: number | undefined;
     let failures = 0;
     const refresh = async () => {
+      if (document.visibilityState === 'hidden') {
+        timer = window.setTimeout(() => void refresh(), 15_000);
+        return;
+      }
       try {
         const response = await fetch(`/api/whatsapp-history-import/batches/${activeBatchId}`, {
           cache: 'no-store',
@@ -755,7 +778,10 @@ export function WhatsAppHistoryImportPage() {
         setConnectionState(failures >= 4 ? 'offline' : 'recovering');
       }
       if (!active) return;
-      const delay = failures === 0 ? 3_000 : Math.min(30_000, 1_000 * 2 ** failures);
+      const delay =
+        failures === 0
+          ? importPollDelay(activeBatchPhase ?? 'processing')
+          : Math.min(30_000, 1_000 * 2 ** failures);
       timer = window.setTimeout(() => void refresh(), delay);
     };
     timer = window.setTimeout(() => void refresh(), 1_000);
@@ -763,7 +789,7 @@ export function WhatsAppHistoryImportPage() {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [activeBatchId, activeBatchStatus, rememberAppliedBackup]);
+  }, [activeBatchId, activeBatchPhase, activeBatchStatus, rememberAppliedBackup]);
 
   const divergenceBatchId = batch?.androidBackup ? batch.id : undefined;
   const divergenceComparisonStatus = batch?.androidBackup?.comparison?.status;
@@ -817,36 +843,50 @@ export function WhatsAppHistoryImportPage() {
     divergenceComparisonUpdatedAt,
   ]);
 
-  useEffect(() => {
-    const processingIds = appliedAndroidBackups
-      .filter((item) =>
+  const appliedProcessingIdsKey = appliedAndroidBackups
+    .filter(
+      (item) =>
+        item.id !== activeBatchId &&
         ['validating', 'processing'].includes(item.androidBackup?.mediaImport?.status ?? ''),
-      )
-      .map((item) => item.id);
+    )
+    .map((item) => item.id)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    const processingIds = appliedProcessingIdsKey ? appliedProcessingIdsKey.split(',') : [];
     if (processingIds.length === 0) return;
-    const refresh = () => {
-      void Promise.all(
-        processingIds.map((batchId) =>
-          fetch(`/api/whatsapp-history-import/batches/${batchId}`, {
-            cache: 'no-store',
-          }).then(parseBatch),
-        ),
-      )
-        .then((updatedBatches) => {
-          setAppliedAndroidBackups((current) => {
-            const updatedById = new Map(updatedBatches.map((item) => [item.id, item]));
-            return current.map((item) => updatedById.get(item.id) ?? item);
-          });
-          setBatch((current) => {
-            if (!current) return current;
-            return updatedBatches.find((item) => item.id === current.id) ?? current;
-          });
-        })
-        .catch(() => undefined);
+    let active = true;
+    let timer: number | undefined;
+    const refresh = async () => {
+      if (document.visibilityState === 'hidden') {
+        timer = window.setTimeout(() => void refresh(), 15_000);
+        return;
+      }
+      try {
+        const updatedBatches = await Promise.all(
+          processingIds.map((batchId) =>
+            fetch(`/api/whatsapp-history-import/batches/${batchId}`, {
+              cache: 'no-store',
+            }).then(parseBatch),
+          ),
+        );
+        if (!active) return;
+        setAppliedAndroidBackups((current) => {
+          const updatedById = new Map(updatedBatches.map((item) => [item.id, item]));
+          return current.map((item) => updatedById.get(item.id) ?? item);
+        });
+      } catch {
+        // A próxima consulta tentará recuperar a sincronização sem interromper o processamento.
+      }
+      if (active) timer = window.setTimeout(() => void refresh(), 5_000);
     };
-    const interval = window.setInterval(refresh, 3_000);
-    return () => window.clearInterval(interval);
-  }, [appliedAndroidBackups]);
+    timer = window.setTimeout(() => void refresh(), 1_000);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [appliedProcessingIdsKey]);
 
   const filteredArchives = useMemo(() => {
     if (!batch) return [];
@@ -1333,6 +1373,9 @@ export function WhatsAppHistoryImportPage() {
           batch.androidBackup.comparison.messagesDivergent) === 0 &&
         (batch.androidBackup.summary.mediaReferences === 0 ||
           batch.androidBackup.mediaImport?.status === 'ready')));
+  const operationProgressPercent = batch?.operation.total
+    ? Math.min(100, (batch.operation.processed / batch.operation.total) * 100)
+    : 0;
 
   return (
     <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
@@ -1375,6 +1418,18 @@ export function WhatsAppHistoryImportPage() {
                 ? ` · Atualizado às ${lastSynchronizedAt.toLocaleTimeString('pt-BR')}`
                 : ''}
             </p>
+            {batch.operation.total > 0 &&
+            !['ready', 'applied', 'cancelled', 'expired'].includes(batch.status) ? (
+              <div className="mt-2 flex max-w-xl items-center gap-3">
+                <Progress value={operationProgressPercent} className="h-2 flex-1" />
+                <span className="min-w-12 text-right text-xs font-semibold tabular-nums">
+                  {operationProgressPercent.toLocaleString('pt-BR', {
+                    maximumFractionDigits: 0,
+                  })}
+                  %
+                </span>
+              </div>
+            ) : null}
             {batch.operation.lastError ? (
               <p className="mt-1 text-destructive-emphasis">{batch.operation.lastError.message}</p>
             ) : null}
@@ -2123,8 +2178,8 @@ export function WhatsAppHistoryImportPage() {
                 </p>
               ) : batch.status === 'applying' ? (
                 <p className="text-sm text-muted-foreground lg:col-span-2">
-                  A importação continua em segundo plano. Não feche ou reinicie a API durante o
-                  processamento.
+                  A importação continua em segundo plano. Você pode sair desta tela e acompanhar o
+                  progresso depois.
                 </p>
               ) : batch.totals.needsReview > 0 ? (
                 <p className="text-sm text-muted-foreground lg:col-span-2">
