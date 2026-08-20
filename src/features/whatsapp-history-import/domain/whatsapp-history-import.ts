@@ -157,6 +157,8 @@ export const whatsAppHistoryImportBatchSchema = z.object({
       comparison: z
         .object({
           status: z.enum(['processing', 'ready', 'failed']),
+          messagesProcessed: z.number().int().nonnegative().optional(),
+          messagesTotal: z.number().int().nonnegative().optional(),
           messagesExisting: z.number().int().nonnegative(),
           messagesNew: z.number().int().nonnegative(),
           messagesDivergent: z.number().int().nonnegative(),
