@@ -79,8 +79,6 @@ function renderSheet() {
   render(
     <ConversationMessageSheet
       conversation={createWhatsAppConversationFixture({ id: conversationId, messages })}
-      open
-      onOpenChange={jest.fn()}
       isLoading={false}
       isLoaded
       detailError=""
@@ -93,9 +91,6 @@ function renderSheet() {
       selectedAttachment={null}
       onSelectedAttachmentChange={jest.fn()}
       canSendMessage={false}
-      canTakeOver={false}
-      isTakingOver={false}
-      onTakeOver={jest.fn()}
       isSendingMessage={false}
       onSendMessage={jest.fn()}
       feedbackMessage=""
@@ -154,8 +149,6 @@ describe('pré-visualização de mídias no chat', () => {
     render(
       <ConversationMessageSheet
         conversation={createWhatsAppConversationFixture({ id: conversationId })}
-        open
-        onOpenChange={jest.fn()}
         isLoading={false}
         isLoaded
         detailError=""
@@ -168,9 +161,6 @@ describe('pré-visualização de mídias no chat', () => {
         selectedAttachment={null}
         onSelectedAttachmentChange={onSelectedAttachmentChange}
         canSendMessage
-        canTakeOver={false}
-        isTakingOver={false}
-        onTakeOver={jest.fn()}
         isSendingMessage={false}
         onSendMessage={jest.fn()}
         feedbackMessage=""

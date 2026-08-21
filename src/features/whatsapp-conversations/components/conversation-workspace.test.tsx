@@ -53,8 +53,9 @@ function mockFetchDetail(conversation: WhatsAppConversation) {
   return jest.mocked(global.fetch).mockResolvedValue(response({ conversation }));
 }
 
-async function openMessages(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Mensagens e anexos/ }));
+async function openMessages(_user: ReturnType<typeof userEvent.setup>) {
+  void _user;
+  await screen.findByRole('region', { name: /Histórico da conversa/ });
 }
 
 describe('ConversationWorkspace', () => {
@@ -197,13 +198,13 @@ describe('ConversationWorkspace', () => {
     const detailHeader = contactHeading.closest('header');
 
     expect(identityRow).toHaveClass('flex', 'flex-col', 'items-start');
-    expect(detailHeader).toHaveClass('px-4', 'py-2', 'bg-primary/8');
+    expect(detailHeader).toHaveClass('px-3', 'py-2', 'bg-primary/8');
     const conversationList = screen.getByRole('button', { name: /Taiane Karine/ }).parentElement;
-    expect(conversationList).toHaveClass('max-h-[58dvh]', 'xl:max-h-none', 'xl:flex-1');
+    expect(conversationList).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
     const inbox = conversationList?.closest('aside');
     expect(inbox).toHaveClass('flex');
     fireEvent.click(screen.getByRole('button', { name: /Taiane Karine/ }));
-    expect(inbox).toHaveClass('hidden', 'xl:flex');
+    expect(inbox).toHaveClass('hidden', 'lg:flex');
     fireEvent.click(screen.getByRole('button', { name: 'Voltar para a caixa de entrada' }));
     expect(inbox).toHaveClass('flex');
     expect(screen.getAllByText('553496305110')).toHaveLength(2);
@@ -505,7 +506,7 @@ describe('ConversationWorkspace', () => {
       ),
     );
     expect(await screen.findByText('Responsável: Outro atendente')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'BOT inativo' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'BOT inativo' })).toBeDisabled());
   });
 
   it('renders empty and initial error states and retries the list request', async () => {
@@ -594,7 +595,7 @@ describe('ConversationWorkspace', () => {
     expect(await screen.findByText('Nenhuma mensagem registrada')).toBeInTheDocument();
   });
 
-  it('abre o Message com largura dobrada no desktop e sem rolagem horizontal', async () => {
+  it('mantém o histórico embutido no painel e sem rolagem horizontal', async () => {
     const conversation = createWhatsAppConversationFixture({ messages: [], unreadCount: 0 });
     mockFetchDetail(conversation);
     const user = userEvent.setup();
@@ -602,15 +603,17 @@ describe('ConversationWorkspace', () => {
     render(<ConversationWorkspace initialConversations={[conversation]} />);
     await openMessages(user);
 
-    const messageSheet = screen.getByRole('dialog');
-    expect(messageSheet).toHaveClass(
-      'w-full',
+    const messagePanel = screen.getByRole('region', {
+      name: /Histórico da conversa com/,
+    });
+    expect(messagePanel).toHaveClass(
+      'flex',
+      'min-h-0',
+      'flex-1',
       'overflow-x-hidden',
-      'data-[side=right]:w-full',
-      'sm:data-[side=right]:w-[min(60rem,calc(100vw-3rem))]',
-      'sm:!max-w-none',
+      'bg-background',
     );
-    expect(messageSheet).not.toHaveClass('sm:max-w-2xl');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('permite encerrar somente a sessão humana enquanto existe proposta em andamento', async () => {
@@ -875,7 +878,7 @@ describe('ConversationWorkspace', () => {
 
     expect(screen.getByText('Encerrado por: Maria Atendente')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Histórico de ações' }));
+    await user.click(screen.getByRole('button', { name: 'Histórico' }));
     expect(
       screen.getByRole('heading', { name: 'Histórico de ações da conversa' }),
     ).toBeInTheDocument();
@@ -1135,7 +1138,7 @@ describe('ConversationWorkspace', () => {
     ).toBeInTheDocument();
   });
 
-  it('allows a stale blocked assignment to be repaired by taking over inside Message', async () => {
+  it('permite reparar uma atribuição bloqueada pela ação consolidada do atendente', async () => {
     const conversation = createWhatsAppConversationFixture({
       conversationState: 'sent-to-human',
       flowStep: 'human-service',
@@ -1159,24 +1162,12 @@ describe('ConversationWorkspace', () => {
     );
     await openMessages(user);
     const characterCounter = screen.getByText(/0\s*\/\s*10\.000 caracteres/);
-    const takeOverButton = screen.getByRole('button', { name: 'Assumir atendimento' });
+    const takeOverButton = screen.getByRole('button', { name: 'Atendente inativo' });
     const sendButton = screen.getByRole('button', { name: 'Enviar mensagem' });
     const input = screen.getByRole('textbox', {
       name: `Mensagem para ${conversation.contact.name}`,
     });
-    const actions = takeOverButton.parentElement;
-
     expect(characterCounter).toHaveClass('whitespace-nowrap');
-    expect(actions).toBe(sendButton.parentElement);
-    expect(actions).toHaveClass(
-      'grid',
-      'w-full',
-      'min-w-0',
-      'max-w-full',
-      'grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
-      'overflow-x-hidden',
-    );
-    expect(takeOverButton).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden');
     expect(sendButton).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden');
     expect(input).toBeDisabled();
 
@@ -1323,7 +1314,7 @@ describe('ConversationWorkspace', () => {
     ).not.toBeInTheDocument();
 
     const firstInput = mockedSendMessage.mock.calls[0][0];
-    await user.click(screen.getByRole('button', { name: 'Atualizar' }));
+    await user.click(screen.getByRole('button', { name: 'Atualizar histórico' }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
     await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
     await waitFor(() => expect(mockedSendMessage).toHaveBeenCalledTimes(2));
@@ -1386,7 +1377,7 @@ describe('ConversationWorkspace', () => {
     await openMessages(user);
 
     expect(await screen.findByText(/· Envio pendente$/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Atualizar' }));
+    await user.click(screen.getByRole('button', { name: 'Atualizar histórico' }));
 
     expect(await screen.findByText(/· Falha no envio$/)).toBeInTheDocument();
     expect(

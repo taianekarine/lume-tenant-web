@@ -95,7 +95,6 @@ import {
   type ConversationControl,
 } from './conversation-labels';
 import { ConversationMessageSheet } from './conversation-message-sheet';
-import { ConversationMetricsCards } from './conversation-metrics-cards';
 import { ConversationQuoteActions } from './conversation-quote-actions';
 import { conversationWorkspaceStyles as styles } from './conversation-workspace.styles';
 
@@ -320,6 +319,7 @@ export function ConversationWorkspace({
   );
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [inboxView, setInboxView] = useState<'all' | 'unread'>('all');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [listPage, setListPage] = useState(initialPagination.page);
   const [departmentFilter, setDepartmentFilter] = useState<WhatsAppConversationDepartment | 'all'>(
@@ -352,7 +352,6 @@ export function ConversationWorkspace({
   const [manualCommercialStatus, setManualCommercialStatus] =
     useState<ManualCommercialStatus>('under-review');
   const [manualCommercialStatusReason, setManualCommercialStatusReason] = useState('');
-  const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [loadedConversationIds, setLoadedConversationIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -681,10 +680,17 @@ export function ConversationWorkspace({
           conversation.requestStatus === requestStatusFilter);
       const matchesSearch =
         normalizedQuery.length === 0 || conversationMatchesSearch(conversation, normalizedQuery);
+      const matchesInboxView = inboxView === 'all' || conversation.unreadCount > 0;
 
-      return matchesDepartment && matchesControl && matchesRequestStatus && matchesSearch;
+      return (
+        matchesDepartment &&
+        matchesControl &&
+        matchesRequestStatus &&
+        matchesSearch &&
+        matchesInboxView
+      );
     });
-  }, [conversations, controlFilter, departmentFilter, requestStatusFilter, searchTerm]);
+  }, [conversations, controlFilter, departmentFilter, inboxView, requestStatusFilter, searchTerm]);
 
   const selectedConversation =
     conversations.find((conversation) => conversation.id === selectedConversationId) ?? null;
@@ -731,7 +737,6 @@ export function ConversationWorkspace({
         : 'under-review',
     );
     setManualCommercialStatusReason('');
-    setIsMessagesOpen(false);
     humanMessageSubmissionRef.current = null;
 
     if (conversation.unreadCount === 0) return;
@@ -1097,13 +1102,12 @@ export function ConversationWorkspace({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <ConversationMetricsCards conversations={conversations} metrics={metrics} className="mt-4" />
       <section aria-labelledby="conversation-workspace-title" className={styles.section()}>
         <h2 id="conversation-workspace-title" className={styles.visuallyHidden()}>
           Caixa de entrada de conversas
         </h2>
 
-        <aside className={cn(styles.sidebar(), mobileDetailOpen ? 'hidden xl:flex' : 'flex')}>
+        <aside className={cn(styles.sidebar(), mobileDetailOpen ? 'hidden lg:flex' : 'flex')}>
           <div className={styles.sidebarHeader()}>
             <div className={styles.sidebarHeading()}>
               <div>
@@ -1118,9 +1122,10 @@ export function ConversationWorkspace({
                   onClick={() => void refreshList(true)}
                   disabled={isRefreshing}
                   className={styles.refreshButton()}
+                  aria-label={isRefreshing ? 'Atualizando conversas' : 'Atualizar conversas'}
+                  title={isRefreshing ? 'Atualizando conversas' : 'Atualizar conversas'}
                 >
                   <RefreshCw aria-hidden="true" />
-                  {isRefreshing ? 'Atualizando' : 'Atualizar'}
                 </button>
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -1172,114 +1177,150 @@ export function ConversationWorkspace({
                 type="search"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Nome, telefone, mensagem ou etapa"
+                placeholder="Pesquisar ou começar nova conversa"
                 className={styles.searchInput()}
               />
             </div>
 
-            <div className={styles.filters()}>
-              <div>
-                <label htmlFor="department-filter" className={styles.filterLabel()}>
-                  Departamento
-                </label>
-                <Select
-                  value={departmentFilter}
-                  onValueChange={(value) => {
-                    setListPage(1);
-                    setDepartmentFilter(isWhatsAppConversationDepartment(value) ? value : 'all');
-                  }}
-                >
-                  <SelectTrigger id="department-filter" className={styles.filterSelect()}>
-                    <span>
-                      {departmentFilter === 'all' ? 'Todos' : DEPARTMENT_LABELS[departmentFilter]}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {WHATSAPP_ROUTABLE_DEPARTMENTS.map((department) => (
-                      <SelectItem key={department} value={department}>
-                        {DEPARTMENT_LABELS[department]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label htmlFor="control-filter" className={styles.filterLabel()}>
-                  Condução
-                </label>
-                <Select
-                  value={controlFilter}
-                  onValueChange={(value) => {
-                    setListPage(1);
-                    setControlFilter(
-                      value === 'bot' ||
-                        value === 'human' ||
-                        value === 'paused' ||
-                        value === 'closed'
-                        ? value
-                        : 'all',
-                    );
-                  }}
-                >
-                  <SelectTrigger id="control-filter" className={styles.filterSelect()}>
-                    <span>
-                      {controlFilter === 'all'
-                        ? 'Todas'
-                        : controlFilter === 'bot'
-                          ? 'Bot ativo'
-                          : controlFilter === 'human'
-                            ? 'Atendente ativo'
-                            : controlFilter === 'paused'
-                              ? 'Bot bloqueado'
-                              : 'Encerrada'}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="bot">Bot ativo</SelectItem>
-                    <SelectItem value="human">Atendente ativo</SelectItem>
-                    <SelectItem value="paused">Bot bloqueado</SelectItem>
-                    <SelectItem value="closed">Encerrada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className={styles.wideFilter()}>
-                <label htmlFor="request-status-filter" className={styles.filterLabel()}>
-                  Status comercial
-                </label>
-                <Select
-                  value={requestStatusFilter}
-                  onValueChange={(value) => {
-                    setListPage(1);
-                    setRequestStatusFilter(
-                      typeof value === 'string' &&
-                        (WHATSAPP_REQUEST_STATUSES as readonly string[]).includes(value)
-                        ? (value as WhatsAppRequestStatus)
-                        : 'all',
-                    );
-                  }}
-                >
-                  <SelectTrigger id="request-status-filter" className={styles.filterSelect()}>
-                    <span>
-                      {requestStatusFilter === 'all'
-                        ? 'Todos os status'
-                        : REQUEST_STATUS_LABELS[requestStatusFilter]}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent alignItemWithTrigger={false}>
-                    <SelectItem value="all">Todos os status</SelectItem>
-                    {WHATSAPP_REQUEST_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {REQUEST_STATUS_LABELS[status]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className={styles.quickFilters()} aria-label="Filtros rápidos das conversas">
+              <button
+                type="button"
+                className={styles.quickFilter({ active: inboxView === 'all' })}
+                onClick={() => setInboxView('all')}
+              >
+                Tudo
+              </button>
+              <button
+                type="button"
+                className={styles.quickFilter()}
+                disabled
+                title="Favoritos estarão disponíveis em uma próxima atualização"
+              >
+                Favoritas
+              </button>
+              <button
+                type="button"
+                className={styles.quickFilter()}
+                disabled
+                title="Grupos não fazem parte do atendimento individual"
+              >
+                Grupos
+              </button>
+              <button
+                type="button"
+                className={styles.quickFilter({ active: inboxView === 'unread' })}
+                onClick={() => setInboxView('unread')}
+              >
+                Não lidas {metrics.unreadConversations}
+              </button>
             </div>
+
+            <details className={styles.advancedFilters()}>
+              <summary>Mais filtros</summary>
+              <div className={styles.filters()}>
+                <div>
+                  <label htmlFor="department-filter" className={styles.filterLabel()}>
+                    Departamento
+                  </label>
+                  <Select
+                    value={departmentFilter}
+                    onValueChange={(value) => {
+                      setListPage(1);
+                      setDepartmentFilter(isWhatsAppConversationDepartment(value) ? value : 'all');
+                    }}
+                  >
+                    <SelectTrigger id="department-filter" className={styles.filterSelect()}>
+                      <span>
+                        {departmentFilter === 'all' ? 'Todos' : DEPARTMENT_LABELS[departmentFilter]}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {WHATSAPP_ROUTABLE_DEPARTMENTS.map((department) => (
+                        <SelectItem key={department} value={department}>
+                          {DEPARTMENT_LABELS[department]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label htmlFor="control-filter" className={styles.filterLabel()}>
+                    Condução
+                  </label>
+                  <Select
+                    value={controlFilter}
+                    onValueChange={(value) => {
+                      setListPage(1);
+                      setControlFilter(
+                        value === 'bot' ||
+                          value === 'human' ||
+                          value === 'paused' ||
+                          value === 'closed'
+                          ? value
+                          : 'all',
+                      );
+                    }}
+                  >
+                    <SelectTrigger id="control-filter" className={styles.filterSelect()}>
+                      <span>
+                        {controlFilter === 'all'
+                          ? 'Todas'
+                          : controlFilter === 'bot'
+                            ? 'Bot ativo'
+                            : controlFilter === 'human'
+                              ? 'Atendente ativo'
+                              : controlFilter === 'paused'
+                                ? 'Bot bloqueado'
+                                : 'Encerrada'}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="bot">Bot ativo</SelectItem>
+                      <SelectItem value="human">Atendente ativo</SelectItem>
+                      <SelectItem value="paused">Bot bloqueado</SelectItem>
+                      <SelectItem value="closed">Encerrada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className={styles.wideFilter()}>
+                  <label htmlFor="request-status-filter" className={styles.filterLabel()}>
+                    Status comercial
+                  </label>
+                  <Select
+                    value={requestStatusFilter}
+                    onValueChange={(value) => {
+                      setListPage(1);
+                      setRequestStatusFilter(
+                        typeof value === 'string' &&
+                          (WHATSAPP_REQUEST_STATUSES as readonly string[]).includes(value)
+                          ? (value as WhatsAppRequestStatus)
+                          : 'all',
+                      );
+                    }}
+                  >
+                    <SelectTrigger id="request-status-filter" className={styles.filterSelect()}>
+                      <span>
+                        {requestStatusFilter === 'all'
+                          ? 'Todos os status'
+                          : REQUEST_STATUS_LABELS[requestStatusFilter]}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectItem value="all">Todos os status</SelectItem>
+                      {WHATSAPP_REQUEST_STATUSES.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          {REQUEST_STATUS_LABELS[status]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </details>
           </div>
 
           <div className={styles.conversationList()}>
@@ -1399,7 +1440,7 @@ export function ConversationWorkspace({
           ) : null}
         </aside>
 
-        <div className={cn(styles.detail(), mobileDetailOpen ? 'flex' : 'hidden xl:flex')}>
+        <div className={cn(styles.detail(), mobileDetailOpen ? 'flex' : 'hidden lg:flex')}>
           {selectedConversation !== null ? (
             <>
               <header className={styles.detailHeader()}>
@@ -1407,7 +1448,7 @@ export function ConversationWorkspace({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  className="xl:hidden"
+                  className="lg:hidden"
                   onClick={() => setMobileDetailOpen(false)}
                   aria-label="Voltar para a caixa de entrada"
                 >
@@ -1588,42 +1629,6 @@ export function ConversationWorkspace({
                     </button>
                   </div>
                   <div className={styles.actions()}>
-                    <ConversationMessageSheet
-                      conversation={selectedConversation}
-                      open={isMessagesOpen}
-                      onOpenChange={setIsMessagesOpen}
-                      isLoading={isLoadingDetail}
-                      isLoaded={loadedConversationIds.has(selectedConversation.id)}
-                      detailError={detailError}
-                      onRetry={() => void loadConversationDetail(selectedConversation.id)}
-                      onLoadOlder={() => {
-                        const nextPage = (selectedConversation.messageHistory?.page ?? 1) + 1;
-                        void loadConversationDetail(selectedConversation.id, nextPage);
-                      }}
-                      isLoadingOlder={isLoadingOlderMessages}
-                      onRefresh={() => void refreshList(true)}
-                      messageDraft={messageDraft}
-                      onMessageDraftChange={setMessageDraft}
-                      selectedAttachment={selectedAttachment}
-                      onSelectedAttachmentChange={(file, kind = 'auto') => {
-                        setSelectedAttachment(file);
-                        setSelectedAttachmentKind(file ? kind : 'auto');
-                        humanMediaSubmissionRef.current = null;
-                      }}
-                      canSendMessage={canCurrentUserSendMessage}
-                      canTakeOver={canTakeOverWhatsAppConversation(selectedConversation)}
-                      isTakingOver={isUpdatingConversation}
-                      onTakeOver={() =>
-                        handleVersionedAction(
-                          takeOverWhatsAppConversationAction,
-                          'Atendimento assumido com sucesso.',
-                        )
-                      }
-                      isSendingMessage={isSendingMessage}
-                      onSendMessage={handleSendHumanMessage}
-                      feedbackMessage={feedbackTone === 'error' ? '' : feedbackMessage}
-                      feedbackTone={feedbackTone}
-                    />
                     <button
                       type="button"
                       onClick={() => setIsForwardDialogOpen(true)}
@@ -1832,14 +1837,42 @@ export function ConversationWorkspace({
                     <Button
                       type="button"
                       variant="outline"
+                      size="sm"
                       onClick={() => setIsHistoryDialogOpen(true)}
                     >
                       <History aria-hidden="true" />
-                      Histórico de ações
+                      Histórico
                     </Button>
                   </div>
                 </div>
               </section>
+
+              <ConversationMessageSheet
+                conversation={selectedConversation}
+                isLoading={isLoadingDetail}
+                isLoaded={loadedConversationIds.has(selectedConversation.id)}
+                detailError={detailError}
+                onRetry={() => void loadConversationDetail(selectedConversation.id)}
+                onLoadOlder={() => {
+                  const nextPage = (selectedConversation.messageHistory?.page ?? 1) + 1;
+                  void loadConversationDetail(selectedConversation.id, nextPage);
+                }}
+                isLoadingOlder={isLoadingOlderMessages}
+                onRefresh={() => void refreshList(true)}
+                messageDraft={messageDraft}
+                onMessageDraftChange={setMessageDraft}
+                selectedAttachment={selectedAttachment}
+                onSelectedAttachmentChange={(file, kind = 'auto') => {
+                  setSelectedAttachment(file);
+                  setSelectedAttachmentKind(file ? kind : 'auto');
+                  humanMediaSubmissionRef.current = null;
+                }}
+                canSendMessage={canCurrentUserSendMessage}
+                isSendingMessage={isSendingMessage}
+                onSendMessage={handleSendHumanMessage}
+                feedbackMessage={feedbackTone === 'error' ? '' : feedbackMessage}
+                feedbackTone={feedbackTone}
+              />
 
               <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
                 <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
