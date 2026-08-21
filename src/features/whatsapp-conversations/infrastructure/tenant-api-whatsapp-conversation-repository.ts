@@ -9,6 +9,7 @@ import {
   type GetWhatsAppConversationsFilters,
   type SendHumanWhatsAppMessageCommand,
   type SendHumanWhatsAppMessageResult,
+  type WhatsAppConversationPage,
   type WhatsAppMessageSearchResult,
   type WhatsAppConversationRepository,
   type WhatsAppConversationRepositoryErrorCode,
@@ -21,6 +22,7 @@ import {
   WHATSAPP_MESSAGE_DIRECTIONS,
   WHATSAPP_MESSAGE_KINDS,
   WHATSAPP_REQUEST_STATUSES,
+  getWhatsAppConversationMetrics,
   type WhatsAppConversation,
   type WhatsAppConversationDepartment,
   type WhatsAppConversationTransition,
@@ -111,6 +113,16 @@ const paginationSchema = z.object({
 const conversationListSchema = z.object({
   data: z.array(conversationSchema),
   meta: paginationSchema,
+  summary: z
+    .object({
+      total: z.number().int().nonnegative(),
+      botActive: z.number().int().nonnegative(),
+      attendantActive: z.number().int().nonnegative(),
+      automationPaused: z.number().int().nonnegative(),
+      unreadMessages: z.number().int().nonnegative(),
+      unreadConversations: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 
 const messageAttemptSchema = z.object({
@@ -235,6 +247,7 @@ function filtersToQuery(filters?: GetWhatsAppConversationsFilters): string {
   if (filters?.search?.trim()) params.set('search', filters.search.trim());
   if (filters?.department) params.set('department', filters.department);
   if (filters?.state) params.set('state', filters.state);
+  if (filters?.control) params.set('control', filters.control);
   if (filters?.requestStatus) params.set('requestStatus', filters.requestStatus);
 
   return `?${params.toString()}`;
@@ -261,6 +274,21 @@ function mapQuoteRequest(
     ...quoteRequest,
     structuredData: quoteRequest.structuredData,
   };
+}
+
+function isTelephoneLabel(value: string): boolean {
+  const normalized = value.trim();
+  return normalized.length > 0 && /^[+\d\s().-]+$/u.test(normalized);
+}
+
+function contactDisplayName(conversation: ApiConversation): string {
+  const savedName = conversation.contact.displayName?.trim();
+  if (savedName && !isTelephoneLabel(savedName)) return savedName;
+
+  const confirmedName = conversation.currentQuoteRequest?.contactName?.trim();
+  if (confirmedName && !isTelephoneLabel(confirmedName)) return confirmedName;
+
+  return 'Contato não identificado';
 }
 
 function mapAttachment(message: ApiMessage): WhatsAppMessageAttachment | null {
@@ -321,7 +349,7 @@ function mapConversation(
     channel: conversation.channel,
     contact: {
       id: conversation.contact.id,
-      name: conversation.contact.displayName?.trim() || conversation.contact.phone,
+      name: contactDisplayName(conversation),
       phone: conversation.contact.phone,
       profilePictureUrl: conversation.contact.profilePictureUrl,
     },
@@ -354,6 +382,7 @@ function responseStatusToErrorCode(status: number): WhatsAppConversationReposito
   if (status === 404) return 'not-found';
   if (status === 409) return 'conflict';
   if (status === 400 || status === 422) return 'validation';
+  if (status === 429) return 'too-many-requests';
   return 'service-unavailable';
 }
 
@@ -412,19 +441,31 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
   async getConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]> {
-    return this.getConversationCollection('/whatsapp/conversations', filters);
+    return (await this.getConversationPage(filters)).conversations;
   }
 
   async getDashboardConversations(
     filters?: GetWhatsAppConversationsFilters,
   ): Promise<readonly WhatsAppConversation[]> {
-    return this.getConversationCollection('/whatsapp/conversations/dashboard', filters);
+    return (await this.getDashboardConversationPage(filters)).conversations;
   }
 
-  private async getConversationCollection(
+  getConversationPage(
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<WhatsAppConversationPage> {
+    return this.getConversationCollectionPage('/whatsapp/conversations', filters);
+  }
+
+  getDashboardConversationPage(
+    filters?: GetWhatsAppConversationsFilters,
+  ): Promise<WhatsAppConversationPage> {
+    return this.getConversationCollectionPage('/whatsapp/conversations/dashboard', filters);
+  }
+
+  private async getConversationCollectionPage(
     path: string,
     filters?: GetWhatsAppConversationsFilters,
-  ): Promise<readonly WhatsAppConversation[]> {
+  ): Promise<WhatsAppConversationPage> {
     const firstPage = filters?.page ?? 1;
     const pageSize = filters?.pageSize ?? 100;
     const response = parseResponse(
@@ -438,31 +479,19 @@ export class LumeApiWhatsAppConversationRepository implements WhatsAppConversati
       ),
     );
 
-    if (filters?.page || response.meta.totalPages <= firstPage) {
-      return response.data.map((conversation) => mapConversation(conversation));
-    }
+    const conversations = response.data.map((conversation) => mapConversation(conversation));
+    const localMetrics = getWhatsAppConversationMetrics(conversations);
 
-    const remainingPages = await Promise.all(
-      Array.from(
-        { length: response.meta.totalPages - firstPage },
-        (_unused, index) => firstPage + index + 1,
-      ).map(async (page) =>
-        parseResponse(
-          conversationListSchema,
-          await this.request(
-            `${path}${filtersToQuery({
-              ...filters,
-              page,
-              pageSize,
-            })}`,
-          ),
-        ),
-      ),
-    );
-
-    return [response, ...remainingPages].flatMap((page) =>
-      page.data.map((conversation) => mapConversation(conversation)),
-    );
+    return {
+      conversations,
+      ...response.meta,
+      metrics: response.summary
+        ? {
+            ...response.summary,
+            awaitingProposal: 0,
+          }
+        : localMetrics,
+    };
   }
 
   async getConversationById(

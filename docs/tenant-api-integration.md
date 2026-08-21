@@ -59,6 +59,22 @@ manual, o download e a aplicação usam uma única planilha consolidada. Configu
 `LUME_TENANT_API_WHATSAPP_IMPORT_TIMEOUT_MS` acima da janela esperada para um ZIP
 grande, sem remover os limites de segurança da Tenant API.
 
+No modo Android completo, a mesma fronteira usa as rotas
+`android-database-uploads`: inicia ou retoma o envio, transmite o
+`msgstore.db.crypt15` em blocos de 16 MiB e confirma cada deslocamento. A tela
+mostra os bytes efetivamente recebidos e uma interrupção continua do último
+bloco confirmado. A chave efêmera e a situação/departamento são enviados apenas
+na confirmação final; a resposta nunca devolve a chave. Depois da validação, a
+tela consulta o lote enquanto o status for `applying` e apresenta mensagens,
+conversas e blocos já processados.
+
+Depois da aplicação, o ZIP da pasta `Media` usa um protocolo retomável: a tela
+inicia o envio, transmite blocos de 16 MiB a partir do deslocamento confirmado
+pela API e solicita a conclusão. A vinculação ocorre em segundo plano; a tela
+consulta o manifesto periodicamente para mostrar arquivos conferidos e
+armazenados. Selecionar novamente o mesmo nome e tamanho retoma o envio parcial
+sem reiniciá-lo.
+
 Uma conversa já aplicada pode participar de um novo lote sem duplicar mensagens
 nem bloquear as demais. Arquivos realmente presentes em cada ZIP são retidos
 pela Tenant API e passam a usar a mesma rota autenticada das mídias correntes.
@@ -160,6 +176,12 @@ mostrados como códigos. A interface usa rótulos em português e restringe
 seletores, filtros e encaminhamentos às nove filas do MVP. O departamento atual
 também é removido das opções de encaminhamento.
 
+O nome exibido na caixa de entrada prioriza o contato salvo na agenda do Lume.
+Quando a importação histórica ainda possui somente o telefone, o painel tenta o
+nome confirmado no orçamento atual e, se ele também não existir, apresenta
+`Contato não identificado`. O telefone permanece em seu campo próprio e nunca é
+promovido a nome do contato.
+
 Toda escrita envia:
 
 ```json
@@ -205,7 +227,11 @@ Leitura da API exige `whatsapp-conversations:view` ou
 
 Não há SSE publicado. O MVP atualiza a lista por polling server-side a cada
 quatro segundos quando a aba está visível, usa backoff exponencial até trinta
-segundos em falhas e reduz consultas com a aba oculta. O detalhe completo só é
+segundos em falhas e reduz consultas com a aba oculta. Cada ciclo solicita
+somente uma página de 25 conversas com filtros server-side; `meta` e `summary`
+fornecem paginação e indicadores sem percorrer as demais páginas. Requisições
+substituídas são canceladas e HTTP 429 permanece 429 para acionar o backoff. O
+detalhe completo só é
 recarregado quando a conversa selecionada muda de versão ou `updatedAt`, ou
 enquanto há uma mensagem outbound `pending`. A última condição é necessária
 porque uma falha de entrega pode atualizar a mensagem sem incrementar a versão
@@ -309,9 +335,10 @@ navegador não recebe credenciais e não chama o provedor.
 O frontend nunca contorna essas ausências chamando cache, Evolution,
 `lume-edge-agent` ou `lume-control` diretamente.
 
-## Contrato futuro de arquivos, importação e exportação
+## Contrato futuro de arquivos, importação e exportação genéricos
 
-O Tenant Web não converte documentos ou planilhas. Quando a Tenant API publicar
+O Tenant Web não converte documentos ou planilhas. Fora dos contratos já
+publicados para documentos e roteirização, quando a Tenant API publicar
 o contrato definitivo, a integração deve ser criada como gateway server-only e
 tipos validados com Zod. A tela futura poderá enviar um arquivo, consultar o
 progresso do lote, apresentar erros por registro e baixar o resultado
@@ -531,6 +558,24 @@ confirmação do usuário no aplicativo de e-mail.
 permissões implícitas de autoatendimento publicadas pela Tenant API. Elas são
 somadas às permissões individuais sem criar um atalho para páginas de outro
 departamento.
+
+## Roteirização
+
+O gateway autenticado integra `routing/companies`, `routing/fixed-points`,
+`routing/contracts`, `routing/passengers` e `routing/routes`. Comandos de criação, importação,
+geração e ciclo de aprovação recebem `commandId`; alterações concorrentes usam
+`expectedVersion`. O upload XLSX/CSV/TSV é multipart e nunca expõe o token ao
+browser. A seleção do cliente é enviada fora da planilha, e correções de CEP
+pendentes usam o endpoint do registro de importação antes de revalidá-lo.
+
+No frontend, a exclusão definitiva de um cliente só é apresentada quando seu
+status já não é `active`; clientes em operação recebem primeiro a ação de
+desativação, que preserva o histórico. A Tenant API ainda valida senha,
+dependências e permissões no comando de exclusão.
+
+Rotas são geradas exclusivamente por contrato. Downloads são proxied por Route
+Handlers autenticadas: `export.pdf`, `export.xlsx`, `my-maps.xlsx` e
+`my-maps.csv`. Os formatos do My Maps não incluem centro de custo.
 
 ## Dashboard e notificações por departamento
 

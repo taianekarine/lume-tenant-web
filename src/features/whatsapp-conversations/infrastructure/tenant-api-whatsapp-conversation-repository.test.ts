@@ -145,6 +145,14 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       jsonResponse({
         data: [apiConversation()],
         meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+        summary: {
+          total: 1,
+          botActive: 0,
+          attendantActive: 0,
+          automationPaused: 1,
+          unreadMessages: 2,
+          unreadConversations: 1,
+        },
       }),
     );
     const repository = new LumeApiWhatsAppConversationRepository(
@@ -158,6 +166,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       search: 'Ana',
       department: 'commercial',
       state: 'sent-to-human',
+      control: 'paused',
       requestStatus: 'under-review',
     });
 
@@ -170,7 +179,7 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       messages: [],
     });
     expect(fetcher).toHaveBeenCalledWith(
-      'http://localhost:3333/api/v1/whatsapp/conversations?page=1&pageSize=100&search=Ana&department=commercial&state=sent-to-human&requestStatus=under-review',
+      'http://localhost:3333/api/v1/whatsapp/conversations?page=1&pageSize=100&search=Ana&department=commercial&state=sent-to-human&control=paused&requestStatus=under-review',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer access-token',
@@ -180,22 +189,23 @@ describe('LumeApiWhatsAppConversationRepository', () => {
     );
   });
 
-  it('loads every page so department queues are not limited to the first 100 conversations', async () => {
-    const secondConversationId = '00000000-0000-4000-8000-000000000102';
-    const fetcher = jest
-      .fn()
-      .mockResolvedValueOnce(
-        jsonResponse({
-          data: [apiConversation()],
-          meta: { page: 1, pageSize: 100, total: 2, totalPages: 2 },
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          data: [apiConversation({ id: secondConversationId })],
-          meta: { page: 2, pageSize: 100, total: 2, totalPages: 2 },
-        }),
-      );
+  it('does not present a telephone number as the contact name', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse({
+        data: [
+          apiConversation({
+            contact: {
+              id: '00000000-0000-4000-8000-000000000301',
+              phone: '+91 94126-76488',
+              displayName: '+919412676488',
+              profilePictureUrl: null,
+            },
+            currentQuoteRequest: null,
+          }),
+        ],
+        meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+      }),
+    );
     const repository = new LumeApiWhatsAppConversationRepository(
       'http://localhost:3333/api/v1/',
       'access-token',
@@ -203,12 +213,86 @@ describe('LumeApiWhatsAppConversationRepository', () => {
       1_500,
     );
 
-    await expect(repository.getConversations({ department: 'controlling' })).resolves.toMatchObject(
-      [{ id: conversationId }, { id: secondConversationId }],
+    const [conversation] = await repository.getConversations();
+
+    expect(conversation?.contact).toEqual(
+      expect.objectContaining({
+        name: 'Contato não identificado',
+        phone: '+91 94126-76488',
+      }),
     );
-    expect(fetcher).toHaveBeenNthCalledWith(
-      2,
-      'http://localhost:3333/api/v1/whatsapp/conversations?page=2&pageSize=100&department=controlling',
+  });
+
+  it('uses the confirmed quote contact when the imported contact has no real name', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse({
+        data: [
+          apiConversation({
+            contact: {
+              id: '00000000-0000-4000-8000-000000000301',
+              phone: '(34) 99999-1001',
+              displayName: '5534999991001',
+              profilePictureUrl: null,
+            },
+            currentQuoteRequest: apiQuote(),
+          }),
+        ],
+        meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+      }),
+    );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'http://localhost:3333/api/v1/',
+      'access-token',
+      fetcher,
+      1_500,
+    );
+
+    const [conversation] = await repository.getConversations();
+
+    expect(conversation?.contact.name).toBe('Ana Paula');
+  });
+
+  it('loads only the requested page even when the tenant has thousands of conversations', async () => {
+    const fetcher = jest.fn().mockResolvedValue(
+      jsonResponse({
+        data: [apiConversation()],
+        meta: { page: 3, pageSize: 25, total: 12_560, totalPages: 503 },
+        summary: {
+          total: 12_560,
+          botActive: 10,
+          attendantActive: 20,
+          automationPaused: 30,
+          unreadMessages: 40,
+          unreadConversations: 5,
+        },
+      }),
+    );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'http://localhost:3333/api/v1/',
+      'access-token',
+      fetcher,
+      1_500,
+    );
+
+    await expect(
+      repository.getConversationPage({ page: 3, pageSize: 25, department: 'controlling' }),
+    ).resolves.toMatchObject({
+      conversations: [{ id: conversationId }],
+      page: 3,
+      pageSize: 25,
+      total: 12_560,
+      totalPages: 503,
+      metrics: {
+        botActive: 10,
+        attendantActive: 20,
+        automationPaused: 30,
+        unreadMessages: 40,
+        unreadConversations: 5,
+      },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://localhost:3333/api/v1/whatsapp/conversations?page=3&pageSize=25&department=controlling',
       expect.any(Object),
     );
   });
@@ -531,6 +615,23 @@ describe('LumeApiWhatsAppConversationRepository', () => {
         currentVersion: 12,
       }),
     );
+  });
+
+  it('maps HTTP 429 without converting throttling into service unavailability', async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ message: 'Aguarde alguns instantes antes de atualizar novamente.' }, 429),
+      );
+    const repository = new LumeApiWhatsAppConversationRepository(
+      'https://tenant.example/api/v1',
+      'token',
+      fetcher,
+    );
+
+    await expect(repository.getConversationPage()).rejects.toMatchObject({
+      code: 'too-many-requests',
+    });
   });
 
   it('posts an idempotent human message to the JWT panel endpoint', async () => {

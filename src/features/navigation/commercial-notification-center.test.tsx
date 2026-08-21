@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { usePathname } from 'next/navigation';
 
 import type { User } from '@/features/auth/domain';
 import { createWhatsAppConversationFixture } from '@/features/whatsapp-conversations/testing/whatsapp-conversation-fixture';
@@ -12,6 +13,10 @@ import {
 
 const toastAdd = jest.fn();
 
+jest.mock('next/navigation', () => ({
+  usePathname: jest.fn(),
+}));
+
 jest.mock('@/shared/ui/toast', () => ({
   toast: { add: (...args: unknown[]) => toastAdd(...args) },
 }));
@@ -23,6 +28,7 @@ jest.mock('./department-notification-action', () => ({
 
 const mockedDepartmentNotifications = jest.mocked(getDepartmentNotificationsAction);
 const mockedMarkNotificationRead = jest.mocked(markDepartmentNotificationReadAction);
+const mockedUsePathname = jest.mocked(usePathname);
 const originalFetch = global.fetch;
 
 function employee(
@@ -46,6 +52,7 @@ function employee(
 
 describe('CommercialNotificationCenter', () => {
   beforeEach(() => {
+    mockedUsePathname.mockReturnValue('/dashboard');
     window.localStorage.clear();
     mockedDepartmentNotifications.mockResolvedValue({
       success: true,
@@ -141,6 +148,19 @@ describe('CommercialNotificationCenter', () => {
 
     expect(screen.getByRole('button', { name: 'Notificações' })).toBeVisible();
     await waitFor(() => expect(mockedDepartmentNotifications).toHaveBeenCalledTimes(1));
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('suspende consultas paralelas durante a importação de históricos', async () => {
+    mockedUsePathname.mockReturnValue('/whatsapp-conversations/import');
+
+    const { container } = render(
+      <CommercialNotificationCenter user={employee(['commercial'])} />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(mockedDepartmentNotifications).not.toHaveBeenCalled();
     expect(global.fetch).not.toHaveBeenCalled();
   });
 

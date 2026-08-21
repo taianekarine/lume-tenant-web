@@ -6,7 +6,10 @@ export interface TenantUser {
   readonly cpf: string | null;
   readonly departments: readonly string[];
   readonly isAdministrator: boolean;
-  readonly documentAccessMode?: 'standard' | 'document-portal';
+  readonly type?: 'employee' | 'candidate' | 'client';
+  readonly routingCompanyId?: string | null;
+  readonly clientCategory?: 'legal-entity' | 'individual' | null;
+  readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
   readonly jobTitle: string | null;
   readonly maritalStatus:
     'single' | 'married' | 'stable-union' | 'divorced' | 'widowed' | 'not-informed' | null;
@@ -97,12 +100,14 @@ export interface TenantProfile {
 }
 
 export interface CreateTenantUserInput {
+  readonly routingCompanyId?: string | null;
+  readonly clientCategory?: 'legal-entity' | 'individual' | null;
   readonly name: string;
   readonly username: string;
   readonly email: string;
   readonly password: string;
   readonly isAdministrator: boolean;
-  readonly documentAccessMode?: 'standard' | 'document-portal';
+  readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
   readonly requestDocuments?: boolean;
   readonly jobTitle?: string;
   readonly maritalStatus?: NonNullable<TenantUser['maritalStatus']>;
@@ -114,11 +119,13 @@ export interface CreateTenantUserInput {
 }
 
 export interface UpdateTenantUserInput {
+  readonly routingCompanyId?: string | null;
+  readonly clientCategory?: 'legal-entity' | 'individual' | null;
   readonly name?: string;
   readonly email?: string;
   readonly cpf?: string | null;
   readonly isAdministrator?: boolean;
-  readonly documentAccessMode?: 'standard' | 'document-portal';
+  readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
   readonly jobTitle?: string | null;
   readonly maritalStatus?: TenantUser['maritalStatus'];
   readonly militaryDocumentStatus?: TenantUser['militaryDocumentStatus'];
@@ -146,6 +153,7 @@ export const TENANT_DEPARTMENTS = [
   'monitoring',
   'operations',
   'information-technology',
+  'client-company',
 ] as const;
 
 export const TENANT_DEPARTMENT_LABELS: Readonly<Record<string, string>> = {
@@ -162,6 +170,7 @@ export const TENANT_DEPARTMENT_LABELS: Readonly<Record<string, string>> = {
   'human-resources': 'Recursos Humanos',
   controlling: 'Controladoria',
   cleaning: 'Limpeza',
+  'client-company': 'Empresa cliente',
   'information-technology': 'Tecnologia da Informação (TI)',
 };
 

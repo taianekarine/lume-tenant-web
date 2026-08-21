@@ -89,7 +89,11 @@ O empacotamento, as sondas e o procedimento de publicação/rollback estão em
 
 O Painel WhatsApp usa somente a Lume Tenant API, com histórico real, comandos
 versionados, resposta do atendente idempotente e polling server-side com
-backoff. O detalhe compacto exibe canal e responsável no cabeçalho; quando a
+backoff. A caixa de entrada consulta uma página por vez e envia pesquisa e
+filtros ao servidor; os indicadores agregados chegam no mesmo contrato. Assim,
+uma importação com milhares de conversas não dispara uma requisição por página
+nem excede o limite de chamadas da API. O detalhe compacto exibe canal e
+responsável no cabeçalho; quando a
 conversa está encerrada, projeta ali o atendente que executou o encerramento. Separa as
 ações operacionais em duas colunas e abre encaminhamento, status comercial,
 histórico de ações e orçamentos em modais. O botão **Abrir chat** abre o painel
@@ -113,6 +117,17 @@ planilha consolidada. Anexos contidos nos ZIPs ficam acessíveis nas respectivas
 mensagens; somente referências realmente ausentes são marcadas como
 indisponíveis. A gravação continua sob responsabilidade do importador oficial
 da Tenant API.
+
+A mesma tela aceita `msgstore.db.crypt15` para importar em lote o backup
+Android completo. A chave de 64 caracteres é encaminhada apenas à Tenant API e
+apagada do formulário assim que o arquivo é validado. A aplicação acompanha o
+processamento assíncrono por blocos. Antes da confirmação, a tela separa
+mensagens já existentes, novas e divergentes e também mídias já armazenadas,
+novas e ainda ausentes. Repetir o mesmo backup não duplica o histórico; um
+backup posterior acrescenta somente mensagens novas e pode completar mídias
+pendentes de importações anteriores. O ZIP de mídias é enviado em blocos
+retomáveis e vinculado em segundo plano, com progresso persistente na tela; o
+navegador não precisa manter o arquivo inteiro em memória.
 
 No MVP, uma proposta aprovada não impede o atendente de encerrar a conversa,
 desde que não exista outra proposta em coleta, aguardando cliente ou em análise.
@@ -164,11 +179,29 @@ navegador e nunca podem conter chaves, tokens, senhas ou licenças.
 - o tratamento compartilhado de erros públicos para sempre informar um código
   útil ao suporte.
 
-Uma futura interface de importação e exportação deve receber da Tenant API um
-contrato de lote, progresso, erros por registro e download. Conversão de
-documentos e planilhas não deve ocorrer no navegador. Enquanto esse contrato
-não estiver publicado, não deve ser criada uma tela que invente estados ou
-formatos.
+Novas interfaces genéricas de importação e exportação devem receber da Tenant
+API um contrato de lote, progresso, erros por registro e download. A exceção já
+publicada é o módulo de roteirização descrito abaixo. Conversão de documentos e
+planilhas continua proibida no navegador.
+
+## Roteirização orientada por contrato
+
+O módulo `/routing` segue cliente, contrato, importação da lista geral
+de colaboradores, sugestão automática, revisão, aprovação e publicação. Não há
+cadastro manual de rota-base. O modelo oficial e a importação usam XLSX; versões
+aprovadas podem ser exportadas em PDF e XLSX operacional ou XLSX/CSV para Google
+My Maps. Centro de custo pertence ao contrato e ao relatório operacional, mas é
+intencionalmente omitido dos arquivos do My Maps.
+
+Os modos de acesso são colaborador, candidato e cliente. Cliente PF ou PJ exige
+vínculo com o respectivo cadastro em **Clientes**. Funcionários internos com
+`passengers:import` selecionam o cliente na tela antes de baixar o modelo ou
+importar XLSX, CSV ou TSV; CPF/CNPJ não é repetido em cada linha.
+
+Em `/routing/companies`, o cadastro e as consultas são separados nas abas
+**Cadastrar cliente**, **Em operação** e **Desativados**. Um cliente ativo deve
+ser desativado para preservar o histórico antes que a opção progressiva de
+exclusão definitiva, protegida pela senha atual, seja exibida.
 
 ## Qualidade
 

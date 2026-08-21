@@ -13,3 +13,17 @@ export function getWhatsAppDashboardConversations(
 ) {
   return repository.getDashboardConversations(filters);
 }
+
+export function getWhatsAppConversationPage(
+  repository: WhatsAppConversationRepository,
+  filters?: GetWhatsAppConversationsFilters,
+) {
+  return repository.getConversationPage(filters);
+}
+
+export function getWhatsAppDashboardConversationPage(
+  repository: WhatsAppConversationRepository,
+  filters?: GetWhatsAppConversationsFilters,
+) {
+  return repository.getDashboardConversationPage(filters);
+}

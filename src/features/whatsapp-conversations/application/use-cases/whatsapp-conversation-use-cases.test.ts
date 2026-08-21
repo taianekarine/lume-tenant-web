@@ -18,6 +18,8 @@ function createRepository(): jest.Mocked<WhatsAppConversationRepository> {
     startConversation: jest.fn(),
     getConversations: jest.fn(),
     getDashboardConversations: jest.fn(),
+    getConversationPage: jest.fn(),
+    getDashboardConversationPage: jest.fn(),
     getConversationById: jest.fn(),
     searchMessages: jest.fn(),
     takeOverConversation: jest.fn(),

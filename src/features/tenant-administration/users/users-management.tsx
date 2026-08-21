@@ -332,9 +332,11 @@ function PermissionFields({
 function CreateUserDialog({
   permissionCatalog,
   canManageAccess,
+  routingCompanies,
 }: {
   readonly permissionCatalog: PermissionCatalog;
   readonly canManageAccess: boolean;
+  readonly routingCompanies: readonly { readonly id: string; readonly label: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -348,6 +350,8 @@ function CreateUserDialog({
       password: '',
       isAdministrator: false,
       documentAccessMode: canManageAccess ? 'standard' : 'document-portal',
+      clientCategory: null,
+      routingCompanyId: null,
       requestDocuments: !canManageAccess,
       departments: [],
       permissionCodes: [],
@@ -363,6 +367,7 @@ function CreateUserDialog({
     control: form.control,
     name: 'documentAccessMode',
   });
+  const clientCategory = useWatch({ control: form.control, name: 'clientCategory' });
   useWatch({ control: form.control });
   const preview = documentPreview(form.getValues());
   const standardPermissions = useMemo(
@@ -404,11 +409,19 @@ function CreateUserDialog({
 
   const createUser = form.handleSubmit((values) => {
     startTransition(async () => {
+      const scopedValues =
+        values.documentAccessMode === 'client'
+          ? values
+          : Object.fromEntries(
+              Object.entries(values).filter(
+                ([key]) => !['clientCategory', 'routingCompanyId'].includes(key),
+              ),
+            );
       const result = await createTenantUserFormAction(
         canManageAccess
-          ? values
+          ? scopedValues
           : {
-              ...values,
+              ...scopedValues,
               isAdministrator: false,
               documentAccessMode: 'document-portal',
               requestDocuments: true,
@@ -550,20 +563,36 @@ function CreateUserDialog({
                             form.setValue('requestDocuments', true, {
                               shouldValidate: true,
                             });
+                            form.setValue('clientCategory', null);
+                            form.setValue('routingCompanyId', null);
+                          } else if (value === 'client') {
+                            form.setValue('requestDocuments', false);
+                            form.setValue('departments', ['client-company'], {
+                              shouldValidate: true,
+                            });
+                          } else {
+                            form.setValue('clientCategory', null);
+                            form.setValue('routingCompanyId', null);
+                            form.setValue('departments', []);
                           }
                         }}
                       >
                         <SelectTrigger id="new-user-document-access" className="h-11 w-full">
                           <SelectValue>
-                            {field.value === 'document-portal'
-                              ? 'Candidato — somente documentos'
-                              : 'Colaborador — painel autorizado'}
+                            {field.value === 'client'
+                              ? 'Cliente - acesso contratado'
+                              : field.value === 'document-portal'
+                                ? 'Candidato — somente documentos'
+                                : 'Colaborador — painel autorizado'}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="standard">Colaborador — painel autorizado</SelectItem>
                           <SelectItem value="document-portal">
                             Candidato — somente documentos
+                          </SelectItem>
+                          <SelectItem value="client">
+                            Cliente - pessoa jurídica ou física
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -582,6 +611,65 @@ function CreateUserDialog({
                   </p>
                 </div>
               )}
+              {canManageAccess && documentAccessMode === 'client' ? (
+                <>
+                  <Field data-invalid={Boolean(form.formState.errors.clientCategory)}>
+                    <FieldLabel htmlFor="new-user-client-category">Tipo de cliente</FieldLabel>
+                    <Controller
+                      control={form.control}
+                      name="clientCategory"
+                      render={({ field }) => (
+                        <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                          <SelectTrigger id="new-user-client-category" className="h-11 w-full">
+                            <SelectValue>
+                              {field.value === 'legal-entity'
+                                ? 'Pessoa jurídica (PJ)'
+                                : field.value === 'individual'
+                                  ? 'Pessoa física (PF)'
+                                  : 'Selecione'}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="legal-entity">Pessoa jurídica (PJ)</SelectItem>
+                            <SelectItem value="individual">Pessoa física (PF)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    <FieldError errors={[form.formState.errors.clientCategory]} />
+                  </Field>
+                  {clientCategory ? (
+                    <Field data-invalid={Boolean(form.formState.errors.routingCompanyId)}>
+                      <FieldLabel htmlFor="new-user-routing-company">Cliente vinculado</FieldLabel>
+                      <Controller
+                        control={form.control}
+                        name="routingCompanyId"
+                        render={({ field }) => (
+                          <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                            <SelectTrigger id="new-user-routing-company" className="h-11 w-full">
+                              <SelectValue>
+                                {routingCompanies.find((company) => company.id === field.value)
+                                  ?.label ?? 'Selecione o cliente'}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {routingCompanies.map((company) => (
+                                <SelectItem key={company.id} value={company.id}>
+                                  {company.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                      <FieldDescription>
+                        O cliente PF ou PJ só acessa e importa dados deste cadastro.
+                      </FieldDescription>
+                      <FieldError errors={[form.formState.errors.routingCompanyId]} />
+                    </Field>
+                  ) : null}
+                </>
+              ) : null}
               <Field data-invalid={Boolean(form.formState.errors.requestDocuments)}>
                 <FieldLabel htmlFor="new-user-request-documents">
                   Solicitar documentação?
@@ -760,12 +848,20 @@ function CreateUserDialog({
                 Selecione um ou mais departamentos. Eles definem o limite das permissões que poderão
                 ser concedidas.
               </FieldDescription>
-              <AssignmentCheckboxes
-                control={form.control}
-                name="departments"
-                values={TENANT_DEPARTMENTS}
-                labels={TENANT_DEPARTMENT_LABELS}
-              />
+              {documentAccessMode === 'client' ? (
+                <p className="rounded-lg border bg-muted/40 p-4 text-sm">
+                  Escopo fixo: Empresa cliente. O isolamento dos dados também é aplicado pela API.
+                </p>
+              ) : (
+                <AssignmentCheckboxes
+                  control={form.control}
+                  name="departments"
+                  values={TENANT_DEPARTMENTS.filter(
+                    (department) => department !== 'client-company',
+                  )}
+                  labels={TENANT_DEPARTMENT_LABELS}
+                />
+              )}
               <FieldError errors={[form.formState.errors.departments]} />
             </FieldSet>
           ) : null}
@@ -1406,6 +1502,7 @@ export function UsersManagement({
   canDelete = false,
   currentUserId,
   filters = {},
+  routingCompanies = [],
 }: {
   readonly users: TenantUserList;
   readonly permissionCatalog: PermissionCatalog;
@@ -1416,6 +1513,7 @@ export function UsersManagement({
   readonly canDelete?: boolean;
   readonly currentUserId?: string;
   readonly filters?: UserListFilters;
+  readonly routingCompanies?: readonly { readonly id: string; readonly label: string }[];
 }) {
   const hasFilters = Boolean(
     filters.search || filters.department || filters.permission || filters.status,
@@ -1437,6 +1535,7 @@ export function UsersManagement({
           <CreateUserDialog
             permissionCatalog={permissionCatalog}
             canManageAccess={canManageAccess}
+            routingCompanies={routingCompanies}
           />
         ) : null}
       </div>

@@ -35,13 +35,16 @@ const permissionSchema = z.string().refine((value) => /^[a-z0-9-]+:[a-z0-9-]+$/.
 const apiUserSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  type: z.literal('employee'),
+  type: z.enum(['employee', 'candidate', 'client']),
   departments: z.array(z.string().min(1)),
   permissions: z.array(permissionSchema),
-  clientCategory: z.null(),
+  clientCategory: z
+    .enum(['legal-entity', 'individual', 'continuous-charter', 'eventual-charter'])
+    .nullable(),
+  routingCompanyId: z.string().uuid().nullable().optional(),
   isActive: z.boolean(),
   isAdministrator: z.boolean().optional(),
-  documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
+  documentAccessMode: z.enum(['standard', 'document-portal', 'client']).optional(),
 });
 
 const apiAuthenticationSchema = z.object({
@@ -146,6 +149,21 @@ function isRequestTimeout(error: unknown): boolean {
 }
 
 function mapApiUser(user: z.infer<typeof apiUserSchema>): User {
+  if (user.type === 'client' && user.clientCategory !== null) {
+    return {
+      id: user.id,
+      name: user.name,
+      type: 'client',
+      departments: user.departments,
+      permissions: user.permissions as Permission[],
+      clientCategory: user.clientCategory,
+      routingCompanyId: user.routingCompanyId ?? null,
+      isActive: user.isActive,
+      ...(user.isAdministrator === undefined ? {} : { isAdministrator: user.isAdministrator }),
+      documentAccessMode: 'client',
+    };
+  }
+
   return {
     id: user.id,
     name: user.name,

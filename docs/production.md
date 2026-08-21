@@ -62,10 +62,13 @@ ambíguo no navegador.
 O Tenant Web precisa alcançar apenas a Tenant API e os destinos HTTPS dos anexos
 publicados por ela.
 
-Para a importação assistida, o proxy deve aceitar o limite configurado para um
-ZIP mais o overhead multipart e manter streaming habilitado. A aplicação envia
-somente um arquivo por requisição; não acumule todo o lote no proxy. O volume
-privado dos lotes pertence à Tenant API e não deve ser montado no frontend.
+Para a importação assistida, o proxy deve aceitar até 2 GiB mais o overhead
+multipart e manter streaming habilitado. Esse limite contempla tanto um ZIP
+quanto um `msgstore.db.crypt15`; a Tenant API continua impondo o limite real por
+arquivo. Em Nginx, configure o equivalente a `client_max_body_size 2g` e
+timeouts compatíveis com a conexão do operador. A aplicação envia somente um
+arquivo por requisição; não acumule todo o lote no proxy. O volume privado dos
+lotes pertence à Tenant API e não deve ser montado no frontend.
 
 ## Sondas
 

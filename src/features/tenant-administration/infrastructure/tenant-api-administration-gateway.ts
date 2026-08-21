@@ -17,10 +17,15 @@ const userSchema = z
     username: z.string().min(1),
     email: z.string().email(),
     cpf: z.string().nullable(),
-    type: z.literal('employee'),
+    type: z.enum(['employee', 'candidate', 'client']),
+    routingCompanyId: z
+      .string()
+      .uuid()
+      .nullish()
+      .transform((value) => value ?? null),
     departments: z.array(z.string()),
     isAdministrator: z.boolean(),
-    documentAccessMode: z.enum(['standard', 'document-portal']).optional(),
+    documentAccessMode: z.enum(['standard', 'document-portal', 'client']).optional(),
     jobTitle: z.string().nullable().default(null),
     maritalStatus: z
       .enum(['single', 'married', 'stable-union', 'divorced', 'widowed', 'not-informed'])
@@ -40,7 +45,7 @@ const userSchema = z
       .default([]),
     permissionCodes: z.array(z.string()).optional(),
     permissions: z.array(z.string()),
-    clientCategory: z.null(),
+    clientCategory: z.enum(['legal-entity', 'individual']).nullable(),
     isActive: z.boolean(),
     status: z.enum(['active', 'inactive', 'suspended']).optional(),
     suspendedUntil: isoDate.nullable().optional(),

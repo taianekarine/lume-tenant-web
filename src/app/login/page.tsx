@@ -7,7 +7,7 @@ export default async function Page({
   searchParams,
 }: {
   readonly searchParams?: Promise<{ passwordChanged?: string }>;
-} = {}) {
+}) {
   const session = await getCurrentAuthenticatedSession();
   const params = await searchParams;
 

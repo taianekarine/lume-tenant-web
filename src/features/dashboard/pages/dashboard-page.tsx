@@ -15,6 +15,7 @@ import {
   isWhatsAppConversationDepartment,
   type WhatsAppConversation,
   type WhatsAppConversationDepartment,
+  type WhatsAppConversationMetrics,
 } from '@/features/whatsapp-conversations/domain';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { toast } from '@/shared/ui/toast';
@@ -32,6 +33,11 @@ import { dashboardPageStyles as styles } from './dashboard-page.styles';
 export interface DashboardPageProps {
   readonly session: AuthenticatedSession;
   readonly conversations?: readonly WhatsAppConversation[];
+  readonly operationalMetrics?: WhatsAppConversationMetrics;
+  readonly departmentVolumes?: readonly {
+    readonly department: WhatsAppConversationDepartment;
+    readonly value: number;
+  }[];
   readonly initialError?: string | null;
   readonly quoteMetrics?: QuoteProposalDashboardMetrics | null;
   readonly quoteInitialError?: string | null;
@@ -75,6 +81,8 @@ function getDepartmentVolume(conversations: readonly WhatsAppConversation[]) {
 export function DashboardPage({
   session,
   conversations = [],
+  operationalMetrics,
+  departmentVolumes,
   initialError = null,
   quoteMetrics = null,
   quoteInitialError = null,
@@ -97,7 +105,7 @@ export function DashboardPage({
       : conversations.filter((conversation) =>
           assignedDepartments.includes(conversation.department),
         );
-  const metrics = getWhatsAppConversationMetrics(scopedConversations);
+  const metrics = operationalMetrics ?? getWhatsAppConversationMetrics(scopedConversations);
   const departmentLabels = assignedDepartments.map((department) =>
     isWhatsAppConversationDepartment(department) ? DEPARTMENT_LABELS[department] : department,
   );
@@ -115,7 +123,17 @@ export function DashboardPage({
     ...item,
     fill: `var(--color-${item.key})`,
   }));
-  const departmentData = getDepartmentVolume(scopedConversations);
+  const departmentData = departmentVolumes
+    ? departmentVolumes
+        .filter((item) => item.value > 0)
+        .sort((first, second) => second.value - first.value)
+        .slice(0, 6)
+        .map((item, index) => ({
+          ...item,
+          label: DEPARTMENT_LABELS[item.department],
+          fill: departmentColors[index] ?? 'var(--chart-1)',
+        }))
+    : getDepartmentVolume(scopedConversations);
   const departmentChartConfig = Object.fromEntries(
     departmentData.map((item) => [item.department, { label: item.label, color: item.fill }]),
   ) satisfies ChartConfig;
@@ -141,9 +159,10 @@ export function DashboardPage({
     {
       key: 'closed',
       label: 'Encerrada',
-      value: scopedConversations.filter(
-        (conversation) => conversation.conversationState === 'closed',
-      ).length,
+      value: Math.max(
+        0,
+        metrics.total - metrics.botActive - metrics.attendantActive - metrics.automationPaused,
+      ),
       fill: 'var(--color-closed)',
     },
   ].filter((item) => item.value > 0);
@@ -174,7 +193,11 @@ export function DashboardPage({
           </span>
         </div>
 
-        <ConversationMetricsCards conversations={scopedConversations} className="mt-5" />
+        <ConversationMetricsCards
+          conversations={scopedConversations}
+          metrics={metrics}
+          className="mt-5"
+        />
 
         <div className={styles.graphGrid()}>
           <Card className="shadow-sm">

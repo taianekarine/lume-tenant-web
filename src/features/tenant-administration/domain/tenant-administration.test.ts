@@ -17,6 +17,7 @@ describe('tenant department catalog', () => {
       'monitoring',
       'operations',
       'information-technology',
+      'client-company',
     ]);
     expect(TENANT_DEPARTMENTS.map((department) => TENANT_DEPARTMENT_LABELS[department])).toEqual([
       'Comercial',
@@ -29,6 +30,7 @@ describe('tenant department catalog', () => {
       'Monitoramento',
       'Operacional',
       'Tecnologia da Informação (TI)',
+      'Empresa cliente',
     ]);
   });
 

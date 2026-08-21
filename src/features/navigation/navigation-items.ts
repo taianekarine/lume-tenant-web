@@ -8,6 +8,8 @@ import {
   LayoutDashboard,
   LifeBuoy,
   MessageCircle,
+  ContactRound,
+  Route,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -21,7 +23,8 @@ import {
   type User,
 } from '@/features/auth/domain';
 
-export type NavigationGroup = 'general' | 'commercial' | 'people-operations' | 'administration';
+export type NavigationGroup =
+  'general' | 'commercial' | 'routing' | 'people-operations' | 'administration';
 
 export interface InternalNavigationItem {
   readonly label: string;
@@ -34,6 +37,20 @@ export interface InternalNavigationItem {
 }
 
 export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
+  {
+    label: 'Roteirização',
+    href: '/routing',
+    permission: 'routes:view',
+    alternativePermissions: [
+      'routes:use',
+      'routing-contracts:view',
+      'routing-companies:view',
+      'passengers:view',
+      'passengers:import',
+    ],
+    icon: Route,
+    group: 'routing',
+  },
   {
     label: 'Dashboard',
     href: '/dashboard',
@@ -53,6 +70,14 @@ export const INTERNAL_NAVIGATION_ITEMS: readonly InternalNavigationItem[] = [
     href: '/whatsapp-conversations',
     permission: 'whatsapp-conversations:manage',
     icon: MessageCircle,
+    group: 'commercial',
+  },
+  {
+    label: 'Contatos',
+    href: '/contacts',
+    permission: 'whatsapp-conversations:view',
+    alternativePermissions: ['whatsapp-conversations:manage'],
+    icon: ContactRound,
     group: 'commercial',
   },
   {

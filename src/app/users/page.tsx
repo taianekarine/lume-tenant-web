@@ -15,6 +15,7 @@ import {
   rethrowTenantPageError,
 } from '@/features/tenant-administration/server';
 import { PageFeedbackToast } from '@/shared/page-feedback-toast';
+import { executeAuthenticatedRoutingRequest } from '@/features/routing/server';
 
 export default async function UsersRoute({
   searchParams,
@@ -37,6 +38,7 @@ export default async function UsersRoute({
   ]);
   const query = await searchParams;
   let users: TenantUserList;
+  let routingCompanies: readonly { readonly id: string; readonly label: string }[] = [];
   let permissionCatalog: PermissionCatalog = {
     resources: [],
     actions: [],
@@ -80,6 +82,16 @@ export default async function UsersRoute({
     rethrowTenantPageError(error);
   }
 
+  if (canManageAccess && session.user.permissions.includes('routing-companies:view')) {
+    const companies = await executeAuthenticatedRoutingRequest((gateway) =>
+      gateway.listCompanies({ status: 'active' }),
+    );
+    routingCompanies = companies.items.map((company) => ({
+      id: company.id,
+      label: `${company.tradeName || company.legalName} — ${company.taxId}`,
+    }));
+  }
+
   return (
     <AuthenticatedShell user={session.user}>
       <div className="mx-auto w-full max-w-[1600px] p-4 md:p-6">
@@ -98,6 +110,7 @@ export default async function UsersRoute({
           canDelete={session.user.isAdministrator === true}
           currentUserId={session.user.id}
           filters={filters}
+          routingCompanies={routingCompanies}
         />
       </div>
     </AuthenticatedShell>

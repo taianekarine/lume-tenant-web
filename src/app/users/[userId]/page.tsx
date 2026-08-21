@@ -12,6 +12,7 @@ import {
 import { AuthenticatedShell } from '@/features/navigation';
 import { Button } from '@/shared/ui/button';
 import { PageFeedbackToast } from '@/shared/page-feedback-toast';
+import { executeAuthenticatedRoutingRequest } from '@/features/routing/server';
 
 export default async function UserEditorRoute({
   params,
@@ -23,6 +24,7 @@ export default async function UserEditorRoute({
   const session = await requirePeopleOperationsTenantSession(['users:update', 'users:create']);
   const [{ userId }, query] = await Promise.all([params, searchParams]);
   let user: TenantUser;
+  let routingCompanies: readonly { readonly id: string; readonly label: string }[] = [];
   let permissionCatalog: PermissionCatalog = {
     resources: [],
     actions: [],
@@ -52,6 +54,16 @@ export default async function UserEditorRoute({
     rethrowTenantPageError(error);
   }
 
+  if (canManageAccess && session.user.permissions.includes('routing-companies:view')) {
+    const companies = await executeAuthenticatedRoutingRequest((gateway) =>
+      gateway.listCompanies({ status: 'active' }),
+    );
+    routingCompanies = companies.items.map((company) => ({
+      id: company.id,
+      label: `${company.tradeName || company.legalName} — ${company.taxId}`,
+    }));
+  }
+
   return (
     <AuthenticatedShell user={session.user}>
       <div className="mx-auto w-full max-w-6xl p-4 md:p-6">
@@ -72,6 +84,7 @@ export default async function UserEditorRoute({
           user={user}
           permissionCatalog={permissionCatalog}
           canManageAccess={canManageAccess}
+          routingCompanies={routingCompanies}
         />
       </div>
     </AuthenticatedShell>

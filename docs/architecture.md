@@ -47,6 +47,12 @@ Server Actions e a Route Handler de polling são os únicos consumidores desse
 adapter. O datasource padrão é a Tenant API; mock exige flag explícita fora de
 produção e é recusado em `production`.
 
+A caixa de entrada nunca materializa todas as conversas do tenant. A Route
+Handler encaminha página, pesquisa e filtros para a Tenant API, recebe no
+máximo 25 resumos por vez e preserva os totais agregados publicados pelo
+backend. As atualizações não se sobrepõem; falhas e HTTP 429 usam backoff sem
+gerar rejeições não tratadas no navegador.
+
 O painel envia `expectedVersion` em toda escrita e nunca calcula estados de
 destino. A matriz e o isolamento por `companyId` permanecem sob autoridade da
 Tenant API. Em conflito 409, o frontend recarrega a conversa antes de permitir
@@ -83,11 +89,14 @@ contextos sem alterar os componentes base do shadcn/ui. A cópia local é
 separada por `userId` e serve somente para atualização visual imediata: a
 Tenant API continua sendo a fonte de verdade do perfil.
 
-Os itens são organizados em três grupos:
+Os itens são organizados em cinco grupos:
 
 - **Geral:** Dashboard, Agentes de IA e Suporte, sujeitos às respectivas
   permissões e com conteúdo filtrado pelo departamento;
 - **Comercial:** Painel WhatsApp e Orçamentos, somente para vínculo Comercial;
+- **Operacional:** Roteirização, conforme as permissões dos clientes atendidos,
+  contratos, colaboradores e rotas;
+- **Pessoas:** Usuários e Gestão documental conforme vínculo e permissões;
 - **Administração:** Painel administrativo exclusivo de administradores, além de
   Usuários e Licença conforme as permissões e o vínculo organizacional. O painel
   apresenta volume, bytes, duração, resultados, usuários e ações humanizadas;
@@ -208,6 +217,40 @@ usuário na Tenant API, sem remover a pendência da lista. O armazenamento local
 é usado para notificações da API somente quando essa confirmação falha. Novos
 ciclos pendentes voltam a ser não lidos. Automações pausadas, ainda derivadas
 da projeção do painel, mantêm leitura local por identificador.
+
+## Roteirização orientada por contrato
+
+`RoutingCompany` representa o cliente atendido pela Milenium e nunca um novo
+tenant. `RoutingContract` é a raiz operacional: unidade, vigência, tipo de
+operação, centros de custo, turnos, horários, veículos, capacidades, KM e
+periodicidade determinam os limites da geração. A rota surge somente de
+`POST /routing/contracts/:id/generate-routes`.
+
+A área de clientes separa cadastro, clientes em operação e clientes
+desativados em abas. Para um cliente ativo, a interface oferece somente a
+desativação e explica que ela preserva o histórico. A exclusão definitiva e a
+confirmação por senha aparecem apenas na área de clientes desativados, como uma
+ação progressiva de último recurso; as regras da Tenant API continuam sendo a
+fonte de verdade.
+
+O navegador não executa agrupamento nem calcula distâncias. Ele apresenta o
+plano retornado pela API para revisão, aprovação e publicação. Exportações usam
+uma versão aprovada e imutável. O arquivo operacional mantém centros de custo;
+os formatos do Google My Maps os omitem.
+
+Pontos fixos globais ou exclusivos de um cliente mantêm nome, código e endereço
+canônico. Os contratos selecionam pontos fixos de saída e destino, e cada turno
+informa quantidade de veículos e capacidade por veículo. Os endereços reutilizam
+`PostalCodeAddressFields`. Ao
+informar oito dígitos, o navegador chama a rota interna
+`GET /api/postal-code/:postalCode`; essa fronteira valida o CEP, consulta o
+ViaCEP server-side, trata CEP inexistente e aplica cache compartilhado. Número
+e complemento permanecem editáveis e uma indisponibilidade externa não impede
+o preenchimento manual.
+
+Clientes PF e PJ exigem `routingCompanyId` e departamento `client-company`.
+Usuários internos permanecem no tenant Milenium e podem operar vários clientes
+quando autorizados.
 
 ## Autenticação e ciclo da conta
 

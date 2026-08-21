@@ -17,7 +17,13 @@ export const DEPARTMENTS = [
 
 export type Department = string;
 
-export const CLIENT_CATEGORIES = ['continuous-charter', 'eventual-charter'] as const;
+export const CLIENT_CATEGORIES = [
+  'legal-entity',
+  'individual',
+  // Kept while older simulated sessions are still accepted.
+  'continuous-charter',
+  'eventual-charter',
+] as const;
 
 export type ClientCategory = (typeof CLIENT_CATEGORIES)[number];
 
@@ -74,7 +80,8 @@ interface BaseUser {
   readonly permissions: readonly Permission[];
   readonly isActive: boolean;
   readonly isAdministrator?: boolean;
-  readonly documentAccessMode?: 'standard' | 'document-portal';
+  readonly documentAccessMode?: 'standard' | 'document-portal' | 'client';
+  readonly routingCompanyId?: string | null;
 }
 
 export interface EmployeeUser extends BaseUser {
@@ -85,7 +92,7 @@ export interface EmployeeUser extends BaseUser {
 
 export interface ClientUser extends BaseUser {
   readonly type: 'client';
-  readonly departments: readonly [];
+  readonly departments: readonly Department[];
   readonly clientCategory: ClientCategory;
 }
 

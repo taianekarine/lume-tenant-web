@@ -92,7 +92,9 @@ function DepartmentCheckboxes({
 
   return (
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {TENANT_DEPARTMENTS.map((department) => {
+      {TENANT_DEPARTMENTS.filter(
+        (department) => department !== 'client-company' || field.value.includes(department),
+      ).map((department) => {
         const id = `edit-user-department-${department}`;
         return (
           <Field
@@ -210,10 +212,12 @@ export function UserEditorForm({
   user,
   permissionCatalog,
   canManageAccess,
+  routingCompanies = [],
 }: {
   readonly user: TenantUser;
   readonly permissionCatalog: PermissionCatalog;
   readonly canManageAccess: boolean;
+  readonly routingCompanies?: readonly { readonly id: string; readonly label: string }[];
 }) {
   const [isPending, startTransition] = useTransition();
   const form = useForm<UserEditorFormValues>({
@@ -223,6 +227,8 @@ export function UserEditorForm({
       email: user.email,
       isAdministrator: user.isAdministrator,
       documentAccessMode: user.documentAccessMode ?? 'standard',
+      clientCategory: user.clientCategory ?? null,
+      routingCompanyId: user.routingCompanyId ?? null,
       departments: [...user.departments],
       permissionCodes: [...user.permissionCodes],
       jobTitle: classificationFromStoredValue(user.jobTitle),
@@ -238,6 +244,7 @@ export function UserEditorForm({
     control: form.control,
     name: 'documentAccessMode',
   });
+  const clientCategory = useWatch({ control: form.control, name: 'clientCategory' });
   const standardPermissions = useMemo(
     () => compatiblePermissionCodes(permissionCatalog, departments),
     [departments, permissionCatalog],
@@ -274,6 +281,14 @@ export function UserEditorForm({
 
   const submit = form.handleSubmit((values) => {
     startTransition(async () => {
+      const scopedValues =
+        values.documentAccessMode === 'client'
+          ? values
+          : Object.fromEntries(
+              Object.entries(values).filter(
+                ([key]) => !['clientCategory', 'routingCompanyId'].includes(key),
+              ),
+            );
       const supportsEmployeeProfile =
         user.jobTitle !== undefined ||
         user.maritalStatus !== undefined ||
@@ -282,9 +297,9 @@ export function UserEditorForm({
       const result = await updateTenantUserFormAction(
         user.id,
         supportsEmployeeProfile
-          ? values
+          ? scopedValues
           : Object.fromEntries(
-              Object.entries(values).filter(
+              Object.entries(scopedValues).filter(
                 ([key]) =>
                   !['jobTitle', 'maritalStatus', 'militaryDocumentStatus', 'dependents'].includes(
                     key,
@@ -353,14 +368,24 @@ export function UserEditorForm({
                   render={({ field }) => (
                     <Select
                       value={field.value}
-                      onValueChange={field.onChange}
+                      onValueChange={(next) => {
+                        field.onChange(next);
+                        if (next === 'client') {
+                          form.setValue('departments', ['client-company']);
+                        } else {
+                          form.setValue('clientCategory', null);
+                          form.setValue('routingCompanyId', null);
+                        }
+                      }}
                       disabled={isAdministrator}
                     >
                       <SelectTrigger id="edit-user-access-mode" className="w-full">
                         <SelectValue>
-                          {field.value === 'document-portal'
-                            ? 'Candidato — somente documentos'
-                            : 'Colaborador — painel autorizado'}
+                          {field.value === 'client'
+                            ? 'Cliente - acesso contratado'
+                            : field.value === 'document-portal'
+                              ? 'Candidato — somente documentos'
+                              : 'Colaborador — painel autorizado'}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
@@ -368,6 +393,7 @@ export function UserEditorForm({
                         <SelectItem value="document-portal">
                           Candidato — somente documentos
                         </SelectItem>
+                        <SelectItem value="client">Cliente - pessoa jurídica ou física</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
@@ -379,6 +405,65 @@ export function UserEditorForm({
                 </FieldDescription>
                 <FieldError errors={[form.formState.errors.documentAccessMode]} />
               </Field>
+            ) : null}
+            {canManageAccess && documentAccessMode === 'client' ? (
+              <>
+                <Field data-invalid={Boolean(form.formState.errors.clientCategory)}>
+                  <FieldLabel htmlFor="edit-user-client-category">Tipo de cliente</FieldLabel>
+                  <Controller
+                    control={form.control}
+                    name="clientCategory"
+                    render={({ field }) => (
+                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                        <SelectTrigger id="edit-user-client-category" className="w-full">
+                          <SelectValue>
+                            {field.value === 'legal-entity'
+                              ? 'Pessoa jurídica (PJ)'
+                              : field.value === 'individual'
+                                ? 'Pessoa física (PF)'
+                                : 'Selecione'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="legal-entity">Pessoa jurídica (PJ)</SelectItem>
+                          <SelectItem value="individual">Pessoa física (PF)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <FieldError errors={[form.formState.errors.clientCategory]} />
+                </Field>
+                {clientCategory ? (
+                  <Field data-invalid={Boolean(form.formState.errors.routingCompanyId)}>
+                    <FieldLabel htmlFor="edit-user-routing-company">Cliente vinculado</FieldLabel>
+                    <Controller
+                      control={form.control}
+                      name="routingCompanyId"
+                      render={({ field }) => (
+                        <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                          <SelectTrigger id="edit-user-routing-company" className="w-full">
+                            <SelectValue>
+                              {routingCompanies.find((company) => company.id === field.value)
+                                ?.label ?? 'Selecione o cliente'}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {routingCompanies.map((company) => (
+                              <SelectItem key={company.id} value={company.id}>
+                                {company.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    <FieldDescription>
+                      O cliente PF ou PJ permanece isolado neste cadastro.
+                    </FieldDescription>
+                    <FieldError errors={[form.formState.errors.routingCompanyId]} />
+                  </Field>
+                ) : null}
+              </>
             ) : null}
           </div>
 
@@ -526,7 +611,10 @@ export function UserEditorForm({
                     ? 'O departamento pode ser preparado agora ou definido ao promover o candidato.'
                     : 'O colaborador deve permanecer vinculado a ao menos um departamento.'}
               </FieldDescription>
-              <DepartmentCheckboxes control={form.control} disabled={isAdministrator} />
+              <DepartmentCheckboxes
+                control={form.control}
+                disabled={isAdministrator || documentAccessMode === 'client'}
+              />
               <FieldError errors={[form.formState.errors.departments]} />
             </FieldSet>
           ) : null}

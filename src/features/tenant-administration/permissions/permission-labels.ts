@@ -26,6 +26,10 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   invoices: 'Faturas',
   'service-requests': 'Solicitações de serviço',
   support: 'Suporte',
+  'routing-companies': 'Clientes',
+  'routing-contracts': 'Contratos de roteirização',
+  passengers: 'Colaboradores transportados',
+  routes: 'Rotas',
 };
 
 const ACTION_LABELS: Readonly<Record<string, string>> = {
@@ -37,6 +41,7 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   use: 'Utilizar',
   approve: 'Aprovar',
   export: 'Exportar',
+  publish: 'Publicar',
 };
 
 export function getPermissionResourceLabel(resource: string): string {

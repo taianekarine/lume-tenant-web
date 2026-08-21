@@ -148,6 +148,19 @@ describe('AuthenticatedNavigation', () => {
     await waitFor(() => expect(mockedPendingCount).toHaveBeenCalledTimes(1));
   });
 
+  it('renders routing in the Operational group', () => {
+    mockedUsePathname.mockReturnValue('/routing');
+
+    renderNavigation(createEmployee(['routes:view'], true, ['operations']));
+
+    expect(screen.getByText('Operacional')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Roteirização' })).toHaveAttribute('href', '/routing');
+    expect(screen.getByRole('link', { name: 'Roteirização' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
   it('renders Users and document management in the People group', () => {
     renderNavigation(
       createEmployee(['users:view', 'documents:manage'], true, ['management'], true),

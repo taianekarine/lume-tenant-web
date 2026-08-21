@@ -15,7 +15,7 @@ import {
   getPendingQuoteProposalsForDashboard,
   getSentQuoteProposalsForDashboard,
 } from '@/features/quote-proposals/server';
-import { getWhatsAppConversationsForOperationalDashboard } from '@/features/whatsapp-conversations/server';
+import { getWhatsAppConversationPageForOperationalDashboard } from '@/features/whatsapp-conversations/server';
 
 import Page from './page';
 
@@ -28,7 +28,7 @@ jest.mock('@/features/auth/server', () => ({
 }));
 
 jest.mock('@/features/whatsapp-conversations/server', () => ({
-  getWhatsAppConversationsForOperationalDashboard: jest.fn(),
+  getWhatsAppConversationPageForOperationalDashboard: jest.fn(),
 }));
 jest.mock('@/features/quote-proposals/server', () => ({
   getPendingQuoteProposalsForDashboard: jest.fn(),
@@ -38,8 +38,8 @@ jest.mock('@/features/quote-proposals/server', () => ({
 }));
 
 const mockedGetCurrentAuthenticatedSession = jest.mocked(getCurrentAuthenticatedSession);
-const mockedGetWhatsAppConversationsForOperationalDashboard = jest.mocked(
-  getWhatsAppConversationsForOperationalDashboard,
+const mockedGetWhatsAppConversationPageForOperationalDashboard = jest.mocked(
+  getWhatsAppConversationPageForOperationalDashboard,
 );
 const mockedGetPendingQuoteProposals = jest.mocked(getPendingQuoteProposalsForDashboard);
 const mockedGetSentQuoteProposals = jest.mocked(getSentQuoteProposalsForDashboard);
@@ -71,7 +71,22 @@ function createSession(
 
 describe('dashboard page route', () => {
   beforeEach(() => {
-    mockedGetWhatsAppConversationsForOperationalDashboard.mockResolvedValue([]);
+    mockedGetWhatsAppConversationPageForOperationalDashboard.mockResolvedValue({
+      conversations: [],
+      page: 1,
+      pageSize: 1,
+      total: 0,
+      totalPages: 0,
+      metrics: {
+        total: 0,
+        botActive: 0,
+        attendantActive: 0,
+        automationPaused: 0,
+        unreadMessages: 0,
+        unreadConversations: 0,
+        awaitingProposal: 0,
+      },
+    });
     mockedGetPendingQuoteProposals.mockResolvedValue({
       items: [],
       total: 0,
@@ -93,7 +108,7 @@ describe('dashboard page route', () => {
 
   afterEach(() => {
     mockedGetCurrentAuthenticatedSession.mockReset();
-    mockedGetWhatsAppConversationsForOperationalDashboard.mockReset();
+    mockedGetWhatsAppConversationPageForOperationalDashboard.mockReset();
     mockedGetPendingQuoteProposals.mockReset();
     mockedGetSentQuoteProposals.mockReset();
     mockedGetApprovedQuoteProposals.mockReset();
@@ -134,12 +149,38 @@ describe('dashboard page route', () => {
       ['operations'],
     );
     mockedGetCurrentAuthenticatedSession.mockResolvedValue(session);
+    mockedGetWhatsAppConversationPageForOperationalDashboard.mockResolvedValue({
+      conversations: [],
+      page: 1,
+      pageSize: 1,
+      total: 237,
+      totalPages: 237,
+      metrics: {
+        total: 237,
+        botActive: 120,
+        attendantActive: 42,
+        automationPaused: 55,
+        unreadMessages: 31,
+        unreadConversations: 18,
+        awaitingProposal: 0,
+      },
+    });
 
     const page = await Page();
 
-    expect(mockedGetWhatsAppConversationsForOperationalDashboard).toHaveBeenCalledWith({
+    expect(mockedGetWhatsAppConversationPageForOperationalDashboard).toHaveBeenCalledWith({
       department: 'operations',
+      page: 1,
+      pageSize: 1,
     });
+    expect(page.props.operationalMetrics).toMatchObject({
+      total: 237,
+      botActive: 120,
+      attendantActive: 42,
+      automationPaused: 55,
+      unreadConversations: 18,
+    });
+    expect(page.props.departmentVolumes).toEqual([{ department: 'operations', value: 237 }]);
     expect(page.props.initialError).toBeNull();
     expect(mockedGetPendingQuoteProposals).not.toHaveBeenCalled();
   });
