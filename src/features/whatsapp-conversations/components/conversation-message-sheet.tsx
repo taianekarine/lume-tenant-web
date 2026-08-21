@@ -43,14 +43,6 @@ import {
   MessageFooter,
   MessageHeader,
 } from '@/shared/ui/message';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/shared/ui/sheet';
 import { Skeleton } from '@/shared/ui/skeleton';
 import { Textarea } from '@/shared/ui/textarea';
 import { toast } from '@/shared/ui/toast';
@@ -353,8 +345,6 @@ function MessageAttachmentPreview({
 
 export interface ConversationMessageSheetProps {
   readonly conversation: WhatsAppConversation;
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
   readonly isLoading: boolean;
   readonly isLoaded: boolean;
   readonly detailError: string;
@@ -367,9 +357,6 @@ export interface ConversationMessageSheetProps {
   readonly selectedAttachment: File | null;
   readonly onSelectedAttachmentChange: (file: File | null, kind?: AttachmentPickerKind) => void;
   readonly canSendMessage: boolean;
-  readonly canTakeOver: boolean;
-  readonly isTakingOver: boolean;
-  readonly onTakeOver: () => void;
   readonly isSendingMessage: boolean;
   readonly onSendMessage: () => void;
   readonly feedbackMessage: string;
@@ -378,8 +365,6 @@ export interface ConversationMessageSheetProps {
 
 export function ConversationMessageSheet({
   conversation,
-  open,
-  onOpenChange,
   isLoading,
   isLoaded,
   detailError,
@@ -392,14 +377,12 @@ export function ConversationMessageSheet({
   selectedAttachment,
   onSelectedAttachmentChange,
   canSendMessage,
-  canTakeOver,
-  isTakingOver,
-  onTakeOver,
   isSendingMessage,
   onSendMessage,
   feedbackMessage,
   feedbackTone,
 }: ConversationMessageSheetProps) {
+  const open = true;
   const historyRef = useRef<HTMLDivElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const attachmentPickerKindRef = useRef<AttachmentPickerKind>('auto');
@@ -572,513 +555,465 @@ export function ConversationMessageSheet({
   );
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetTrigger
-        render={
-          <Button type="button" variant="outline" size="sm" className="h-9 whitespace-nowrap" />
-        }
-      >
-        <MessageCircleMore aria-hidden="true" />
-        <span className="sr-only">Mensagens e anexos — </span>
-        Abrir chat
-        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-          {conversation.messageHistory?.total ?? conversation.messages.length}
-        </span>
-      </SheetTrigger>
+    <section
+      className="flex min-h-0 flex-1 flex-col overflow-x-hidden bg-background"
+      aria-label={`Histórico da conversa com ${conversation.contact.name}`}
+    >
+      <header className="flex min-h-10 items-center justify-end gap-1 border-b bg-card px-3 py-1.5">
+        <Button
+          type="button"
+          variant={searchOpen ? 'secondary' : 'outline'}
+          size="icon-sm"
+          onClick={() => setSearchOpen((current) => !current)}
+          aria-expanded={searchOpen}
+          aria-label="Pesquisar mensagens"
+          title="Pesquisar mensagens"
+        >
+          <Search aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          onClick={onRefresh}
+          aria-label="Atualizar histórico"
+          title="Atualizar histórico"
+        >
+          <RefreshCw aria-hidden="true" />
+        </Button>
+      </header>
 
-      <SheetContent className="w-full gap-0 overflow-x-hidden data-[side=right]:w-full sm:!max-w-none sm:data-[side=right]:w-[min(60rem,calc(100vw-3rem))]">
-        <SheetHeader className="border-b pr-12">
-          <div className="flex min-w-0 items-center gap-3">
-            <Avatar className="size-10 shrink-0">
-              {conversation.contact.profilePictureUrl ? (
-                <AvatarImage
-                  src={conversation.contact.profilePictureUrl}
-                  alt={`Foto de ${conversation.contact.name}`}
-                />
-              ) : null}
-              <AvatarFallback>{getInitial(conversation.contact.name)}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <SheetTitle className="truncate">Conversa com {conversation.contact.name}</SheetTitle>
-              <SheetDescription>
-                {conversation.contact.phone} · Mensagens e anexos salvos.
-              </SheetDescription>
-            </div>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-2">
+      {searchOpen ? (
+        <section className="border-b bg-muted/10 p-3 sm:p-4" aria-label="Pesquisar mensagens">
+          <div className="flex items-center gap-2">
+            <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Pesquisar texto ou nome de arquivo"
+              maxLength={160}
+              autoFocus
+            />
             <Button
               type="button"
-              variant={searchOpen ? 'secondary' : 'outline'}
-              size="sm"
-              onClick={() => setSearchOpen((current) => !current)}
-              aria-expanded={searchOpen}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Fechar pesquisa"
+              onClick={() => setSearchOpen(false)}
             >
-              <Search aria-hidden="true" />
-              Pesquisar mensagens
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={onRefresh}>
-              <RefreshCw aria-hidden="true" />
-              Atualizar
+              <X aria-hidden="true" />
             </Button>
           </div>
-        </SheetHeader>
-
-        {searchOpen ? (
-          <section className="border-b bg-muted/10 p-3 sm:p-4" aria-label="Pesquisar mensagens">
-            <div className="flex items-center gap-2">
-              <Search aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Pesquisar texto ou nome de arquivo"
-                maxLength={160}
-                autoFocus
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Fechar pesquisa"
-                onClick={() => setSearchOpen(false)}
-              >
-                <X aria-hidden="true" />
-              </Button>
-            </div>
-            {searchQuery.trim().length < 2 ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Digite ao menos dois caracteres para pesquisar todo o histórico.
-              </p>
-            ) : isSearching ? (
-              <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
-                <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
-                Pesquisando...
-              </p>
-            ) : searchError ? (
-              <p className="mt-2 text-xs text-destructive-emphasis">{searchError}</p>
-            ) : (
-              <div className="mt-2 max-h-52 space-y-1 overflow-y-auto" aria-live="polite">
-                <p className="text-xs text-muted-foreground">
-                  {searchTotal === 1
-                    ? '1 mensagem encontrada'
-                    : `${searchTotal.toLocaleString('pt-BR')} mensagens encontradas`}
-                </p>
-                {searchMessages.map((message) => (
-                  <article key={message.id} className="rounded-lg border bg-background p-2 text-sm">
-                    <p className="line-clamp-3 whitespace-pre-wrap break-words">
-                      {message.text ||
-                        message.attachment?.fileName ||
-                        MESSAGE_KIND_LABELS[message.kind]}
-                    </p>
-                    <small className="text-muted-foreground">
-                      {formatDateTime(message.occurredAt)} ·{' '}
-                      {message.direction === 'outbound' ? 'Atendimento' : conversation.contact.name}
-                    </small>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-        ) : null}
-
-        <div
-          ref={bindHistoryRef}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/20 p-4 sm:p-6"
-          onScroll={(event) => {
-            const history = event.currentTarget;
-            previousHistoryRef.current.scrollHeight = history.scrollHeight;
-            previousHistoryRef.current.scrollTop = history.scrollTop;
-            previousHistoryRef.current.clientHeight = history.clientHeight;
-            if (
-              history.scrollTop <= 64 &&
-              !isLoadingOlder &&
-              conversation.messageHistory &&
-              conversation.messageHistory.page < conversation.messageHistory.totalPages
-            ) {
-              onLoadOlder();
-            }
-          }}
-        >
-          {isLoading && !isLoaded ? (
-            <div className="space-y-4" role="status">
-              <span className="sr-only">Carregando histórico completo...</span>
-              <Skeleton className="h-20 w-3/4 rounded-2xl" />
-              <Skeleton className="ml-auto h-24 w-2/3 rounded-2xl" />
-              <Skeleton className="h-16 w-1/2 rounded-2xl" />
-            </div>
-          ) : detailError ? (
-            <div className="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
-              <p className="text-sm text-muted-foreground">O histórico não pôde ser carregado.</p>
-              <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-                Tentar novamente
-              </Button>
-            </div>
-          ) : conversation.messages.length > 0 ? (
-            <div className="space-y-5">
-              {conversation.messageHistory &&
-              conversation.messageHistory.page < conversation.messageHistory.totalPages ? (
-                <div className="flex justify-center">
-                  <div className="flex flex-col items-center gap-1 text-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={isLoadingOlder}
-                      onClick={onLoadOlder}
-                    >
-                      {isLoadingOlder
-                        ? 'Carregando mensagens anteriores...'
-                        : 'Carregar 100 mensagens anteriores'}
-                    </Button>
-                    <small className="text-muted-foreground" aria-live="polite">
-                      Exibindo {conversation.messages.length.toLocaleString('pt-BR')} de{' '}
-                      {conversation.messageHistory.total.toLocaleString('pt-BR')} mensagens
-                    </small>
-                  </div>
-                </div>
-              ) : null}
-              {conversation.messages.map((message) => {
-                const isOutbound = message.direction === 'outbound';
-                const failedAttempt = [...message.attempts]
-                  .reverse()
-                  .find((attempt) => attempt.status === 'failed');
-                const messageMetadata = [
-                  formatDateTime(message.occurredAt),
-                  ...(isOutbound
-                    ? [message.sentBy?.name ?? conversation.assignedTo?.name ?? 'Atendente']
-                    : []),
-                  DELIVERY_STATUS_LABELS[message.deliveryStatus],
-                ].join(' · ');
-
-                return (
-                  <Message key={message.id} align={isOutbound ? 'end' : 'start'}>
-                    <MessageAvatar>
-                      {isOutbound ? (
-                        <CurrentUserAvatar
-                          name={
-                            message.sentBy?.name ?? conversation.assignedTo?.name ?? 'Atendimento'
-                          }
-                          imageAlt="Foto do atendente"
-                        />
-                      ) : (
-                        <Avatar>
-                          {conversation.contact.profilePictureUrl ? (
-                            <AvatarImage
-                              src={conversation.contact.profilePictureUrl}
-                              alt={conversation.contact.name}
-                            />
-                          ) : null}
-                          <AvatarFallback>{getInitial(conversation.contact.name)}</AvatarFallback>
-                        </Avatar>
-                      )}
-                    </MessageAvatar>
-                    <MessageContent>
-                      <MessageHeader>
-                        {isOutbound ? 'Atendimento' : conversation.contact.name}
-                      </MessageHeader>
-                      <Bubble
-                        variant={isOutbound ? 'tinted' : 'secondary'}
-                        className="max-w-[88%] sm:max-w-[80%] xl:max-w-[42rem]"
-                      >
-                        <BubbleContent>
-                          <div className="space-y-2">
-                            {message.text ? (
-                              <p className="whitespace-pre-wrap break-words leading-6 [overflow-wrap:anywhere]">
-                                {message.text}
-                              </p>
-                            ) : null}
-                            {message.attachment ? (
-                              <MessageAttachmentPreview
-                                kind={message.kind}
-                                attachment={message.attachment}
-                              />
-                            ) : null}
-                            {failedAttempt ? (
-                              <p className="flex items-start gap-1 text-xs text-destructive-emphasis">
-                                <AlertCircle aria-hidden="true" className="mt-0.5 size-3.5" />
-                                <span>Não foi possível enviar esta mensagem. Tente novamente.</span>
-                              </p>
-                            ) : null}
-                          </div>
-                        </BubbleContent>
-                      </Bubble>
-                      <MessageFooter className="w-full max-w-full min-w-0 justify-center text-center text-[11px] sm:text-xs">
-                        <span
-                          className="block w-full min-w-0 max-w-full whitespace-normal break-words text-center [overflow-wrap:anywhere]"
-                          data-occurred-at={message.occurredAt}
-                        >
-                          {messageMetadata}
-                        </span>
-                      </MessageFooter>
-                    </MessageContent>
-                  </Message>
-                );
-              })}
-            </div>
+          {searchQuery.trim().length < 2 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Digite ao menos dois caracteres para pesquisar todo o histórico.
+            </p>
+          ) : isSearching ? (
+            <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+              Pesquisando...
+            </p>
+          ) : searchError ? (
+            <p className="mt-2 text-xs text-destructive-emphasis">{searchError}</p>
           ) : (
-            <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2 text-center">
-              <MessageCircleMore aria-hidden="true" className="size-9 text-muted-foreground" />
-              <strong>Nenhuma mensagem registrada</strong>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                As próximas mensagens e anexos desta conversa aparecerão aqui.
+            <div className="mt-2 max-h-52 space-y-1 overflow-y-auto" aria-live="polite">
+              <p className="text-xs text-muted-foreground">
+                {searchTotal === 1
+                  ? '1 mensagem encontrada'
+                  : `${searchTotal.toLocaleString('pt-BR')} mensagens encontradas`}
               </p>
+              {searchMessages.map((message) => (
+                <article key={message.id} className="rounded-lg border bg-background p-2 text-sm">
+                  <p className="line-clamp-3 whitespace-pre-wrap break-words">
+                    {message.text ||
+                      message.attachment?.fileName ||
+                      MESSAGE_KIND_LABELS[message.kind]}
+                  </p>
+                  <small className="text-muted-foreground">
+                    {formatDateTime(message.occurredAt)} ·{' '}
+                    {message.direction === 'outbound' ? 'Atendimento' : conversation.contact.name}
+                  </small>
+                </article>
+              ))}
             </div>
           )}
-        </div>
+        </section>
+      ) : null}
 
-        <div className="space-y-3 border-t bg-background p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold">Responder pelo painel</p>
-              <p className="text-xs text-muted-foreground">
-                {canSendMessage
-                  ? 'Envio autorizado para o atendente responsável.'
-                  : 'Assuma esta conversa para responder ao cliente.'}
-              </p>
-            </div>
-            <span
-              className={
-                canSendMessage
-                  ? 'shrink-0 whitespace-nowrap rounded-full bg-success/10 px-2 py-1 text-[11px] font-semibold text-success-emphasis'
-                  : 'shrink-0 whitespace-nowrap rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground'
-              }
-            >
-              {canSendMessage ? 'Atendente ativo' : 'Envio bloqueado'}
-            </span>
+      <div
+        ref={bindHistoryRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/20 p-3 sm:p-4"
+        onScroll={(event) => {
+          const history = event.currentTarget;
+          previousHistoryRef.current.scrollHeight = history.scrollHeight;
+          previousHistoryRef.current.scrollTop = history.scrollTop;
+          previousHistoryRef.current.clientHeight = history.clientHeight;
+          if (
+            history.scrollTop <= 64 &&
+            !isLoadingOlder &&
+            conversation.messageHistory &&
+            conversation.messageHistory.page < conversation.messageHistory.totalPages
+          ) {
+            onLoadOlder();
+          }
+        }}
+      >
+        {isLoading && !isLoaded ? (
+          <div className="space-y-4" role="status">
+            <span className="sr-only">Carregando histórico completo...</span>
+            <Skeleton className="h-20 w-3/4 rounded-2xl" />
+            <Skeleton className="ml-auto h-24 w-2/3 rounded-2xl" />
+            <Skeleton className="h-16 w-1/2 rounded-2xl" />
           </div>
-          {canSendMessage ? (
-            <div className="flex items-center gap-1" aria-label="Opções da mensagem">
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Adicionar anexo"
-                      disabled={isSendingMessage}
-                    />
-                  }
-                >
-                  <Paperclip aria-hidden="true" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" align="start" className="w-56">
-                  <DropdownMenuGroup>
-                    <DropdownMenuLabel>Adicionar</DropdownMenuLabel>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        openAttachmentPicker(
-                          'application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z,application/zip,application/x-zip-compressed,application/vnd.rar,application/x-rar-compressed,application/x-7z-compressed',
-                        )
-                      }
-                    >
-                      <FileText aria-hidden="true" /> Documento
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openAttachmentPicker('image/*,video/*')}>
-                      <ImageIcon aria-hidden="true" /> Fotos e vídeos
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openAttachmentPicker('audio/*')}>
-                      <Music aria-hidden="true" /> Áudio
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => openAttachmentPicker('.vcf,text/vcard,text/x-vcard')}
-                    >
-                      <Contact aria-hidden="true" /> Contato
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openAttachmentPicker('image/gif,.gif')}>
-                      <ImagePlay aria-hidden="true" /> GIF do dispositivo
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => openAttachmentPicker('image/webp,.webp', 'sticker')}
-                    >
-                      <Sticker aria-hidden="true" /> Figurinha WebP
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </DropdownMenuContent>
-              </DropdownMenu>
+        ) : detailError ? (
+          <div className="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
+            <p className="text-sm text-muted-foreground">O histórico não pôde ser carregado.</p>
+            <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+              Tentar novamente
+            </Button>
+          </div>
+        ) : conversation.messages.length > 0 ? (
+          <div className="space-y-5">
+            {conversation.messageHistory &&
+            conversation.messageHistory.page < conversation.messageHistory.totalPages ? (
+              <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-1 text-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isLoadingOlder}
+                    onClick={onLoadOlder}
+                  >
+                    {isLoadingOlder
+                      ? 'Carregando mensagens anteriores...'
+                      : 'Carregar 100 mensagens anteriores'}
+                  </Button>
+                  <small className="text-muted-foreground" aria-live="polite">
+                    Exibindo {conversation.messages.length.toLocaleString('pt-BR')} de{' '}
+                    {conversation.messageHistory.total.toLocaleString('pt-BR')} mensagens
+                  </small>
+                </div>
+              </div>
+            ) : null}
+            {conversation.messages.map((message) => {
+              const isOutbound = message.direction === 'outbound';
+              const failedAttempt = [...message.attempts]
+                .reverse()
+                .find((attempt) => attempt.status === 'failed');
+              const messageMetadata = [
+                formatDateTime(message.occurredAt),
+                ...(isOutbound
+                  ? [message.sentBy?.name ?? conversation.assignedTo?.name ?? 'Atendente']
+                  : []),
+                DELIVERY_STATUS_LABELS[message.deliveryStatus],
+              ].join(' · ');
 
-              <Popover.Root>
-                <Popover.Trigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Adicionar emoji"
-                      disabled={isSendingMessage}
-                    />
-                  }
-                >
-                  <Smile aria-hidden="true" />
-                </Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Positioner side="top" align="start" sideOffset={8} className="z-50">
-                    <Popover.Popup className="w-[min(22rem,calc(100vw-2rem))] rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg outline-none">
-                      <Popover.Title className="font-semibold">Emojis</Popover.Title>
-                      <Input
-                        value={emojiSearch}
-                        onChange={(event) => setEmojiSearch(event.target.value)}
-                        placeholder="Pesquisar emoji"
-                        className="mt-2"
+              return (
+                <Message key={message.id} align={isOutbound ? 'end' : 'start'}>
+                  <MessageAvatar>
+                    {isOutbound ? (
+                      <CurrentUserAvatar
+                        name={
+                          message.sentBy?.name ?? conversation.assignedTo?.name ?? 'Atendimento'
+                        }
+                        imageAlt="Foto do atendente"
                       />
-                      <div className="mt-2 grid max-h-52 grid-cols-7 gap-1 overflow-y-auto sm:grid-cols-8">
-                        {visibleEmojis.map(([emoji, keywords]) => (
-                          <Popover.Close
-                            key={emoji}
-                            render={
-                              <button
-                                type="button"
-                                className="flex size-9 items-center justify-center rounded-md text-xl hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                aria-label={`Inserir ${keywords}`}
-                                onClick={() =>
-                                  onMessageDraftChange(
-                                    `${messageDraft}${emoji}`.slice(
-                                      0,
-                                      HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH,
-                                    ),
-                                  )
-                                }
-                              />
-                            }
-                          >
-                            {emoji}
-                          </Popover.Close>
-                        ))}
-                      </div>
-                    </Popover.Popup>
-                  </Popover.Positioner>
-                </Popover.Portal>
-              </Popover.Root>
-            </div>
-          ) : null}
-          <Textarea
-            id="human-message"
-            value={messageDraft}
-            onChange={(event) => onMessageDraftChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === 'Enter' &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing &&
-                canSendMessage &&
-                (messageDraft.trim().length > 0 || selectedAttachment !== null)
-              ) {
-                event.preventDefault();
-                onSendMessage();
-              }
-            }}
-            maxLength={HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH}
-            rows={4}
-            disabled={!canSendMessage || isSendingMessage}
-            placeholder={
-              canSendMessage
-                ? `Responder para ${conversation.contact.name}`
-                : 'Assuma esta conversa para responder ao cliente.'
-            }
-            aria-label={`Mensagem para ${conversation.contact.name}`}
-          />
-          <input
-            ref={attachmentInputRef}
-            type="file"
-            className="sr-only"
-            disabled={!canSendMessage || isSendingMessage}
-            onChange={(event) => {
-              onSelectedAttachmentChange(
-                event.target.files?.[0] ?? null,
-                attachmentPickerKindRef.current,
+                    ) : (
+                      <Avatar>
+                        {conversation.contact.profilePictureUrl ? (
+                          <AvatarImage
+                            src={conversation.contact.profilePictureUrl}
+                            alt={conversation.contact.name}
+                          />
+                        ) : null}
+                        <AvatarFallback>{getInitial(conversation.contact.name)}</AvatarFallback>
+                      </Avatar>
+                    )}
+                  </MessageAvatar>
+                  <MessageContent>
+                    <MessageHeader>
+                      {isOutbound ? 'Atendimento' : conversation.contact.name}
+                    </MessageHeader>
+                    <Bubble
+                      variant={isOutbound ? 'tinted' : 'secondary'}
+                      className="max-w-[88%] sm:max-w-[80%] xl:max-w-[42rem]"
+                    >
+                      <BubbleContent>
+                        <div className="space-y-2">
+                          {message.text ? (
+                            <p className="whitespace-pre-wrap break-words leading-6 [overflow-wrap:anywhere]">
+                              {message.text}
+                            </p>
+                          ) : null}
+                          {message.attachment ? (
+                            <MessageAttachmentPreview
+                              kind={message.kind}
+                              attachment={message.attachment}
+                            />
+                          ) : null}
+                          {failedAttempt ? (
+                            <p className="flex items-start gap-1 text-xs text-destructive-emphasis">
+                              <AlertCircle aria-hidden="true" className="mt-0.5 size-3.5" />
+                              <span>Não foi possível enviar esta mensagem. Tente novamente.</span>
+                            </p>
+                          ) : null}
+                        </div>
+                      </BubbleContent>
+                    </Bubble>
+                    <MessageFooter className="w-full max-w-full min-w-0 justify-center text-center text-[11px] sm:text-xs">
+                      <span
+                        className="block w-full min-w-0 max-w-full whitespace-normal break-words text-center [overflow-wrap:anywhere]"
+                        data-occurred-at={message.occurredAt}
+                      >
+                        {messageMetadata}
+                      </span>
+                    </MessageFooter>
+                  </MessageContent>
+                </Message>
               );
-              event.currentTarget.value = '';
-            }}
-          />
-          {selectedAttachment ? (
-            <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/30 p-2">
-              <Paperclip aria-hidden="true" className="size-4 shrink-0" />
-              <span className="min-w-0 flex-1">
-                <strong className="block truncate text-sm">{selectedAttachment.name}</strong>
-                <small className="text-muted-foreground">
-                  {formatFileSize(selectedAttachment.size)}
-                </small>
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Remover anexo"
-                disabled={isSendingMessage}
-                onClick={() => onSelectedAttachmentChange(null, 'auto')}
-              >
-                <X aria-hidden="true" />
-              </Button>
-            </div>
-          ) : null}
-          <div className="space-y-2">
-            <p className="whitespace-nowrap text-xs text-muted-foreground">
-              {messageDraft.length.toLocaleString('pt-BR')} /{' '}
-              {HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH.toLocaleString('pt-BR')} caracteres
+            })}
+          </div>
+        ) : (
+          <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2 text-center">
+            <MessageCircleMore aria-hidden="true" className="size-9 text-muted-foreground" />
+            <strong>Nenhuma mensagem registrada</strong>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              As próximas mensagens e anexos desta conversa aparecerão aqui.
             </p>
-            <div
-              className={
-                !canSendMessage && canTakeOver
-                  ? 'grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2 overflow-x-hidden'
-                  : 'grid w-full min-w-0 max-w-full grid-cols-1 overflow-x-hidden'
-              }
-            >
-              {!canSendMessage && canTakeOver ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full min-w-0 max-w-full gap-1 overflow-hidden px-1 text-xs sm:px-2.5 sm:text-sm"
-                  onClick={onTakeOver}
-                  disabled={isTakingOver}
-                >
-                  {isTakingOver ? (
-                    <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
-                  ) : null}
-                  {isTakingOver
-                    ? 'Iniciando...'
-                    : conversation.conversationState === 'closed'
-                      ? 'Iniciar atendimento'
-                      : 'Assumir atendimento'}
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                className="w-full min-w-0 max-w-full gap-1 overflow-hidden px-1 text-xs sm:px-2.5 sm:text-sm"
-                onClick={onSendMessage}
-                disabled={
-                  !canSendMessage ||
-                  isSendingMessage ||
-                  (messageDraft.trim().length === 0 && selectedAttachment === null)
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3 border-t bg-background p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold">Responder pelo painel</p>
+            <p className="text-xs text-muted-foreground">
+              {canSendMessage
+                ? 'Envio autorizado para o atendente responsável.'
+                : 'Assuma esta conversa para responder ao cliente.'}
+            </p>
+          </div>
+          <span
+            className={
+              canSendMessage
+                ? 'shrink-0 whitespace-nowrap rounded-full bg-success/10 px-2 py-1 text-[11px] font-semibold text-success-emphasis'
+                : 'shrink-0 whitespace-nowrap rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground'
+            }
+          >
+            {canSendMessage ? 'Atendente ativo' : 'Envio bloqueado'}
+          </span>
+        </div>
+        {canSendMessage ? (
+          <div className="flex items-center gap-1" aria-label="Opções da mensagem">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Adicionar anexo"
+                    disabled={isSendingMessage}
+                  />
                 }
               >
-                {isSendingMessage ? (
-                  <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
-                ) : (
-                  <Send aria-hidden="true" className="size-3.5" />
-                )}
-                {isSendingMessage
-                  ? 'Enviando...'
-                  : selectedAttachment
-                    ? 'Enviar anexo'
-                    : 'Enviar mensagem'}
-              </Button>
-            </div>
+                <Paperclip aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Adicionar</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      openAttachmentPicker(
+                        'application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,.rar,.7z,application/zip,application/x-zip-compressed,application/vnd.rar,application/x-rar-compressed,application/x-7z-compressed',
+                      )
+                    }
+                  >
+                    <FileText aria-hidden="true" /> Documento
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openAttachmentPicker('image/*,video/*')}>
+                    <ImageIcon aria-hidden="true" /> Fotos e vídeos
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openAttachmentPicker('audio/*')}>
+                    <Music aria-hidden="true" /> Áudio
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => openAttachmentPicker('.vcf,text/vcard,text/x-vcard')}
+                  >
+                    <Contact aria-hidden="true" /> Contato
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openAttachmentPicker('image/gif,.gif')}>
+                    <ImagePlay aria-hidden="true" /> GIF do dispositivo
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => openAttachmentPicker('image/webp,.webp', 'sticker')}
+                  >
+                    <Sticker aria-hidden="true" /> Figurinha WebP
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Popover.Root>
+              <Popover.Trigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Adicionar emoji"
+                    disabled={isSendingMessage}
+                  />
+                }
+              >
+                <Smile aria-hidden="true" />
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Positioner side="top" align="start" sideOffset={8} className="z-50">
+                  <Popover.Popup className="w-[min(22rem,calc(100vw-2rem))] rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg outline-none">
+                    <Popover.Title className="font-semibold">Emojis</Popover.Title>
+                    <Input
+                      value={emojiSearch}
+                      onChange={(event) => setEmojiSearch(event.target.value)}
+                      placeholder="Pesquisar emoji"
+                      className="mt-2"
+                    />
+                    <div className="mt-2 grid max-h-52 grid-cols-7 gap-1 overflow-y-auto sm:grid-cols-8">
+                      {visibleEmojis.map(([emoji, keywords]) => (
+                        <Popover.Close
+                          key={emoji}
+                          render={
+                            <button
+                              type="button"
+                              className="flex size-9 items-center justify-center rounded-md text-xl hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              aria-label={`Inserir ${keywords}`}
+                              onClick={() =>
+                                onMessageDraftChange(
+                                  `${messageDraft}${emoji}`.slice(
+                                    0,
+                                    HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH,
+                                  ),
+                                )
+                              }
+                            />
+                          }
+                        >
+                          {emoji}
+                        </Popover.Close>
+                      ))}
+                    </div>
+                  </Popover.Popup>
+                </Popover.Positioner>
+              </Popover.Portal>
+            </Popover.Root>
           </div>
-          {feedbackMessage ? (
-            <p
-              aria-live="polite"
-              className={
-                feedbackTone === 'error'
-                  ? 'text-sm text-destructive-emphasis'
-                  : feedbackTone === 'success'
-                    ? 'text-sm text-success-emphasis'
-                    : 'text-sm text-muted-foreground'
+        ) : null}
+        <Textarea
+          id="human-message"
+          value={messageDraft}
+          onChange={(event) => onMessageDraftChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (
+              event.key === 'Enter' &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing &&
+              canSendMessage &&
+              (messageDraft.trim().length > 0 || selectedAttachment !== null)
+            ) {
+              event.preventDefault();
+              onSendMessage();
+            }
+          }}
+          maxLength={HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH}
+          rows={4}
+          disabled={!canSendMessage || isSendingMessage}
+          placeholder={
+            canSendMessage
+              ? `Responder para ${conversation.contact.name}`
+              : 'Assuma esta conversa para responder ao cliente.'
+          }
+          aria-label={`Mensagem para ${conversation.contact.name}`}
+        />
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          className="sr-only"
+          disabled={!canSendMessage || isSendingMessage}
+          onChange={(event) => {
+            onSelectedAttachmentChange(
+              event.target.files?.[0] ?? null,
+              attachmentPickerKindRef.current,
+            );
+            event.currentTarget.value = '';
+          }}
+        />
+        {selectedAttachment ? (
+          <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/30 p-2">
+            <Paperclip aria-hidden="true" className="size-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <strong className="block truncate text-sm">{selectedAttachment.name}</strong>
+              <small className="text-muted-foreground">
+                {formatFileSize(selectedAttachment.size)}
+              </small>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Remover anexo"
+              disabled={isSendingMessage}
+              onClick={() => onSelectedAttachmentChange(null, 'auto')}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
+        <div className="space-y-2">
+          <p className="whitespace-nowrap text-xs text-muted-foreground">
+            {messageDraft.length.toLocaleString('pt-BR')} /{' '}
+            {HUMAN_WHATSAPP_MESSAGE_MAX_LENGTH.toLocaleString('pt-BR')} caracteres
+          </p>
+          <div className="grid w-full min-w-0 max-w-full grid-cols-1 overflow-x-hidden">
+            <Button
+              type="button"
+              className="w-full min-w-0 max-w-full gap-1 overflow-hidden px-1 text-xs sm:px-2.5 sm:text-sm"
+              onClick={onSendMessage}
+              disabled={
+                !canSendMessage ||
+                isSendingMessage ||
+                (messageDraft.trim().length === 0 && selectedAttachment === null)
               }
             >
-              {feedbackMessage}
-            </p>
-          ) : null}
+              {isSendingMessage ? (
+                <LoaderCircle aria-hidden="true" className="size-3.5 animate-spin" />
+              ) : (
+                <Send aria-hidden="true" className="size-3.5" />
+              )}
+              {isSendingMessage
+                ? 'Enviando...'
+                : selectedAttachment
+                  ? 'Enviar anexo'
+                  : 'Enviar mensagem'}
+            </Button>
+          </div>
         </div>
-      </SheetContent>
-    </Sheet>
+        {feedbackMessage ? (
+          <p
+            aria-live="polite"
+            className={
+              feedbackTone === 'error'
+                ? 'text-sm text-destructive-emphasis'
+                : feedbackTone === 'success'
+                  ? 'text-sm text-success-emphasis'
+                  : 'text-sm text-muted-foreground'
+            }
+          >
+            {feedbackMessage}
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
