@@ -20,17 +20,17 @@ import {
   MessageCircle,
   MessageSquarePlus,
   Phone,
+  Plus,
   RefreshCw,
   RotateCcw,
   Search,
-  ShieldAlert,
   UserRound,
 } from 'lucide-react';
 
 import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
-import { Button, buttonVariants } from '@/shared/ui/button';
+import { Button } from '@/shared/ui/button';
 import { userFacingMessage } from '@/shared/lib/user-facing-message';
 import {
   Dialog,
@@ -45,6 +45,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/shared/ui/se
 import { Textarea } from '@/shared/ui/textarea';
 import { Input } from '@/shared/ui/input';
 import { toast } from '@/shared/ui/toast';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu';
 
 import {
   closeWhatsAppConversationAction,
@@ -1052,19 +1060,6 @@ export function ConversationWorkspace({
 
   return (
     <>
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <Button type="button" onClick={() => setIsStartConversationDialogOpen(true)}>
-          <MessageSquarePlus aria-hidden="true" />
-          Nova conversa
-        </Button>
-        <Link
-          href="/whatsapp-conversations/import"
-          className={buttonVariants({ variant: 'outline' })}
-        >
-          <FileUp aria-hidden="true" />
-          Importar históricos
-        </Link>
-      </div>
       <Dialog open={isStartConversationDialogOpen} onOpenChange={setIsStartConversationDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1112,20 +1107,49 @@ export function ConversationWorkspace({
           <div className={styles.sidebarHeader()}>
             <div className={styles.sidebarHeading()}>
               <div>
-                <p className={styles.sidebarEyebrow()}>Caixa de entrada</p>
+                <p className={styles.sidebarEyebrow()}>Conversas</p>
                 <p className={styles.sidebarTitle()}>
                   {pagination.total === 1 ? '1 conversa' : `${pagination.total} conversas`}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => void refreshList(true)}
-                disabled={isRefreshing}
-                className={styles.refreshButton()}
-              >
-                <RefreshCw aria-hidden="true" />
-                {isRefreshing ? 'Atualizando' : 'Atualizar'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void refreshList(true)}
+                  disabled={isRefreshing}
+                  className={styles.refreshButton()}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  {isRefreshing ? 'Atualizando' : 'Atualizar'}
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="outline"
+                        aria-label="Ações das conversas"
+                      />
+                    }
+                  >
+                    <Plus aria-hidden="true" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => setIsStartConversationDialogOpen(true)}>
+                        <MessageSquarePlus aria-hidden="true" />
+                        Nova conversa
+                      </DropdownMenuItem>
+                      <DropdownMenuItem render={<Link href="/whatsapp-conversations/import" />}>
+                        <FileUp aria-hidden="true" />
+                        Importar históricos
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
 
             {listError ? (
@@ -1424,49 +1448,8 @@ export function ConversationWorkspace({
                 </div>
               </header>
 
-              <div className={styles.highlightGrid()}>
-                <div
-                  className={styles.highlight({
-                    tone: isWhatsAppBotBlocked(selectedConversation) ? 'danger' : 'success',
-                  })}
-                >
-                  {isWhatsAppBotBlocked(selectedConversation) ? (
-                    <ShieldAlert aria-hidden="true" />
-                  ) : (
-                    <Bot aria-hidden="true" />
-                  )}
-                  <span>
-                    <strong>
-                      {isWhatsAppBotBlocked(selectedConversation)
-                        ? 'Bot bloqueado'
-                        : 'Bot autorizado'}
-                    </strong>
-                    <small>
-                      {isWhatsAppBotBlocked(selectedConversation)
-                        ? 'A automação não pode responder neste estado.'
-                        : 'A automação está permitida neste estado.'}
-                    </small>
-                  </span>
-                </div>
-                <div
-                  className={styles.highlight({
-                    tone: isWhatsAppHumanActive(selectedConversation) ? 'info' : 'neutral',
-                  })}
-                >
-                  <Headset aria-hidden="true" />
-                  <span>
-                    <strong>
-                      {isWhatsAppHumanActive(selectedConversation)
-                        ? 'Atendente ativo'
-                        : 'Sem atendente ativo'}
-                    </strong>
-                    <small>
-                      {selectedConversation.assignedTo?.name ??
-                        'Nenhum responsável assumiu o atendimento.'}
-                    </small>
-                  </span>
-                </div>
-                {selectedConversation.department === 'commercial' ? (
+              {selectedConversation.department === 'commercial' ? (
+                <div className={styles.highlightGrid()}>
                   <div
                     className={styles.highlight({
                       tone: isWhatsAppAwaitingProposal(selectedConversation)
@@ -1492,8 +1475,8 @@ export function ConversationWorkspace({
                       </small>
                     </span>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
 
               <div className={styles.dimensionGrid()}>
                 <div className={styles.dimensionItem()}>
@@ -1557,7 +1540,7 @@ export function ConversationWorkspace({
                       className={styles.actionButton({ action: 'human' })}
                     >
                       <Headset aria-hidden="true" />
-                      Assumir
+                      Atendente {isWhatsAppHumanActive(selectedConversation) ? 'ativo' : 'inativo'}
                     </button>
                     <button
                       type="button"
@@ -1574,7 +1557,7 @@ export function ConversationWorkspace({
                       className={styles.actionButton({ action: 'bot' })}
                     >
                       <Bot aria-hidden="true" />
-                      Devolver ao bot
+                      BOT {isWhatsAppBotBlocked(selectedConversation) ? 'inativo' : 'ativo'}
                     </button>
                     <button
                       type="button"

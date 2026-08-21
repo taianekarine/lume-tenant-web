@@ -93,7 +93,8 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[current]} currentUserId="employee-001" />);
 
-    await user.click(screen.getByRole('button', { name: 'Nova conversa' }));
+    await user.click(screen.getByRole('button', { name: 'Ações das conversas' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Nova conversa' }));
     await user.type(screen.getByLabelText('Número do WhatsApp'), '(34) 98765-4321');
     await user.click(screen.getByRole('button', { name: 'Iniciar atendimento' }));
 
@@ -282,7 +283,7 @@ describe('ConversationWorkspace', () => {
     expect(screen.getByText('Estado da conversa')).toBeInTheDocument();
     expect(screen.getByText('Etapa do fluxo')).toBeInTheDocument();
     expect(screen.getAllByText('Status comercial')).toHaveLength(2);
-    expect(screen.getByText('Bot autorizado')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'BOT ativo' })).toBeDisabled();
     expect(
       screen.getByText('Segundo contato retomado no acompanhamento comercial.'),
     ).toBeInTheDocument();
@@ -407,7 +408,7 @@ describe('ConversationWorkspace', () => {
     const user = userEvent.setup();
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Assumir' }));
+    await user.click(screen.getByRole('button', { name: 'Atendente inativo' }));
 
     await waitFor(() => {
       expect(mockedTakeOver).toHaveBeenCalledWith({
@@ -438,7 +439,7 @@ describe('ConversationWorkspace', () => {
     const user = userEvent.setup();
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Devolver ao bot' }));
+    await user.click(screen.getByRole('button', { name: 'BOT inativo' }));
 
     await waitFor(() => {
       expect(mockedReturnToBot).toHaveBeenCalledWith({
@@ -462,8 +463,8 @@ describe('ConversationWorkspace', () => {
       <ConversationWorkspace initialConversations={[conversation]} currentUserId="employee-001" />,
     );
 
-    expect(screen.getByRole('button', { name: 'Assumir' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Devolver ao bot' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Atendente inativo' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'BOT inativo' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /Marcar como lid[ao]/i })).not.toBeInTheDocument();
   });
 
@@ -493,7 +494,7 @@ describe('ConversationWorkspace', () => {
     render(<ConversationWorkspace initialConversations={[conversation]} />);
     await waitFor(() => expect(global.fetch).toHaveBeenCalled());
 
-    await user.click(screen.getByRole('button', { name: 'Assumir' }));
+    await user.click(screen.getByRole('button', { name: 'Atendente inativo' }));
 
     await waitFor(() =>
       expect(toastAdd).toHaveBeenCalledWith(
@@ -504,7 +505,7 @@ describe('ConversationWorkspace', () => {
       ),
     );
     expect(await screen.findByText('Responsável: Outro atendente')).toBeInTheDocument();
-    expect(screen.getAllByText('Bot bloqueado')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'BOT inativo' })).toBeDisabled();
   });
 
   it('renders empty and initial error states and retries the list request', async () => {
