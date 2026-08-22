@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { findClientByPhoneAction } from '@/features/clients/actions/client-actions';
 import {
   closeWhatsAppConversationAction,
   forwardWhatsAppConversationAction,
@@ -17,6 +18,15 @@ import { ConversationWorkspace, preserveLoadedConversationHistory } from './conv
 jest.setTimeout(15_000);
 
 const toastAdd = jest.fn();
+const routerPush = jest.fn();
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
+
+jest.mock('@/features/clients/actions/client-actions', () => ({
+  findClientByPhoneAction: jest.fn(),
+}));
 
 jest.mock('@/shared/ui/toast', () => ({
   toast: { add: (...args: unknown[]) => toastAdd(...args) },
@@ -39,6 +49,7 @@ const mockedReturnToBot = jest.mocked(returnWhatsAppConversationToBotAction);
 const mockedSendMessage = jest.mocked(sendHumanWhatsAppMessageAction);
 const mockedStartConversation = jest.mocked(startWhatsAppConversationAction);
 const mockedTakeOver = jest.mocked(takeOverWhatsAppConversationAction);
+const mockedFindClient = jest.mocked(findClientByPhoneAction);
 const originalFetch = global.fetch;
 
 function response(body: unknown, status = 200): Response {
@@ -61,6 +72,7 @@ async function openMessages(_user: ReturnType<typeof userEvent.setup>) {
 describe('ConversationWorkspace', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
+    mockedFindClient.mockResolvedValue({ status: 'not-found' });
   });
 
   afterEach(() => {
@@ -128,7 +140,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[closed]} currentUserId="employee-001" />);
 
-    const startButton = screen.getByRole('button', { name: 'Iniciar atendimento' });
+    const startButton = screen.getByRole('button', { name: 'Iniciar' });
     expect(startButton).toBeEnabled();
     await user.click(startButton);
 
@@ -197,18 +209,72 @@ describe('ConversationWorkspace', () => {
     const identityRow = contactHeading.parentElement;
     const detailHeader = contactHeading.closest('header');
 
-    expect(identityRow).toHaveClass('flex', 'flex-col', 'items-start');
-    expect(detailHeader).toHaveClass('px-3', 'py-2', 'bg-primary/8');
-    const conversationList = screen.getByRole('button', { name: /Taiane Karine/ }).parentElement;
+    expect(identityRow).toHaveClass('min-w-0', 'flex-1');
+    expect(detailHeader).toHaveClass('min-h-14', 'px-3', 'py-1.5');
+    const conversationButton = screen.getByRole('button', {
+      name: /Taiane Karine/,
+      pressed: true,
+    });
+    const conversationList = conversationButton.parentElement;
     expect(conversationList).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
     const inbox = conversationList?.closest('aside');
     expect(inbox).toHaveClass('flex');
-    fireEvent.click(screen.getByRole('button', { name: /Taiane Karine/ }));
+    fireEvent.click(conversationButton);
     expect(inbox).toHaveClass('hidden', 'lg:flex');
     fireEvent.click(screen.getByRole('button', { name: 'Voltar para a caixa de entrada' }));
     expect(inbox).toHaveClass('flex');
     expect(screen.getAllByText('553496305110')).toHaveLength(2);
     expect(screen.getByText(/Última interação: 29\/07\/2026, 16:50/)).toBeInTheDocument();
+  });
+
+  it('opens the matching client when the contact header is selected', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      contact: {
+        id: '00000000-0000-4000-8000-000000000302',
+        name: 'Taiane Karine',
+        phone: '553496305110',
+        profilePictureUrl: null,
+      },
+    });
+    mockFetchDetail(conversation);
+    mockedFindClient.mockResolvedValue({ status: 'found', clientId: 'client-001' });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    await user.click(screen.getByRole('button', { name: 'Abrir cadastro de Taiane Karine' }));
+
+    await waitFor(() => expect(mockedFindClient).toHaveBeenCalledWith('553496305110'));
+    expect(routerPush).toHaveBeenCalledWith('/clients/client-001');
+  });
+
+  it('offers a prefilled client registration in a new tab when the contact is unknown', async () => {
+    const conversation = createWhatsAppConversationFixture({
+      contact: {
+        id: '00000000-0000-4000-8000-000000000303',
+        name: 'Contato sem cadastro',
+        phone: '5534999999999',
+        profilePictureUrl: null,
+      },
+    });
+    mockFetchDetail(conversation);
+    mockedFindClient.mockResolvedValue({ status: 'not-found' });
+    const user = userEvent.setup();
+
+    render(<ConversationWorkspace initialConversations={[conversation]} />);
+
+    await user.click(
+      screen.getByRole('button', { name: 'Abrir cadastro de Contato sem cadastro' }),
+    );
+
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fechar' })).toBeInTheDocument();
+    const registrationLink = screen.getByRole('link', { name: 'Cadastrar' });
+    expect(registrationLink).toHaveAttribute('target', '_blank');
+    expect(registrationLink).toHaveAttribute(
+      'href',
+      '/clients/new?name=Contato%20sem%20cadastro&phone=5534999999999',
+    );
   });
 
   it('shows canonical dimensions, bot blocking, confirmed quote, second contact and complete history', async () => {
@@ -286,14 +352,15 @@ describe('ConversationWorkspace', () => {
     expect(screen.getAllByText('Status comercial')).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'BOT ativo' })).toBeDisabled();
     expect(
-      screen.getByText('Segundo contato retomado no acompanhamento comercial.'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Orçamentos' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Lista de orçamentos' })).toBeInTheDocument();
+      screen.queryByText('Segundo contato retomado no acompanhamento comercial.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Orçamentos' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abrir orçamentos' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pesquisar mensagens' })).toBeInTheDocument();
     expect(screen.queryByText('Resumo confirmado')).not.toBeInTheDocument();
     await openMessages(user);
     expect(await screen.findByText('proposta.pdf')).toBeInTheDocument();
-    expect(screen.getByText(/· Falha no envio$/)).toBeInTheDocument();
+    expect(screen.getByText(/Enviada por .* · \d{2}:\d{2}/)).toBeInTheDocument();
     expect(
       screen.getByText('Não foi possível enviar esta mensagem. Tente novamente.'),
     ).toBeInTheDocument();
@@ -505,7 +572,8 @@ describe('ConversationWorkspace', () => {
         }),
       ),
     );
-    expect(await screen.findByText('Responsável: Outro atendente')).toBeInTheDocument();
+    expect(screen.queryByText(/Responsável:/)).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Atendente ativo' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'BOT inativo' })).toBeDisabled());
   });
 
@@ -621,7 +689,7 @@ describe('ConversationWorkspace', () => {
     mockFetchDetail(conversation);
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    expect(screen.getByRole('button', { name: 'Encerrar atendimento' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Encerrar' })).toBeEnabled();
     expect(mockedForward).not.toHaveBeenCalled();
     expect(mockedMarkAsRead).not.toHaveBeenCalled();
   });
@@ -648,7 +716,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Encerrar atendimento' }));
+    await user.click(screen.getByRole('button', { name: 'Encerrar' }));
     expect(screen.getByRole('dialog')).toHaveTextContent(
       'Quando o cliente enviar uma nova mensagem, o bot iniciará outro atendimento',
     );
@@ -694,7 +762,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
+    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
     expect(closeButton).toBeEnabled();
     await user.click(closeButton);
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
@@ -731,7 +799,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
+    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
     expect(closeButton).toBeEnabled();
     await user.click(closeButton);
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
@@ -768,7 +836,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    const closeButton = screen.getByRole('button', { name: 'Encerrar atendimento' });
+    const closeButton = screen.getByRole('button', { name: 'Encerrar' });
     expect(closeButton).toBeEnabled();
     await user.click(closeButton);
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
@@ -802,7 +870,7 @@ describe('ConversationWorkspace', () => {
 
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Encerrar atendimento' }));
+    await user.click(screen.getByRole('button', { name: 'Encerrar' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar encerramento' }));
 
     await waitFor(() =>
@@ -876,8 +944,9 @@ describe('ConversationWorkspace', () => {
     const user = userEvent.setup();
     render(<ConversationWorkspace initialConversations={[conversation]} />);
 
-    expect(screen.getByText('Encerrado por: Maria Atendente')).toBeInTheDocument();
+    expect(screen.queryByText('Encerrado por: Maria Atendente')).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: 'Abrir orçamentos' }));
     await user.click(screen.getByRole('button', { name: 'Histórico' }));
     expect(
       screen.getByRole('heading', { name: 'Histórico de ações da conversa' }),
@@ -982,7 +1051,7 @@ describe('ConversationWorkspace', () => {
       });
     });
     expect(await screen.findAllByText(message.text)).toHaveLength(2);
-    expect(screen.getByText(/· Envio pendente$/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Enviada por .* · \d{2}:\d{2}/)).not.toHaveLength(0);
     expect(
       screen.getAllByText('Mensagem salva. Aguardando confirmação de envio.'),
     ).not.toHaveLength(0);
@@ -1113,29 +1182,10 @@ describe('ConversationWorkspace', () => {
     await user.type(input, secondMessage.text);
     fireEvent.keyDown(input, { key: 'Enter', code: 'NumpadEnter' });
     await waitFor(() => expect(mockedSendMessage).toHaveBeenCalledTimes(2));
-    const firstMetadata = await screen.findByText(
-      '28/07/2026, 19:47 · Usuário Comercial · Envio pendente',
-    );
-    expect(firstMetadata).toHaveClass(
-      'w-full',
-      'min-w-0',
-      'max-w-full',
-      'whitespace-normal',
-      'break-words',
-      'text-center',
-      '[overflow-wrap:anywhere]',
-    );
+    const firstMetadata = await screen.findByText('Enviada por Usuário Comercial · 19:47');
+    expect(firstMetadata).toHaveClass('ml-auto', 'block', 'w-fit', 'text-[10px]');
     expect(firstMetadata).not.toHaveClass('min-w-max', 'whitespace-nowrap');
-    expect(firstMetadata.parentElement).toHaveClass(
-      'w-full',
-      'max-w-full',
-      'min-w-0',
-      'justify-center',
-    );
-    expect(firstMetadata.parentElement).not.toHaveClass('overflow-x-auto', 'whitespace-nowrap');
-    expect(
-      await screen.findByText('28/07/2026, 19:48 · Usuário Comercial · Envio pendente'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Enviada por Usuário Comercial · 19:48')).toBeInTheDocument();
   });
 
   it('permite reparar uma atribuição bloqueada pela ação consolidada do atendente', async () => {
@@ -1161,14 +1211,13 @@ describe('ConversationWorkspace', () => {
       <ConversationWorkspace initialConversations={[conversation]} currentUserId="employee-001" />,
     );
     await openMessages(user);
-    const characterCounter = screen.getByText(/0\s*\/\s*10\.000 caracteres/);
     const takeOverButton = screen.getByRole('button', { name: 'Atendente inativo' });
     const sendButton = screen.getByRole('button', { name: 'Enviar mensagem' });
     const input = screen.getByRole('textbox', {
       name: `Mensagem para ${conversation.contact.name}`,
     });
-    expect(characterCounter).toHaveClass('whitespace-nowrap');
-    expect(sendButton).toHaveClass('w-full', 'min-w-0', 'max-w-full', 'overflow-hidden');
+    expect(screen.queryByText(/10\.000 caracteres/)).not.toBeInTheDocument();
+    expect(sendButton).toHaveClass('shrink-0', 'rounded-full');
     expect(input).toBeDisabled();
 
     await user.click(takeOverButton);
@@ -1314,7 +1363,7 @@ describe('ConversationWorkspace', () => {
     ).not.toBeInTheDocument();
 
     const firstInput = mockedSendMessage.mock.calls[0][0];
-    await user.click(screen.getByRole('button', { name: 'Atualizar histórico' }));
+    await user.click(screen.getByRole('button', { name: 'Atualizar conversas' }));
     await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(3));
     await user.click(screen.getByRole('button', { name: 'Enviar mensagem' }));
     await waitFor(() => expect(mockedSendMessage).toHaveBeenCalledTimes(2));
@@ -1376,10 +1425,10 @@ describe('ConversationWorkspace', () => {
     render(<ConversationWorkspace initialConversations={[summary]} />);
     await openMessages(user);
 
-    expect(await screen.findByText(/· Envio pendente$/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Atualizar histórico' }));
+    expect(await screen.findAllByText(/Enviada por .* · \d{2}:\d{2}/)).not.toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'Atualizar conversas' }));
 
-    expect(await screen.findByText(/· Falha no envio$/)).toBeInTheDocument();
+    expect(await screen.findAllByText(/Enviada por .* · \d{2}:\d{2}/)).not.toHaveLength(0);
     expect(
       screen.getByText('Não foi possível enviar esta mensagem. Tente novamente.'),
     ).toBeInTheDocument();
@@ -1406,7 +1455,9 @@ describe('ConversationWorkspace', () => {
       screen.getByRole('textbox', { name: `Mensagem para ${conversation.contact.name}` }),
     ).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Enviar mensagem' })).toBeDisabled();
-    expect(screen.getByText('Assuma esta conversa para responder ao cliente.')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Assuma esta conversa para responder ao cliente.'),
+    ).toBeInTheDocument();
   });
 
   it('polls only when visible and applies backoff after a failure', async () => {

@@ -12,6 +12,7 @@ import { Label } from '@/shared/ui/label';
 type ClientFormProps = {
   readonly action: (data: FormData) => void | Promise<void>;
   readonly client?: RoutingCompany;
+  readonly initialValues?: { readonly name?: string; readonly phone?: string };
 };
 
 function PhoneList({ name, initial }: { name: string; initial: readonly RoutingPhone[] }) {
@@ -70,8 +71,11 @@ function PhoneList({ name, initial }: { name: string; initial: readonly RoutingP
   );
 }
 
-export function ClientForm({ action, client }: ClientFormProps) {
-  const [clientType, setClientType] = useState<'pf' | 'pj'>(client?.clientType ?? 'pj');
+export function ClientForm({ action, client, initialValues }: ClientFormProps) {
+  const hasInitialIndividualValues = Boolean(initialValues?.name || initialValues?.phone);
+  const [clientType, setClientType] = useState<'pf' | 'pj'>(
+    client?.clientType ?? (hasInitialIndividualValues ? 'pf' : 'pj'),
+  );
   return (
     <form action={action} className="space-y-6">
       {client ? (
@@ -131,7 +135,7 @@ export function ClientForm({ action, client }: ClientFormProps) {
             <Input
               id="individualName"
               name="individualName"
-              defaultValue={client?.individualName ?? ''}
+              defaultValue={client?.individualName ?? initialValues?.name ?? ''}
             />
           </div>
           <div className="space-y-2">
@@ -155,7 +159,7 @@ export function ClientForm({ action, client }: ClientFormProps) {
               id="individualWhatsapp"
               name="individualWhatsapp"
               required={clientType === 'pf'}
-              defaultValue={client?.individualWhatsapp ?? ''}
+              defaultValue={client?.individualWhatsapp ?? initialValues?.phone ?? ''}
             />
           </div>
           <div className="space-y-2 md:col-span-2">

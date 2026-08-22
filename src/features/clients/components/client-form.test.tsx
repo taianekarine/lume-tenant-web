@@ -41,4 +41,17 @@ describe('ClientForm', () => {
       'email',
     );
   });
+
+  it('preenche pessoa física com o contato recebido da conversa', () => {
+    render(
+      <ClientForm
+        action={jest.fn()}
+        initialValues={{ name: 'Contato sem cadastro', phone: '5534999999999' }}
+      />,
+    );
+
+    expect(screen.getByLabelText('Tipo de cliente')).toHaveValue('pf');
+    expect(screen.getByLabelText('Nome')).toHaveValue('Contato sem cadastro');
+    expect(screen.getByLabelText(/WhatsApp \(obrigatório\)/)).toHaveValue('5534999999999');
+  });
 });

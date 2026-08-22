@@ -10,7 +10,7 @@ import { Button } from '@/shared/ui/button';
 export default async function NewClientPage({
   searchParams,
 }: {
-  readonly searchParams: Promise<{ error?: string }>;
+  readonly searchParams: Promise<{ error?: string; name?: string; phone?: string }>;
 }) {
   const session = await requireTenantSession(['clients:create']);
   const search = await searchParams;
@@ -30,7 +30,10 @@ export default async function NewClientPage({
             Voltar
           </Button>
         </header>
-        <ClientForm action={createClientAction} />
+        <ClientForm
+          action={createClientAction}
+          initialValues={{ name: search.name, phone: search.phone }}
+        />
       </main>
     </AuthenticatedShell>
   );
