@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { RoutingError } from '@/features/routing/application';
 import { executeAuthenticatedRoutingMutation } from '@/features/routing/server';
+import { normalizePhone } from '@/shared/utils/brazilian-data';
 
 function text(data: FormData, key: string): string {
   const value = data.get(key);
@@ -61,6 +62,42 @@ export async function createClientAction(data: FormData): Promise<void> {
   }
   revalidatePath('/clients');
   redirect(`/clients/${clientId}?success=${encodeURIComponent('Cliente cadastrado.')}`);
+}
+
+export type ClientLookupResult =
+  | { readonly status: 'found'; readonly clientId: string }
+  | { readonly status: 'not-found' }
+  | { readonly status: 'error'; readonly message: string };
+
+export async function findClientByPhoneAction(phone: string): Promise<ClientLookupResult> {
+  const searchedPhone = normalizePhone(phone);
+  if (searchedPhone.length < 10) return { status: 'not-found' };
+
+  try {
+    const result = await executeAuthenticatedRoutingMutation((gateway) =>
+      gateway.listCompanies({ search: searchedPhone, page: 1, pageSize: 100 }),
+    );
+    const comparablePhone = (value: string | null | undefined) => {
+      const digits = normalizePhone(value ?? '');
+      return digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
+    };
+    const target = comparablePhone(searchedPhone);
+    const client = result.items.find((item) =>
+      [
+        item.individualWhatsapp,
+        item.legalWhatsapp,
+        ...item.individualPhones.map((entry) => entry.number),
+        ...item.legalPhones.map((entry) => entry.number),
+      ].some((candidate) => comparablePhone(candidate) === target),
+    );
+    return client ? { status: 'found', clientId: client.id } : { status: 'not-found' };
+  } catch (error) {
+    return {
+      status: 'error',
+      message:
+        error instanceof RoutingError ? error.message : 'Não foi possível consultar clientes.',
+    };
+  }
 }
 
 export async function updateClientAction(data: FormData): Promise<void> {

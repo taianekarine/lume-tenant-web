@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   ArrowLeft,
@@ -24,14 +25,23 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
-  UserRound,
 } from 'lucide-react';
 
+import { findClientByPhoneAction } from '@/features/clients/actions/client-actions';
 import { updateQuoteProposalStatusAction } from '@/features/quote-proposals/actions';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { userFacingMessage } from '@/shared/lib/user-facing-message';
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/shared/ui/alert-dialog';
 import {
   Dialog,
   DialogClose,
@@ -73,7 +83,6 @@ import {
   canSendHumanWhatsAppMessage,
   canTakeOverWhatsAppConversation,
   getWhatsAppConversationMetrics,
-  isWhatsAppAwaitingProposal,
   isWhatsAppBotBlocked,
   isWhatsAppConversationDepartment,
   isWhatsAppHumanActive,
@@ -243,23 +252,6 @@ function getClosureActor(transition: WhatsAppConversation['transitions'][number]
   return 'Automação';
 }
 
-function getLatestClosureTransition(
-  transitions: WhatsAppConversation['transitions'],
-): WhatsAppConversation['transitions'][number] | null {
-  return transitions.reduce<WhatsAppConversation['transitions'][number] | null>(
-    (latest, transition) => {
-      if (transition.name !== 'close' && transition.name !== 'close-after-rejection') {
-        return latest;
-      }
-      if (latest === null) return transition;
-      return new Date(transition.createdAt).valueOf() > new Date(latest.createdAt).valueOf()
-        ? transition
-        : latest;
-    },
-    null,
-  );
-}
-
 const TRANSITION_LABELS: Readonly<Record<string, string>> = {
   'present-main-menu': 'Menu principal apresentado',
   'select-commercial': 'Atendimento comercial selecionado',
@@ -309,6 +301,7 @@ export function ConversationWorkspace({
   initialError = null,
   currentUserId = null,
 }: ConversationWorkspaceProps) {
+  const router = useRouter();
   const [conversations, setConversations] = useState(initialConversations);
   const [pagination, setPagination] = useState(initialPagination);
   const [metrics, setMetrics] = useState(
@@ -348,6 +341,10 @@ export function ConversationWorkspace({
   const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [isQuoteDialogOpen, setIsQuoteDialogOpen] = useState(false);
+  const [isClientMissingDialogOpen, setIsClientMissingDialogOpen] = useState(false);
+  const [isMessageSearchOpen, setIsMessageSearchOpen] = useState(false);
+  const [isResolvingClient, startClientLookup] = useTransition();
   const [closeReason, setCloseReason] = useState('');
   const [manualCommercialStatus, setManualCommercialStatus] =
     useState<ManualCommercialStatus>('under-review');
@@ -703,7 +700,22 @@ export function ConversationWorkspace({
     canSendHumanWhatsAppMessage(selectedConversation) &&
     selectedConversation.assignedTo?.id === currentUserId;
   const actionHistory = selectedConversation?.transitions ?? [];
-  const latestClosure = getLatestClosureTransition(actionHistory);
+
+  function handleClientHeaderClick() {
+    if (!selectedConversation || isResolvingClient) return;
+    startClientLookup(async () => {
+      const result = await findClientByPhoneAction(selectedConversation.contact.phone);
+      if (result.status === 'found') {
+        router.push(`/clients/${result.clientId}`);
+        return;
+      }
+      if (result.status === 'not-found') {
+        setIsClientMissingDialogOpen(true);
+        return;
+      }
+      toast.add({ title: 'Cliente não localizado', description: result.message, type: 'error' });
+    });
+  }
 
   function applyActionResult(result: WhatsAppConversationActionResult, successMessage: string) {
     if (result.conversation) {
@@ -730,6 +742,8 @@ export function ConversationWorkspace({
     setIsForwardDialogOpen(false);
     setIsStatusDialogOpen(false);
     setIsHistoryDialogOpen(false);
+    setIsQuoteDialogOpen(false);
+    setIsMessageSearchOpen(false);
     setCloseReason('');
     setManualCommercialStatus(
       isManualCommercialStatus(conversation.requestStatus)
@@ -1206,13 +1220,15 @@ export function ConversationWorkspace({
               >
                 Grupos
               </button>
-              <button
-                type="button"
-                className={styles.quickFilter({ active: inboxView === 'unread' })}
-                onClick={() => setInboxView('unread')}
-              >
-                Não lidas {metrics.unreadConversations}
-              </button>
+              {metrics.unreadConversations > 0 ? (
+                <button
+                  type="button"
+                  className={styles.quickFilter({ active: inboxView === 'unread' })}
+                  onClick={() => setInboxView('unread')}
+                >
+                  Não lidas {metrics.unreadConversations}
+                </button>
+              ) : null}
             </div>
 
             <details className={styles.advancedFilters()}>
@@ -1454,7 +1470,13 @@ export function ConversationWorkspace({
                 >
                   <ArrowLeft aria-hidden="true" />
                 </Button>
-                <div className={styles.contactBlock()}>
+                <button
+                  type="button"
+                  className={styles.contactBlock()}
+                  onClick={handleClientHeaderClick}
+                  disabled={isResolvingClient}
+                  aria-label={`Abrir cadastro de ${selectedConversation.contact.name}`}
+                >
                   <Avatar className={styles.detailAvatar()}>
                     {selectedConversation.contact.profilePictureUrl ? (
                       <AvatarImage
@@ -1476,48 +1498,30 @@ export function ConversationWorkspace({
                       Última interação: {formatDateTime(selectedConversation.lastMessageAt)}
                     </p>
                   </div>
-                </div>
-                <div className={styles.headerAssignment()}>
-                  <UserRound aria-hidden="true" />
-                  <span>
-                    {selectedConversation.conversationState === 'closed' && latestClosure !== null
-                      ? `Encerrado por: ${getClosureActor(latestClosure)}`
-                      : selectedConversation.assignedTo === null
-                        ? 'Sem atendente responsável'
-                        : `Responsável: ${selectedConversation.assignedTo.name}`}
-                  </span>
-                </div>
-              </header>
-
-              {selectedConversation.department === 'commercial' ? (
-                <div className={styles.highlightGrid()}>
-                  <div
-                    className={styles.highlight({
-                      tone: isWhatsAppAwaitingProposal(selectedConversation)
-                        ? 'warning'
-                        : 'neutral',
-                    })}
+                </button>
+                <div className={styles.headerAssignment()} aria-label="Ferramentas da conversa">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setIsQuoteDialogOpen(true)}
+                    aria-label="Abrir orçamentos"
+                    title="Orçamentos"
                   >
                     <FileText aria-hidden="true" />
-                    <span>
-                      <strong>
-                        {isWhatsAppAwaitingProposal(selectedConversation)
-                          ? 'Aguardando proposta'
-                          : selectedConversation.requestStatus === 'waiting-for-customer'
-                            ? 'Proposta enviada'
-                            : 'Sem proposta pendente'}
-                      </strong>
-                      <small>
-                        {selectedConversation.requestStatus === 'waiting-for-customer'
-                          ? 'PDF entregue; aguardando retorno do cliente.'
-                          : selectedConversation.flowStep === 'commercial-follow-up-menu'
-                            ? 'Segundo contato retomado no acompanhamento comercial.'
-                            : getFlowStepLabel(selectedConversation)}
-                      </small>
-                    </span>
-                  </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={isMessageSearchOpen ? 'secondary' : 'ghost'}
+                    size="icon-sm"
+                    onClick={() => setIsMessageSearchOpen((current) => !current)}
+                    aria-label="Pesquisar mensagens"
+                    title="Pesquisar mensagens"
+                  >
+                    <Search aria-hidden="true" />
+                  </Button>
                 </div>
-              ) : null}
+              </header>
 
               <div className={styles.dimensionGrid()}>
                 <div className={styles.dimensionItem()}>
@@ -1623,9 +1627,7 @@ export function ConversationWorkspace({
                       ) : (
                         <CircleStop aria-hidden="true" />
                       )}
-                      {selectedConversation.conversationState === 'closed'
-                        ? 'Iniciar atendimento'
-                        : 'Encerrar atendimento'}
+                      {selectedConversation.conversationState === 'closed' ? 'Iniciar' : 'Encerrar'}
                     </button>
                   </div>
                   <div className={styles.actions()}>
@@ -1815,12 +1817,14 @@ export function ConversationWorkspace({
                 </Dialog>
               </div>
 
-              <section aria-labelledby="quote-request-title" className={styles.quotePanel()}>
-                <div className={styles.panelHeading()}>
-                  <div>
-                    <p className={styles.panelEyebrow()}>Atendimento comercial</p>
-                    <h4 id="quote-request-title">Orçamentos</h4>
-                  </div>
+              <Dialog open={isQuoteDialogOpen} onOpenChange={setIsQuoteDialogOpen}>
+                <DialogContent className="sm:max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Orçamentos da conversa</DialogTitle>
+                    <DialogDescription>
+                      Consulte, crie ou atualize propostas ligadas a este atendimento.
+                    </DialogDescription>
+                  </DialogHeader>
                   <div className={styles.quoteActions()}>
                     <ConversationQuoteActions
                       conversation={selectedConversation}
@@ -1844,8 +1848,39 @@ export function ConversationWorkspace({
                       Histórico
                     </Button>
                   </div>
-                </div>
-              </section>
+                </DialogContent>
+              </Dialog>
+
+              <AlertDialog
+                open={isClientMissingDialogOpen}
+                onOpenChange={setIsClientMissingDialogOpen}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Cliente ainda não cadastrado</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Este contato não possui cadastro de cliente. Você pode fechar este aviso ou
+                      iniciar o cadastro com nome e telefone já preenchidos.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogClose render={<Button variant="outline" />}>
+                      Fechar
+                    </AlertDialogClose>
+                    <Button
+                      render={
+                        <Link
+                          href={`/clients/new?name=${encodeURIComponent(selectedConversation.contact.name)}&phone=${encodeURIComponent(selectedConversation.contact.phone)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        />
+                      }
+                    >
+                      Cadastrar
+                    </Button>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
 
               <ConversationMessageSheet
                 conversation={selectedConversation}
@@ -1858,7 +1893,8 @@ export function ConversationWorkspace({
                   void loadConversationDetail(selectedConversation.id, nextPage);
                 }}
                 isLoadingOlder={isLoadingOlderMessages}
-                onRefresh={() => void refreshList(true)}
+                searchOpen={isMessageSearchOpen}
+                onSearchOpenChange={setIsMessageSearchOpen}
                 messageDraft={messageDraft}
                 onMessageDraftChange={setMessageDraft}
                 selectedAttachment={selectedAttachment}

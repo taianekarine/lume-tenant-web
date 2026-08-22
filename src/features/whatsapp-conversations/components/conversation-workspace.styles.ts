@@ -109,9 +109,11 @@ export const conversationWorkspaceStyles = {
     'h-full min-h-0 w-full max-w-full min-w-0 flex-col overflow-hidden bg-muted/20 lg:flex',
   ),
   detailHeader: cva(
-    'flex min-h-16 flex-wrap items-center justify-between gap-2 border-b border-border bg-primary/8 px-3 py-2',
+    'flex min-h-14 items-center justify-between gap-2 border-b border-border bg-primary/8 px-3 py-1.5',
   ),
-  contactBlock: cva('flex min-w-0 flex-1 items-center gap-2 sm:gap-3'),
+  contactBlock: cva(
+    'flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left transition hover:bg-primary/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-wait disabled:opacity-70 sm:gap-3',
+  ),
   contactIdentity: cva('flex min-w-0 flex-1 flex-col items-start gap-0.5'),
   detailAvatar: cva(
     'flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground',
@@ -119,13 +121,10 @@ export const conversationWorkspaceStyles = {
   detailTitle: cva('shrink-0 text-sm font-bold text-foreground'),
   phone: cva('flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5'),
   lastInteraction: cva('min-w-0 text-[11px] text-muted-foreground'),
-  headerAssignment: cva(
-    'flex items-center gap-2 rounded-lg bg-background/80 px-3 py-2 text-xs text-muted-foreground ring-1 ring-border [&>svg]:size-4',
-  ),
+  headerAssignment: cva('flex shrink-0 items-center gap-0.5 text-muted-foreground'),
   versionBadge: cva(
     'w-fit rounded-full bg-muted px-3 py-1 text-[11px] font-bold text-muted-foreground',
   ),
-  highlightGrid: cva('grid min-w-0 gap-px border-b border-border bg-border sm:grid-cols-3'),
   highlight: cva(
     'flex min-w-0 items-start gap-2 bg-card px-3 py-2 [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0 [&_span]:min-w-0 [&_strong]:block [&_strong]:whitespace-nowrap [&_strong]:text-[11px] [&_small]:mt-0.5 [&_small]:block [&_small]:truncate [&_small]:text-[10px] [&_small]:leading-4',
     {
@@ -141,15 +140,15 @@ export const conversationWorkspaceStyles = {
     },
   ),
   dimensionGrid: cva(
-    'grid min-w-0 gap-px border-b border-border bg-border sm:grid-cols-2 xl:grid-cols-5',
+    'grid min-w-0 grid-cols-2 gap-px border-b border-border bg-border sm:grid-cols-3 xl:grid-cols-5',
   ),
   dimensionItem: cva(
-    'flex min-w-0 items-start gap-2 bg-card px-3 py-2 [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-primary-emphasis [&_small]:block [&_small]:text-[9px] [&_small]:font-semibold [&_small]:uppercase [&_small]:tracking-wide [&_small]:text-muted-foreground [&_strong]:mt-0.5 [&_strong]:block [&_strong]:text-[11px] [&_strong]:leading-4 [&_strong]:text-foreground',
+    'flex min-w-0 items-start gap-2 bg-card px-3 py-1.5 [&>svg]:mt-0.5 [&>svg]:size-3.5 [&>svg]:shrink-0 [&>svg]:text-primary-emphasis [&_small]:block [&_small]:text-[9px] [&_small]:font-semibold [&_small]:uppercase [&_small]:tracking-wide [&_small]:text-muted-foreground [&_strong]:block [&_strong]:truncate [&_strong]:text-[11px] [&_strong]:leading-4 [&_strong]:text-foreground',
   ),
   assignment: cva(
     'flex flex-wrap items-center gap-2 border-b border-border bg-card px-5 py-2.5 text-xs text-muted-foreground [&>svg]:size-4 [&>svg]:text-muted-foreground [&>small]:ml-auto [&>small]:text-muted-foreground',
   ),
-  actionsPanel: cva('border-b border-border bg-card px-3 py-2'),
+  actionsPanel: cva('border-b border-border bg-card px-3 py-1.5'),
   actionsTitle: cva('sr-only'),
   actionColumns: cva('grid min-w-0 gap-1.5 xl:grid-cols-2 xl:[&>div:last-child]:justify-end'),
   actions: cva('grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap'),
